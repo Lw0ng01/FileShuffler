@@ -115,9 +115,19 @@ small enough to finish, and **never introduce a permanent-delete path.**
 ### First release: one bundled player
 
 Use a persistent mpv process controlled over local JSON IPC (named pipe on Windows, Unix socket
-on macOS). Load files into that process instead of restarting it on every Next. Support only mpv
-initially; VLC, IINA, and generic player support are deferred until there is a concrete need.
+on macOS). Load files into that process instead of restarting it on every Next. Phase 1 ships
+only mpv.
 
+**VLC is the planned second player (Phase 2)**, because Lucas wants it as an option.
+- Implement mpv behind a small playback adapter interface whose shape also fits VLC: load and
+  unload a file, report a successful load, end of file, errors and player exit.
+- VLC is user-installed and controlled through its local interface (HTTP bound to localhost, with a
+  password). It reports state by polling rather than pushed events, so the adapter must not assume
+  push events.
+- Don't build VLC support in Phase 1, but don't design it out either.
+- IINA and generic players stay deferred until there is a concrete need.
+
+For every player:
 - Keep shuffle order and navigation authoritative in the application. Route player key bindings
   into the same application actions so mpv and the dashboard cannot advance separate playlists.
 - Prefer bindings inside the mpv window for fullscreen control. Make system-wide shortcuts
@@ -161,15 +171,16 @@ Do not assume any framework makes native media embedding effortless.
 vitest. Keep this stack for the shuffler and initial dashboard work. This is a practical fit for
 Lucas's goals and existing start, not a claim that Electron is universally best or most efficient.
 - **First player:** bundled external mpv only.
+- **Second player:** VLC as an option (Phase 2), through the same playback adapter (§4).
 - **Planned player:** custom embedded native playback, subject to the early prototype in §4.
 - **Learning objective:** explain architecture, state transitions, performance measurements,
   failure handling, and tradeoffs. A harder language is not automatically a better portfolio.
 
 ### Existing setup notes
 
-The following installation/version notes are inherited from the initial setup session. This
-planning revision did not revalidate them. Check the actual lockfile, installed tools, and a
-clean install before relying on or changing these claims.
+Verified 2026-09-15 on `main` after the Electron 44 merge: Node 26.8.2, npm 11.19.1, Electron
+44.3.0, approved install scripts, clean install, build and app launch. Re-check after any
+toolchain upgrade.
 
 - **Requires Node ≥ 22.12**, because `electron-builder` loads an ESM-only library (`@noble/hashes`)
   using `require()`. On older Node, `npm install`'s postinstall fails with `ERR_REQUIRE_ESM`.
@@ -293,10 +304,13 @@ is not designed in detail yet.
 
 ### Phase 1 — Shuffler MVP ⭐
 
+- [x] Harden the starter template: sandbox on, preload exposes no raw IPC, navigation and new
+      windows blocked (§5)
 - [ ] Pick folder (top-level files only)
 - [ ] Scan for video files (allowlisted extensions)
 - [ ] Shuffle engine (bag + playlist/cursor, endless cycles, seam rule) **with unit tests**
-- [ ] mpv integration: launch, load file, detect end of video → autoplay next, key bindings inside mpv
+- [ ] mpv integration behind the playback adapter (§4): launch, load file, detect end of video →
+      autoplay next, key bindings inside mpv
 - [ ] Next / Back / Delete-to-trash (unload first, undo window)
 - [ ] App shell with sidebar + shuffler screen (§6), player-local shortcuts
 - [ ] Show current filename + successful-open coverage and failures
@@ -312,6 +326,8 @@ is not designed in detail yet.
 
 ### Phase 2 — Shuffler polish
 
+- [ ] **VLC as a second player option** (user-installed VLC, local control interface) through the
+      same playback adapter. Verify end-of-file/error detection and file release before trashing.
 - [ ] Remember last folder and shuffle progress between launches
 - [ ] "Show in Explorer/Finder" button
 - [ ] Configurable shortcuts and clear error/recovery feedback
@@ -337,7 +353,7 @@ is not designed in detail yet.
 ### Phase 5 — Bonus ideas
 
 - [ ] Favorites / weighting without breaking cycle coverage
-- [ ] Additional external player integrations only if needed
+- [ ] Other external players (IINA, generic) only if needed
 - [ ] Thumbnail gallery for photos/videos
 - [ ] Duplicate finder (view-only, with trash as the only action)
 - [ ] Watch stats: most played, never watched, total hours of video
@@ -355,8 +371,8 @@ is not designed in detail yet.
   application shell is a possible outcome, not a foregone conclusion.
 - **Electron has baseline overhead.** Measure the complete app plus player; do not promise
   native-toolkit memory usage or assume the project cannot leak resources.
-- **Scope growth:** shuffler first; dashboard and embedded player remain planned. Extra external
-  player support and bonus tools must not crowd out the core flow.
+- **Scope growth:** shuffler first; dashboard and embedded player remain planned. Players beyond
+  mpv and VLC, and bonus tools, must not crowd out the core flow.
 - **Controlling an external player** is the trickiest part of the MVP (focus, file locks,
   per-player differences). mpv first keeps it manageable.
 - **Scanning every drive is slow.** Scan in the background, cache results, let the user pick roots.
@@ -401,12 +417,21 @@ is not designed in detail yet.
   - Fixed by upgrading to **Electron 44.3.0**. It has no install script and downloads the binary
     on first run, so it was removed from `allowScripts`.
   - Verified on Node 26: clean `npm ci`, type check, build, tests, and a real app launch.
-
-- **2026-09-15 — Architecture and scope review:** Lucas confirmed the shuffler is first, while
-  the dashboard, a custom built-in native player, efficiency, and demonstrable architecture all
-  remain important. Keep Electron/React/TypeScript for the initial delivery without claiming
-  guaranteed efficiency. Added an early embedded-player prototype and measurements as the
-  basis for any stack change. Defined application/domain/adapter boundaries and runtime IPC
-  validation; deferred extra external players. Moved Windows packaging into Phase 1. Clarified
-  shuffle progress/history and fail-closed trash/undo behavior. Removed unsupported framework
-  ease/size comparisons. Existing setup/version notes were preserved, not reverified.
+- **2026-09-15:** Architecture and scope review (Lucas, with a Codex review).
+  - Lucas confirmed the shuffler comes first. The dashboard, a custom built-in native player,
+    efficiency and demonstrable architecture all remain important.
+  - Kept Electron/React/TypeScript for the initial delivery, without claiming guaranteed
+    efficiency. Any stack change will rest on an early embedded-player prototype and measurements.
+  - Defined application/domain/adapter boundaries and runtime IPC validation.
+  - Moved Windows packaging into Phase 1.
+  - Clarified shuffle progress/history and fail-closed trash/undo behavior.
+  - Removed unsupported framework ease/size comparisons.
+- **2026-09-15:** Follow-ups to the review, approved by Lucas.
+  - **VLC restored as a planned option** (Phase 2). Phase 1 still ships only mpv, but behind a
+    playback adapter shaped to fit VLC (§4). IINA and generic players stay deferred.
+  - Setup notes marked verified: they were re-checked on `main` after the Electron 44 merge.
+  - Security baseline applied to the starter code: sandbox and context isolation on, Node
+    integration off, navigation and new windows blocked. The preload now exposes only a read-only
+    `api.versions` instead of Electron's full IPC bridge (`@electron-toolkit/preload` removed).
+  - `CLAUDE.md` trimmed to how-to-work guidance that links to this doc instead of repeating it.
+  - Change log entries now use one format.

@@ -1,92 +1,69 @@
 # CLAUDE.md
 
-Read `PROJECT.md` first. It holds the vision, safety rules, shuffle design, roadmap, open questions
-and a dated change log. Add a Change Log entry there for any major change or decision.
+Read `PROJECT.md` first. It holds the vision, safety rules (§2), shuffle design (§3), playback plan
+(§4), stack/architecture/efficiency (§5), roadmap (§7) and a dated change log.
+- Add a Change Log entry there for any major change or decision.
+- This file covers *how to work in the code*. Link to PROJECT.md instead of restating it here.
 
 Lucas wants a working shuffler first, then a dashboard with a custom built-in native player.
-All of these matter, as do efficiency and demonstrating good system architecture. Explain why
-non-obvious choices fit the requirements. Keep Electron/React/TypeScript for the initial work;
-do not promise low memory use or migrate stacks for prestige. Use measurements and the early
-embedded-player prototype to inform any later stack decision.
+Efficiency and good architecture matter too. Explain why non-obvious choices fit. Don't promise
+low memory use or migrate stacks for prestige: measurements and the embedded-player prototype
+drive stack decisions.
 
-## Hard rules (details in PROJECT.md §2)
+## Hard rules (full text in PROJECT.md §2)
 
-- Never permanently delete files. Trash only (`shell.trashItem`), and fail closed if trashing
-  isn't possible. Extra confirmation never permits permanent deletion.
-- Cancel trash actions still in the undo window on exit; never replay them on restart. Restore
-  the item on undo/failure. Recheck the target before trashing; cancel if its identity is uncertain.
-- Scanning is read-only and skips system locations and symlinks/junctions.
-- A shuffle session only reads the top level of the chosen folder, never subfolders.
+- Never permanently delete. Trash only (`shell.trashItem`) and fail closed. Extra confirmation
+  never permits a permanent delete.
+- Deletes still in the undo window are cancelled on exit and never replayed. Recheck the file's
+  identity before trashing.
+- Scanning is read-only and skips system locations and symlinks/junctions. A shuffle session reads
+  only the chosen folder's top level.
 - No network calls. Never commit media, caches, index DBs, or config containing real file paths.
 
-## Stack
+## Stack and layout
 
 Electron + React + TypeScript via electron-vite. Tests use vitest.
-- `src/main/`: Electron main process (coordination and adapters: filesystem, trash, controlling mpv)
-- `src/preload/`: the safe bridge that exposes selected main-process functions to the UI
-- `src/renderer/`: React UI
+- `src/main/`: main process: application coordinator and adapters (filesystem, trash, player control)
+- `src/preload/`: the only bridge to the UI. Expose narrow, typed functions; keep `index.d.ts` in sync
+- `src/renderer/`: React UI, presentation only
 
-### Inherited setup notes
+## Toolchain gotchas
 
-These notes describe the initial setup; the architecture review did not revalidate version or
-installer claims. Check the actual lockfile and tool versions before changing the toolchain.
+- Node ≥ 22.12 (developed on Node 26). Electron ≤ 39 can't unpack on Node 26; stay on Electron 44+.
+- Electron downloads its binary on first run, not on install. A passing build doesn't prove
+  Electron works: run `node_modules/.bin/electron --version`.
+- npm 11 runs only the install scripts listed in `package.json` → `allowScripts` (exact
+  versions). After upgrading esbuild, fsevents or electron-winstaller, run
+  `npm install-scripts ls` and approve.
 
-Requires **Node ≥ 22.12**. Developed on Node 26 with Electron 44; Electron ≤ 39 fails to unpack
-on Node 26 (see PROJECT.md §5).
-- Electron downloads its binary on the first `npm run dev`, not during `npm install`.
-- A passing `npm run build` does **not** prove Electron is installed. Run
-  `node_modules/.bin/electron --version`.
-- npm 11 only runs install scripts listed in `package.json` → `allowScripts`, pinned to exact
-  versions. After upgrading esbuild, fsevents or electron-winstaller, run
-  `npm install-scripts ls` and approve the new version.
+## Code rules
 
-## Architecture and implementation approach
+- Shuffle/cycle/history logic is pure TypeScript with no React, Electron, filesystem or player
+  imports. Inject randomness.
+- One application coordinator owns navigation, end-of-file, playback requests and pending trash.
+  Use explicit states and request IDs so late events can't double-advance or overwrite newer state.
+- Players sit behind one playback adapter interface (mpv now, VLC in Phase 2, embedded later).
+  - Don't assume pushed events: VLC is polled.
+  - Unload the file and observe completion before trashing it.
+- Keep the security baseline:
+  - In `src/main/index.ts`: sandbox on, context isolation on, Node integration off, navigation and
+    new windows blocked. Keep the strict CSP in `src/renderer/index.html`.
+  - Validate IPC senders and input at runtime in main.
+  - Never expose raw `ipcRenderer`, shell execution or arbitrary paths. File actions resolve
+    against the active session.
+- Player control uses structured local IPC, never interpolated shell strings. Don't register plain
+  arrows/Delete as global shortcuts.
+- Use async I/O, bounded concurrency and bounded history/caches. Clean up processes, listeners and
+  timers.
+- No speculative plugin/service frameworks. SQLite arrives with the indexer.
 
-- Keep shuffle/cycle/history rules in pure TypeScript modules independent of React, Electron,
-  the filesystem, and mpv. Inject randomness for deterministic tests.
-- Use one application coordinator for navigation, EOF, playback requests, and pending trash.
-  Explicit states and request identities must prevent double-advance and stale-event races.
-- Introduce small interfaces for playback, file operations, and persistence as needed. The
-  external/embedded playback boundary can preserve logic, but native rendering needs real work.
-- Renderer owns presentation and sends narrow commands through preload. Keep Node integration
-  off, context isolation and sandboxing on, and a restrictive CSP. Validate IPC senders and input
-  at runtime in the main process; TypeScript types alone are insufficient. Do not expose raw
-  IPC, shell execution, or unrestricted file operations to the renderer.
-- Use asynchronous I/O and bounded concurrency. Keep CPU-heavy indexing/probing/thumbnails off
-  the main/UI threads when those features arrive. Clean up processes, subscriptions, and timers.
-- Bound history/cache growth. Add SQLite with the indexer; avoid speculative service/plugin
-  frameworks. Document substantive decisions and limitations briefly in PROJECT.md.
+## Verification
 
-## Playback and delivery order
-
-- Deliver one complete flow first: choose folder → shuffle → external mpv → Next/Back → trash
-  with undo. Bundle only mpv initially, keeping one controlled process alive between videos.
-- Route player-local shortcuts into the application coordinator. System-wide shortcuts are
-  optional/configurable; do not register plain arrows/Delete globally by default.
-- Unload before trashing and observe completion. Handle load failure, player exit, file locks,
-  and disconnects explicitly. Use structured local IPC commands rather than shell strings.
-- After the first working flow, run the embedded native-player prototype in PROJECT.md §4,
-  before extensive dashboard UI work. It must cover rendering, controls, fullscreen, file release,
-  hardware decoding where available, and packaged Windows behavior. Assess macOS feasibility.
-- HTML video is not a substitute for the planned broad-format native player. Do not promise
-  "every format" or assume Qt/.NET/Tauri integration is effortless. Record supported combinations.
-- Package and test on Windows during Phase 1, not only at the end. Dashboard and integrated
-  player remain planned features; extra external players and bonus features are deferred.
-
-## Verification and performance
-
-- Test shuffle invariants with deterministic randomness: empty/small folders, cycle boundaries,
-  coverage, Back/Forward, and undo/delete during navigation. A statistical test is not proof of
-  uniformity. "Opened this cycle" requires a successful player load, not merely selection.
-- Exercise rapid commands, EOF races, missing/unplayable files, player crashes, failed trash,
-  and exit during the undo window. Verify actual OS behavior with disposable fixtures on Windows.
-- Establish a packaged-build baseline covering launch time, idle/playback CPU and memory,
-  seek latency, and dropped frames. Include every app/player/helper process with consistent
-  metrics, record the machine and workload, then set explicit budgets. Do not invent results.
-- Check repeated load/unload/navigation for memory or handle growth. Once indexing exists,
-  measure browsing/scanning during playback and verify cancellation and bounded resource use.
-- Run checks appropriate to the change. For runtime changes, typecheck/build alone cannot
-  establish that Electron launches or the packaged player works; exercise the relevant flow.
+- Shuffle: deterministic invariant tests (empty/small folders, cycle seams, coverage, Back/Forward,
+  undo/delete mid-history). A statistical test doesn't prove uniformity.
+- Runtime changes: typecheck/build aren't enough; launch the app and exercise the flow. Test real
+  OS trash and file-lock behavior with disposable files, on Windows where it matters.
+- Performance claims need measurements from a packaged build (PROJECT.md §5). Never invent results.
 
 ## Commands
 
