@@ -12,11 +12,13 @@ export const MESSAGE_TARGET = 'fileshuffler'
 
 /**
  * Written to the input.conf passed to mpv. `>` and `<` are mpv's own playlist next/previous keys,
- * so they keep a familiar meaning and leave arrow-key seeking alone.
+ * so they keep a familiar meaning and leave arrow-key seeking alone. `DEL` is the Delete key on
+ * Windows (fn+Delete on a Mac); the delete it starts can be undone.
  */
 export const KEY_BINDINGS = [
   `> script-message ${MESSAGE_TARGET} next`,
   `< script-message ${MESSAGE_TARGET} back`,
+  `DEL script-message ${MESSAGE_TARGET} delete`,
   ''
 ].join('\n')
 
@@ -344,7 +346,7 @@ function entryIdOf(data: unknown): number | null {
 }
 
 function isPlayerCommand(value: unknown): value is PlayerCommand {
-  return value === 'next' || value === 'back'
+  return value === 'next' || value === 'back' || value === 'delete'
 }
 
 function errorMessage(error: unknown): string {

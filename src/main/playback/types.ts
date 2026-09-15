@@ -6,7 +6,7 @@
  */
 
 /** Commands a player sends back, for example from key bindings inside its window. */
-export type PlayerCommand = 'next' | 'back'
+export type PlayerCommand = 'next' | 'back' | 'delete'
 
 export type PlaybackEvent =
   /** The player opened the file for this load. */

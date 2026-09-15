@@ -50,9 +50,14 @@ describe('mpvArguments', () => {
     expect(args.lastIndexOf('--idle=yes')).toBeGreaterThan(args.indexOf('--idle=no'))
   })
 
-  it('binds only the next and back messages', () => {
+  it('binds next, back and delete inside mpv', () => {
     expect(KEY_BINDINGS).toBe(
-      '> script-message fileshuffler next\n< script-message fileshuffler back\n'
+      [
+        '> script-message fileshuffler next',
+        '< script-message fileshuffler back',
+        'DEL script-message fileshuffler delete',
+        ''
+      ].join('\n')
     )
   })
 })
@@ -138,17 +143,19 @@ describe('MpvPlayer', () => {
     ])
   })
 
-  it('turns key-binding messages into next and back commands', async () => {
+  it('turns key-binding messages into player commands and ignores anything else', async () => {
     const { mpv, events } = setup()
     mpv.send({ event: 'client-message', args: ['fileshuffler', 'next'] })
     mpv.send({ event: 'client-message', args: ['fileshuffler', 'back'] })
-    mpv.send({ event: 'client-message', args: ['other-script', 'next'] })
     mpv.send({ event: 'client-message', args: ['fileshuffler', 'delete'] })
+    mpv.send({ event: 'client-message', args: ['other-script', 'next'] })
+    mpv.send({ event: 'client-message', args: ['fileshuffler', 'format-drive'] })
     await flush()
 
     expect(events).toEqual([
       { type: 'command', command: 'next' },
-      { type: 'command', command: 'back' }
+      { type: 'command', command: 'back' },
+      { type: 'command', command: 'delete' }
     ])
   })
 

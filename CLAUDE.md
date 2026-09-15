@@ -29,6 +29,7 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
   - `src/main/app/`: the coordinator that connects the shuffle session to a player
   - `src/main/playback/`: the player interface (`types.ts`) and the mpv adapter (`mpv/`,
     PROJECT.md §4)
+  - `src/main/files/`: read-only folder listing and file identity checks (PROJECT.md §2)
 - `src/preload/`: the only bridge to the UI. Expose narrow, typed functions; keep `index.d.ts` in sync
 - `src/renderer/`: React UI, presentation only
 

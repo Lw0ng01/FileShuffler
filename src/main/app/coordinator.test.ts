@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { ShuffleSession } from '../domain/shuffle'
+import type { FileIdentity } from '../files/fileIdentity'
 import type { PlaybackAdapter, PlaybackEvent } from '../playback/types'
 import { ShuffleCoordinator, type CoordinatorState } from './coordinator'
 
@@ -38,14 +39,32 @@ class FakePlayer implements PlaybackAdapter {
   }
 }
 
-function setup(items: string[]): { player: FakePlayer; coordinator: ShuffleCoordinator } {
+interface Setup {
+  player: FakePlayer
+  coordinator: ShuffleCoordinator
+  /** Fake file system: path → identity. A missing path means no file exists there. */
+  files: Map<string, FileIdentity>
+  trash: Mock<(path: string) => Promise<void>>
+}
+
+function identity(ino: number): FileIdentity {
+  return { isFile: true, dev: 1n, ino: BigInt(ino), size: 1000n, mtimeNs: 1n }
+}
+
+function setup(items: string[]): Setup {
   const player = new FakePlayer()
+  const files = new Map(items.map((id, index) => [`/videos/${id}`, identity(index + 1)]))
+  const trash = vi.fn(async (path: string) => {
+    files.delete(path)
+  })
   const coordinator = new ShuffleCoordinator({
     session: new ShuffleSession(items, { random: () => 0 }),
     player,
-    resolvePath: (id) => `/videos/${id}`
+    resolvePath: (id) => `/videos/${id}`,
+    trash,
+    identify: async (path) => files.get(path) ?? null
   })
-  return { player, coordinator }
+  return { player, coordinator, files, trash }
 }
 
 describe('ShuffleCoordinator', () => {
@@ -182,5 +201,194 @@ describe('ShuffleCoordinator', () => {
     player.emit({ type: 'ended', token: 1 })
     expect(player.loads).toHaveLength(1)
     expect(seen).toHaveLength(2)
+  })
+})
+
+describe('ShuffleCoordinator deletes', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  /** Starts playback, confirms the first file opened, and returns its ID. */
+  function playFirst({ player, coordinator }: Setup): string {
+    coordinator.next()
+    player.emit({ type: 'loaded', token: player.lastToken })
+    return coordinator.getState().current as string
+  }
+
+  /** The next file opened, which means the player has let go of the previous one. */
+  function openNext({ player }: Setup): void {
+    player.emit({ type: 'loaded', token: player.lastToken })
+  }
+
+  /** Lets pending promise chains (identity checks, trash) run to completion. */
+  async function settle(): Promise<void> {
+    for (let i = 0; i < 20; i++) await Promise.resolve()
+  }
+
+  it('hides the current file, moves on, and trashes it when the undo window ends', async () => {
+    const s = setup(['a.mkv', 'b.mkv', 'c.mkv'])
+    const doomed = playFirst(s)
+    s.coordinator.deleteCurrent()
+
+    const state = s.coordinator.getState()
+    expect(state.current).not.toBe(doomed)
+    expect(state.stats.total).toBe(2)
+    expect(state.pendingDeletes).toEqual([{ id: doomed, deadline: Date.now() + 5000 }])
+    openNext(s)
+
+    await vi.advanceTimersByTimeAsync(4999)
+    await settle()
+    expect(s.trash).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(1)
+    await settle()
+    expect(s.trash).toHaveBeenCalledTimes(1)
+    expect(s.trash).toHaveBeenCalledWith(`/videos/${doomed}`)
+    expect(s.coordinator.getState()).toMatchObject({ pendingDeletes: [], stats: { total: 2 } })
+  })
+
+  it('keeps the file and makes it playable again when the delete is undone', async () => {
+    const s = setup(['a.mkv', 'b.mkv', 'c.mkv'])
+    const doomed = playFirst(s)
+    s.coordinator.deleteCurrent()
+    openNext(s)
+
+    s.coordinator.undoDelete(doomed)
+    expect(s.coordinator.getState()).toMatchObject({ pendingDeletes: [], stats: { total: 3 } })
+
+    await vi.advanceTimersByTimeAsync(10000)
+    await settle()
+    expect(s.trash).not.toHaveBeenCalled()
+
+    s.coordinator.back()
+    expect(s.coordinator.getState().current).toBe(doomed)
+  })
+
+  it('never trashes a file that changed during the undo window', async () => {
+    const s = setup(['a.mkv', 'b.mkv', 'c.mkv'])
+    const doomed = playFirst(s)
+    s.coordinator.deleteCurrent()
+    openNext(s)
+    await settle()
+
+    s.files.set(`/videos/${doomed}`, identity(99))
+    await vi.advanceTimersByTimeAsync(5000)
+    await settle()
+
+    expect(s.trash).not.toHaveBeenCalled()
+    expect(s.coordinator.getState()).toMatchObject({
+      lastError: `${doomed} could not be confirmed as the same file, so it was kept`,
+      pendingDeletes: [],
+      stats: { total: 3 }
+    })
+  })
+
+  it('keeps the file and explains why when trashing fails', async () => {
+    const s = setup(['a.mkv', 'b.mkv', 'c.mkv'])
+    s.trash.mockRejectedValueOnce(new Error('the Recycle Bin is not available on this drive'))
+    const doomed = playFirst(s)
+    s.coordinator.deleteCurrent()
+    openNext(s)
+
+    await vi.advanceTimersByTimeAsync(5000)
+    await settle()
+
+    expect(s.trash).toHaveBeenCalledTimes(1)
+    expect(s.coordinator.getState()).toMatchObject({
+      lastError: `Could not move ${doomed} to the trash: the Recycle Bin is not available on this drive`,
+      pendingDeletes: [],
+      stats: { total: 3 }
+    })
+  })
+
+  it('forgets a file that already disappeared, without trashing anything', async () => {
+    const s = setup(['a.mkv', 'b.mkv', 'c.mkv'])
+    const doomed = playFirst(s)
+    s.coordinator.deleteCurrent()
+    openNext(s)
+    await settle()
+
+    s.files.delete(`/videos/${doomed}`)
+    await vi.advanceTimersByTimeAsync(5000)
+    await settle()
+
+    expect(s.trash).not.toHaveBeenCalled()
+    expect(s.coordinator.getState()).toMatchObject({ lastError: null, stats: { total: 2 } })
+  })
+
+  it('waits for the player to move past the file before trashing it', async () => {
+    const s = setup(['a.mkv', 'b.mkv', 'c.mkv'])
+    const doomed = playFirst(s)
+    s.coordinator.deleteCurrent()
+
+    await vi.advanceTimersByTimeAsync(5000)
+    await settle()
+    expect(s.trash).not.toHaveBeenCalled()
+
+    openNext(s)
+    await vi.advanceTimersByTimeAsync(1000)
+    await settle()
+    expect(s.trash).toHaveBeenCalledWith(`/videos/${doomed}`)
+  })
+
+  it('keeps the file if the player never lets go of it', async () => {
+    const s = setup(['a.mkv', 'b.mkv', 'c.mkv'])
+    const doomed = playFirst(s)
+    s.coordinator.deleteCurrent()
+
+    await vi.advanceTimersByTimeAsync(5000 + 10 * 1000)
+    await settle()
+
+    expect(s.trash).not.toHaveBeenCalled()
+    expect(s.coordinator.getState()).toMatchObject({
+      lastError: `${doomed} is still open in the player, so it was not deleted`,
+      stats: { total: 3 }
+    })
+  })
+
+  it('stops the player when it deletes the last playable file, then trashes it', async () => {
+    const s = setup(['only.mkv'])
+    const doomed = playFirst(s)
+    s.coordinator.deleteCurrent()
+
+    expect(s.coordinator.getState().status).toBe('finished')
+    expect(s.player.unloads).toBe(1)
+    await settle()
+
+    await vi.advanceTimersByTimeAsync(5000)
+    await settle()
+    expect(s.trash).toHaveBeenCalledWith(`/videos/${doomed}`)
+  })
+
+  it('deletes the current file when Delete is pressed inside the player', () => {
+    const s = setup(['a.mkv', 'b.mkv'])
+    const doomed = playFirst(s)
+    s.player.emit({ type: 'command', command: 'delete' })
+    expect(s.coordinator.getState().pendingDeletes.map((entry) => entry.id)).toEqual([doomed])
+  })
+
+  it('does nothing when there is no current file', async () => {
+    const s = setup(['a.mkv'])
+    s.coordinator.deleteCurrent()
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(s.coordinator.getState().pendingDeletes).toEqual([])
+    expect(s.trash).not.toHaveBeenCalled()
+  })
+
+  it('cancels deletes still in the undo window when disposed, and never replays them', async () => {
+    const s = setup(['a.mkv', 'b.mkv', 'c.mkv'])
+    playFirst(s)
+    s.coordinator.deleteCurrent()
+    openNext(s)
+
+    s.coordinator.dispose()
+    await vi.advanceTimersByTimeAsync(10000)
+    await settle()
+    expect(s.trash).not.toHaveBeenCalled()
   })
 })

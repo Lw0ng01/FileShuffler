@@ -79,10 +79,12 @@ describe.skipIf(mpvPath === undefined)('MpvPlayer with a real mpv', { timeout: 2
     const client = player['client']
     await client.command(['keypress', '>'])
     await client.command(['keypress', '<'])
-    await waitFor(events, (event) => event.type === 'command' && event.command === 'back')
+    await client.command(['keypress', 'DEL'])
+    await waitFor(events, (event) => event.type === 'command' && event.command === 'delete')
     expect(events).toEqual([
       { type: 'command', command: 'next' },
-      { type: 'command', command: 'back' }
+      { type: 'command', command: 'back' },
+      { type: 'command', command: 'delete' }
     ])
   })
 

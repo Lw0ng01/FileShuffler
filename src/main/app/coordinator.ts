@@ -1,14 +1,21 @@
 import type { ShuffleSession, ShuffleStats } from '../domain/shuffle'
+import { sameFile, type FileIdentity } from '../files/fileIdentity'
 import type { PlaybackAdapter, PlaybackEvent } from '../playback/types'
 
 /**
  * - `idle`: nothing requested yet
  * - `loading`: a file was sent to the player, waiting for it to open
  * - `playing`: the player confirmed the current file opened
- * - `finished`: nothing left that can play (empty folder, or every file failed)
- * - `player-exited`: the player is gone; commands are ignored until a new coordinator is created
+ * - `finished`: nothing left that can play (empty folder, or every file failed or was deleted)
+ * - `player-exited`: the player is gone; navigation is ignored until a new coordinator is created
  */
 export type CoordinatorStatus = 'idle' | 'loading' | 'playing' | 'finished' | 'player-exited'
+
+export interface PendingDelete {
+  id: string
+  /** When the undo window ends, in milliseconds since the epoch. */
+  deadline: number
+}
 
 export interface CoordinatorState {
   status: CoordinatorStatus
@@ -16,6 +23,8 @@ export interface CoordinatorState {
   stats: ShuffleStats
   /** Most recent problem, kept until the next file opens successfully. */
   lastError: string | null
+  /** Deletes that can still be undone. */
+  pendingDeletes: PendingDelete[]
 }
 
 export interface CoordinatorOptions {
@@ -23,10 +32,38 @@ export interface CoordinatorOptions {
   player: PlaybackAdapter
   /** Maps a session item ID to the absolute path the player should open. */
   resolvePath: (id: string) => string
+  /** Moves a file to the OS trash. Must reject, never delete permanently, if that isn't possible. */
+  trash: (path: string) => Promise<void>
+  /** The identity of the file at a path, or null if nothing is there. Rejects if it can't tell. */
+  identify: (path: string) => Promise<FileIdentity | null>
+  /** How long a delete can be undone before the file is trashed. */
+  undoWindowMs?: number
+}
+
+const DEFAULT_UNDO_WINDOW_MS = 5000
+/** If the player still holds a file when its undo window ends, check again this often... */
+const RELEASE_RETRY_MS = 1000
+/** ...up to this many times, then keep the file rather than trash it while it's open. */
+const MAX_RELEASE_RETRIES = 10
+
+interface DeleteInProgress {
+  id: string
+  path: string
+  deadline: number
+  timer: ReturnType<typeof setTimeout>
+  /** Identity when the delete started; undefined if it couldn't be read. */
+  identity: Promise<FileIdentity | null | undefined>
+  /** The load that was showing this file when the delete started. */
+  token: number | null
+  /** True once the player has moved past that load or stopped. */
+  released: boolean
+  releaseRetries: number
+  /** The trash step has begun and can no longer be undone. */
+  trashing: boolean
 }
 
 /**
- * The single authority for a shuffle session's playback (PROJECT.md §5). Every navigation command
+ * The single authority for a shuffle session's playback and deletes (PROJECT.md §5). Every command
  * and player event goes through here, and each load carries a token, so rapid commands and late
  * player events can never advance twice or overwrite newer state.
  */
@@ -34,7 +71,11 @@ export class ShuffleCoordinator {
   private readonly session: ShuffleSession
   private readonly player: PlaybackAdapter
   private readonly resolvePath: (id: string) => string
+  private readonly trash: (path: string) => Promise<void>
+  private readonly identify: (path: string) => Promise<FileIdentity | null>
+  private readonly undoWindowMs: number
   private readonly listeners = new Set<(state: CoordinatorState) => void>()
+  private readonly deletes = new Map<string, DeleteInProgress>()
   private readonly stopListening: () => void
   private status: CoordinatorStatus = 'idle'
   private current: string | null = null
@@ -45,6 +86,9 @@ export class ShuffleCoordinator {
     this.session = options.session
     this.player = options.player
     this.resolvePath = options.resolvePath
+    this.trash = options.trash
+    this.identify = options.identify
+    this.undoWindowMs = options.undoWindowMs ?? DEFAULT_UNDO_WINDOW_MS
     this.stopListening = this.player.onEvent((event) => this.handle(event))
   }
 
@@ -53,7 +97,10 @@ export class ShuffleCoordinator {
       status: this.status,
       current: this.current,
       stats: this.session.stats(),
-      lastError: this.lastError
+      lastError: this.lastError,
+      pendingDeletes: [...this.deletes.values()]
+        .filter((entry) => !entry.trashing)
+        .map((entry) => ({ id: entry.id, deadline: entry.deadline }))
     }
   }
 
@@ -74,8 +121,52 @@ export class ShuffleCoordinator {
     if (id !== null) this.show(id)
   }
 
-  /** Stops reacting to the player. The owner disposes the player itself. */
+  /**
+   * Deletes the current file with an undo window (PROJECT.md §2.2–2.3): hides it, moves on, and
+   * sends it to the trash only when the window ends and the file is confirmed unchanged.
+   */
+  deleteCurrent(): void {
+    const id = this.current
+    if (id === null || this.deletes.has(id)) return
+    const path = this.resolvePath(id)
+    this.deletes.set(id, {
+      id,
+      path,
+      deadline: Date.now() + this.undoWindowMs,
+      timer: setTimeout(() => void this.finishDelete(id), this.undoWindowMs),
+      identity: this.identify(path).catch(() => undefined),
+      token: this.activeToken,
+      released: this.activeToken === null,
+      releaseRetries: 0,
+      trashing: false
+    })
+    this.session.beginDelete(id)
+    if (this.status === 'player-exited') this.emit()
+    else this.next()
+  }
+
+  /** Cancels a delete that is still in its undo window. The file becomes playable again. */
+  undoDelete(id: string): void {
+    const entry = this.deletes.get(id)
+    if (entry === undefined || entry.trashing) return
+    clearTimeout(entry.timer)
+    this.deletes.delete(id)
+    this.session.cancelDelete(id)
+    this.emit()
+  }
+
+  /**
+   * Stops reacting to the player and cancels deletes still in their undo window; they are never
+   * replayed later. A trash operation that already started can't be cancelled and finishes on its
+   * own. The owner disposes the player itself.
+   */
   dispose(): void {
+    for (const entry of [...this.deletes.values()]) {
+      if (entry.trashing) continue
+      clearTimeout(entry.timer)
+      this.deletes.delete(entry.id)
+      this.session.cancelDelete(entry.id)
+    }
     this.stopListening()
     this.listeners.clear()
   }
@@ -96,13 +187,18 @@ export class ShuffleCoordinator {
     this.current = null
     this.status = 'finished'
     this.emit()
-    this.player.unload().catch((error: unknown) => {
-      this.lastError = `Could not stop the player: ${String(error)}`
-      this.emit()
-    })
+    this.player.unload().then(
+      () => this.releaseAll(),
+      (error: unknown) => {
+        this.lastError = `Could not stop the player: ${errorMessage(error)}`
+        this.emit()
+      }
+    )
   }
 
   private handle(event: PlaybackEvent): void {
+    if ('token' in event) this.releaseOlderThan(event.token)
+
     switch (event.type) {
       case 'loaded':
         if (event.token !== this.activeToken || this.current === null) return
@@ -123,10 +219,12 @@ export class ShuffleCoordinator {
         return
       case 'command':
         if (event.command === 'next') this.next()
-        else this.back()
+        else if (event.command === 'back') this.back()
+        else this.deleteCurrent()
         return
       case 'exited':
         this.activeToken = null
+        this.releaseAll()
         this.status = 'player-exited'
         this.lastError = `Player exited: ${event.reason}`
         this.emit()
@@ -134,8 +232,83 @@ export class ShuffleCoordinator {
     }
   }
 
+  /** Any event for a newer load means the player has already closed the older file. */
+  private releaseOlderThan(token: number): void {
+    for (const entry of this.deletes.values()) {
+      if (entry.token === null || token > entry.token) entry.released = true
+    }
+  }
+
+  private releaseAll(): void {
+    for (const entry of this.deletes.values()) entry.released = true
+  }
+
+  private async finishDelete(id: string): Promise<void> {
+    const entry = this.deletes.get(id)
+    if (entry === undefined || entry.trashing) return
+
+    if (!entry.released) {
+      if (entry.releaseRetries >= MAX_RELEASE_RETRIES) {
+        this.abandonDelete(entry, `${id} is still open in the player, so it was not deleted`)
+        return
+      }
+      entry.releaseRetries += 1
+      entry.timer = setTimeout(() => void this.finishDelete(id), RELEASE_RETRY_MS)
+      return
+    }
+
+    entry.trashing = true
+    this.emit()
+
+    const original = await entry.identity
+    let now: FileIdentity | null
+    try {
+      now = await this.identify(entry.path)
+    } catch (error) {
+      this.abandonDelete(entry, `Could not check ${id} before deleting it: ${errorMessage(error)}`)
+      return
+    }
+
+    if (now === null) {
+      // Already gone: nothing to trash, so just forget it.
+      this.completeDelete(entry)
+      return
+    }
+    if (original === undefined || original === null || !sameFile(original, now)) {
+      this.abandonDelete(entry, `${id} could not be confirmed as the same file, so it was kept`)
+      return
+    }
+
+    try {
+      await this.trash(entry.path)
+    } catch (error) {
+      this.abandonDelete(entry, `Could not move ${id} to the trash: ${errorMessage(error)}`)
+      return
+    }
+    this.completeDelete(entry)
+  }
+
+  private completeDelete(entry: DeleteInProgress): void {
+    this.deletes.delete(entry.id)
+    this.session.completeDelete(entry.id)
+    this.emit()
+  }
+
+  /** Keeps the file: it becomes playable again and the reason is shown. */
+  private abandonDelete(entry: DeleteInProgress, reason: string): void {
+    clearTimeout(entry.timer)
+    this.deletes.delete(entry.id)
+    this.session.cancelDelete(entry.id)
+    this.lastError = reason
+    this.emit()
+  }
+
   private emit(): void {
     const state = this.getState()
     for (const listener of this.listeners) listener(state)
   }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }

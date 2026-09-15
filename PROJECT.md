@@ -4,7 +4,7 @@
 > change happens (see Change Log at the bottom). `CLAUDE.md` covers *how to work in the code*;
 > this file covers *what and why*.
 
-**Status:** Phase 1 (shuffle engine and mpv playback done; next: folder scan, delete, app UI) · **Stack:** Electron + React + TypeScript
+**Status:** Phase 1 (engine, mpv playback, folder reading and delete done; next: app screen) · **Stack:** Electron + React + TypeScript
 (electron-vite) · **Name:** FileShuffler. Lucas doesn't care about the name;
 keep it unless he says otherwise.
 
@@ -59,6 +59,37 @@ small enough to finish, and **never introduce a permanent-delete path.**
    fine.)
 8. **Nothing personal goes into git:** no media, caches, index database, or config holding real
    paths. Enforce this with `.gitignore`.
+
+### How delete is implemented (Phase 1)
+
+- **Entry points:** `ShuffleCoordinator.deleteCurrent()` and `undoDelete(id)` in
+  `src/main/app/coordinator.ts`. `DEL` inside mpv goes through the same path.
+- **Immediately:** the file is hidden from the session and playback moves on. It is listed in
+  `pendingDeletes` with a deadline, so the UI can show a countdown and an Undo button.
+- **When the 5-second window ends:**
+  1. Wait until the player has moved past the file: any event for a newer load, or the player
+     stopped or exited. If it hasn't, check again every second for up to 10 seconds, then keep
+     the file.
+  2. Read the file's identity again with `lstat`, without following links: device, file ID, size
+     and nanosecond modification time.
+  3. If it's gone, just remove it from the session. If it changed or can't be read, keep it and show
+     why. If it's the same file, call `shell.trashItem`.
+  4. If trashing fails, keep the file and show the error. There is no fallback of any kind.
+- **On close:** deletes still in the undo window are cancelled and never replayed. A trash
+  operation that already started finishes.
+- **Electron on Windows**, checked in its source (`shell/common/platform_util_win.cc`):
+  - `trashItem` uses `IFileOperation` with `FOFX_RECYCLEONDELETE`.
+  - Its progress handler aborts (`E_ABORT`) whenever Windows says an item can't be recycled, so the
+    promise rejects instead of deleting permanently.
+  - Still to confirm on a real USB or network drive on Windows.
+- **Folder reading:** `listVideoFiles` in `src/main/files/videoFolder.ts`.
+  - Top level only, regular files only.
+  - Skips links, junctions and dot-files.
+  - Extensions come from an allowlist. `.ts` and `.mts` are excluded because they are also
+    TypeScript source files.
+- **Known limits:**
+  - The Windows "hidden" attribute isn't checked, only dot-files.
+  - FAT-formatted drives may not report stable file IDs; size and modification time still apply.
 
 ## 3. The shuffle algorithm (the main thing to get right)
 
@@ -169,8 +200,8 @@ For every player:
 
 - **Player interface:** `src/main/playback/types.ts`.
   - `load()` returns a token immediately.
-  - Events: `loaded`, `ended` and `failed` (each with its token), `command` (`next`/`back`) and
-    `exited`.
+  - Events: `loaded`, `ended` and `failed` (each with its token), `command`
+    (`next`/`back`/`delete`) and `exited`.
   - Nothing assumes pushed events, so a polling VLC adapter fits.
 - **Coordinator:** `src/main/app/coordinator.ts` connects `ShuffleSession` to a player.
   - Ignores any event whose token isn't the active load.
@@ -183,8 +214,9 @@ For every player:
   - Flags: `--no-config`, because user scripts such as autoload would play files outside the
     session; plus `--idle=yes`, `--force-window=yes`, `--keep-open=no` and `--ytdl=no`.
   - Keys inside mpv: `>` for Next and `<` for Back. These are mpv's own playlist keys, so
-    arrow-key seeking still works. They arrive as `client-message` events, so no Lua script is
-    needed. Delete gets its key with the delete flow.
+    arrow-key seeking still works. `DEL` deletes (fn+Delete on a Mac). They arrive as
+    `client-message` events, so no Lua script is needed. Lucas left the key choice to Claude
+    (2026-09-15); the arrow keys stay for seeking within a video.
   - Each load is matched to the `playlist_entry_id` in mpv's `loadfile` reply. Events that
     arrive before the reply are buffered, because mpv's docs don't guarantee the order.
   - `unload()` sends `stop` and then waits until `idle-active` is true, because `stop` replies
@@ -199,8 +231,8 @@ For every player:
   - The integration tests run when `MPV_PATH` is set.
 - **Still to verify on Windows:** the named pipe connection, file release before trashing, and
   the bundled mpv build.
-- **Not yet:** deciding where mpv comes from (bundled or installed), connecting it to the Electron
-  app, and the delete key.
+- **Not yet:** deciding where mpv comes from (bundled or installed) and connecting it to the
+  Electron app.
 
 ### Embedded player: an early feasibility milestone
 
@@ -368,16 +400,19 @@ is not designed in detail yet.
 
 - [x] Harden the starter template: sandbox on, preload exposes no raw IPC, navigation and new
       windows blocked (§5)
-- [ ] Pick folder (top-level files only)
-- [ ] Scan for video files (allowlisted extensions)
+- [ ] Pick folder (top-level files only). Reading is done (`listVideoFiles`); the folder picker
+      comes with the app shell.
+- [x] Scan for video files (allowlisted extensions): `src/main/files/videoFolder.ts`
 - [x] Shuffle engine (bag + playlist/cursor, endless cycles, seam rule) **with unit tests** (§3)
 - [x] mpv integration behind the playback adapter (§4): launch, load file, detect end of video →
       autoplay next, key bindings inside mpv. Not yet connected to the app window (App shell item).
       Verified against mpv 0.41.0 on macOS.
-- [ ] Next / Back / Delete-to-trash (unload first, undo window)
+- [x] Next / Back / Delete-to-trash (unload first, undo window), in the coordinator (§2 How
+      delete is implemented). Buttons come with the app shell.
 - [ ] App shell with sidebar + shuffler screen (§6), player-local shortcuts
 - [ ] Show current filename + successful-open coverage and failures
-- [ ] Verify rapid navigation, EOF races, load failure, player exit, undo, failed trash, and empty folders
+- [ ] Verify rapid navigation, EOF races, load failure, player exit, undo, failed trash, and empty folders.
+      Covered by unit tests with a fake player and fake files; still to exercise in the running app.
 - [ ] Package on Windows now: bundle mpv and verify control/file release/trash on the target machine
 - [ ] Record initial performance baseline (§5); agree budgets before optimization claims
 
@@ -512,3 +547,15 @@ is not designed in detail yet.
     adapter.
   - Choices: `>`/`<` for Next/Back inside mpv, `--no-config` for predictable playback, and a file
     counts as released only once mpv reports `idle-active`. See §4 Implementation.
+- **2026-09-15:** Folder reading and delete-to-trash implemented (Phase 1).
+  - Lucas left the in-player keys to Claude: `>`/`<` for Next/Back, so the arrow keys keep seeking,
+    and `DEL` to delete.
+  - `listVideoFiles` reads a folder's top level through an allowlist, excluding `.ts`/`.mts`.
+  - Delete has a 5-second undo, an identity recheck, a wait for the player to release the file,
+    and fail-closed trashing (§2 How delete is implemented).
+  - Checked Electron's Windows `trashItem` source: it aborts rather than permanently deleting items
+    that can't be recycled. Still to confirm on a real Windows drive.
+  - 31 tests for folder reading, file identity and the coordinator, including 11 delete cases. No
+    dependency changes, so no `npm install` was needed.
+  - Mutation check: breaking the identity recheck, the wait for the player to release the file,
+    cancel-on-close, or keeping the file when trashing fails each made a delete test fail.
