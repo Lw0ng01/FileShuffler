@@ -17,10 +17,16 @@ A small personal desktop app with two parts:
 1. **Shuffler (the core):** point it at a folder of videos and play them in a *good* random order.
    Buttons for next, back and delete (sends the file to the Recycle Bin/Trash).
    Remake of an older Python app whose shuffle felt bad.
-2. **Dashboard (bonus, later):** a good-looking "all-in-one" overview of the *personal* files on
-   every drive: videos, pictures, documents, audio. System and background files are left out.
+2. **Dashboard (planned, after the shuffler):** a good-looking overview of the *personal* files
+   in selected locations across drives: videos, pictures, documents, audio. System and background
+   files are left out.
+3. **Custom built-in player (planned):** a player integrated into the dashboard, with our own
+   controls and a native media engine for broad video/audio/subtitle support. External mpv gets
+   the shuffler working first; embedded playback has an early feasibility milestone (§4).
 
-It doesn't need to be rigorous, but it **must never put files at risk.**
+All three parts matter to Lucas. The shuffler is the first delivery priority. The project should
+also demonstrate good system architecture, design, and measured efficiency. Keep the design
+small enough to finish, and **never introduce a permanent-delete path.**
 
 **Platforms:** Windows is the main target (Lucas's desktop). macOS is a nice-to-have (laptop).
 
@@ -31,12 +37,17 @@ It doesn't need to be rigorous, but it **must never put files at risk.**
 2. **The only destructive action is "move to Recycle Bin/Trash".** No permanent delete anywhere
    in the codebase. If the OS can't send a file to the trash, **fail and show an error** instead of
    falling back to a permanent delete.
-   - ⚠️ Windows: USB sticks and network drives often have **no Recycle Bin**, so deleting there is
-     permanent. Turn delete off on those drives, or require an explicit extra confirmation.
+   - Some removable and network locations do not support recycling. Disable the action where
+     this is known; otherwise report a failed trash operation. Extra confirmation never permits
+     permanent deletion. Test actual behavior on the target Windows storage types.
    - ⚠️ Windows locks files that are open in another program. **Switch the player to the next
      video (or unload the file) before trashing it** (see §4).
 3. **Undo window for delete.** Delete hides the file right away but only sends it to the trash
-   after about 5 seconds, so it can be undone in the app. Pending deletes finish when the app closes.
+   after about 5 seconds, so it can be undone in the app. Cancel actions still in the undo window
+   when the app closes; do not replay them after a restart. An OS trash operation already started
+   cannot be cancelled by this undo mechanism. On failure, restore the item in the app and show
+   the error. Recheck the target before acting; if the file changed or its identity is uncertain,
+   cancel the action instead of trashing a replacement at the same path.
 4. **Allowlist, not blocklist, for file types.** Only index known personal-media and document
    extensions.
 5. **Skip system locations:** `C:\Windows`, `Program Files*`, `ProgramData`, `AppData`,
@@ -52,10 +63,12 @@ It doesn't need to be rigorous, but it **must never put files at risk.**
 ## 3. The shuffle algorithm (the main thing to get right)
 
 ### Scope of a shuffle session
+
 - **Top level only.** Only video files directly inside the chosen folder are included.
   **Subfolders are ignored entirely** (not scanned, not played, never touched). *(Decided 2026-09-15.)*
 
 ### Why the old one probably felt bad
+
 - **Picking with `random()` every time** (sampling *with replacement*) repeats videos quickly.
   With 100 videos there's about a 50% chance of a repeat within the first 12 picks (the birthday
   problem).
@@ -64,57 +77,100 @@ It doesn't need to be rigorous, but it **must never put files at risk.**
 - Check this against the old code once Lucas shares it.
 
 ### The design: shuffle bag + playlist history
-- **Fisher–Yates shuffle** of the whole file list gives a uniform random order with no repeats.
-  Play through it in order. Every file plays once before any file plays twice.
+
+- **Fisher–Yates shuffle** gives a uniform base permutation. Automatic forward traversal
+  covers each eligible file once per cycle. Explicit Back/Forward navigation can replay history;
+  this does not consume the shuffle bag again.
 - **One `playlist` array plus a `cursor`** handles navigation:
   - *Next:* `cursor + 1`. If that's past the end, pull the next file from the bag.
   - *Back:* `cursor - 1`. Pressing Next after Back replays the same order, like a browser's
     forward and back.
 - **Endless, maximum-coverage cycles** *(decided)*: when the bag runs out, reshuffle and keep
-  going. Make sure the first few picks of the new cycle weren't among the last *K* played (for
-  example K = min(10, n/3)) to avoid back-to-back repeats at the seam.
-- **Delete:** remove the file from both the playlist and the bag, and adjust the cursor.
+  going. For an unchanged eligible set of size n, use K = min(10, floor(n / 3)): exclude the
+  previous cycle's last K files from the next cycle's first K positions. Also avoid an immediate
+  repeat when n > 1, even if K is zero. Handle changed/empty/single-file sets explicitly; relax
+  exclusions only when they cannot be satisfied, and never retry indefinitely. These constraints
+  intentionally alter uniform randomness.
+- **Delete:** temporarily exclude the item during its undo window while preserving enough state
+  to restore it. Only finalize removal after successful trashing; maintain a valid history cursor.
+- **Progress:** label a file "opened this cycle" only after the player reports a successful load.
+  This is coverage, not proof it was watched. Failed/missing files are reported separately and
+  skipped for this cycle; stop autoplay when no playable candidates remain instead of looping.
+- **History:** bound navigation history in memory. Preserve current-cycle coverage independently
+  so trimming old history does not reintroduce already-opened files into the current cycle.
 - **New files found mid-session:** insert them at a random spot in the *unplayed* part of the bag.
 - **Persist per folder:** save which files have been played this cycle, so reopening the app
   continues the cycle instead of starting fresh. This matters because the goal is coverage.
 
 ### Possible upgrades (later)
+
 - **Weighting:** favor favorites or videos not seen in a long time, without breaking the
   no-repeat guarantee.
-- The shuffle is pure logic, so it can be **unit-tested** (uniformity, no repeats within a cycle,
-  seam rule, back/forward, delete while mid-history).
+- Test pure shuffle logic with an injectable random source: coverage, small/empty folders,
+  cycle boundaries, Back/Forward, and undo/delete while navigating history. Use deterministic
+  invariant tests; a flaky statistical test is not proof of uniformity.
 
-## 4. Playback: external player by default
+## 4. Playback: external mpv first, embedded native player planned
 
-Lucas has many formats (mkv, avi, etc.), so **the default is a separate player program**.
-A built-in player is a later nice-to-have.
+### First release: one bundled player
 
-**The core problem:** the app's Next/Back/Delete must *control* another program. Three consequences:
-- **Keyboard focus:** while the player is fullscreen, it gets the keypresses, so the app needs
-  system-wide hotkeys, a floating control bar, or key bindings added inside the player.
-- **File locks:** a video must be unloaded from the player before it can be trashed (§2.2).
-- **How much control each player allows:**
+Use a persistent mpv process controlled over local JSON IPC (named pipe on Windows, Unix socket
+on macOS). Load files into that process instead of restarting it on every Next. Support only mpv
+initially; VLC, IINA, and generic player support are deferred until there is a concrete need.
 
-| Player | Control method | Level |
-|---|---|---|
-| **mpv**, bundled with the app | JSON IPC (named pipe on Windows, unix socket on Mac). A Lua script can add → ← Del keys *inside* the mpv window. | Full: **recommended default** |
-| **VLC** | Its HTTP interface, switched on through launch arguments | Good |
-| **IINA** (Mac, mpv-based) | Probably mpv IPC passed through `iina-cli`. **Still to verify.** | Probably good |
-| Any other player | Close and relaunch it with the next file | Basic: flickers, leaves fullscreen |
+- Keep shuffle order and navigation authoritative in the application. Route player key bindings
+  into the same application actions so mpv and the dashboard cannot advance separate playlists.
+- Prefer bindings inside the mpv window for fullscreen control. Make system-wide shortcuts
+  optional/configurable and avoid claiming plain arrow/Delete keys globally.
+- Serialize playback transitions and associate events with the active load request. Rapid Next,
+  EOF, Back, and Delete must not advance twice or let late events overwrite newer state.
+- Before trashing, unload the target and wait for the relevant playback transition to complete.
+  A command being sent is not proof that a file handle was released. If trashing still fails,
+  restore the item and report the error; never force deletion.
+- Handle process exit, load errors, and IPC disconnects explicitly. Keep IPC local with suitable
+  access restrictions; pass commands as structured data, not interpolated shell strings.
 
-**Built-in player (later):**
-- Web-based stacks (Electron) can play mp4/webm in-app, which is fine for dashboard previews.
-- Embedding a player that plays every format is easy in Qt, Flutter or C# (libmpv/libVLC) and hard
-  in Electron.
+### Embedded player: an early feasibility milestone
+
+"Built-in native player" means our own integrated interface backed by a native media library
+such as libmpv or libVLC. It does not require writing codecs from scratch. HTML video previews
+can be useful, but do not satisfy the broad-format player goal by themselves.
+
+Immediately after the first working shuffler flow, before extensive dashboard layout work,
+prototype one embedded playback surface on Windows. Test:
+- Video actually inside the app, with custom controls, correct layering, resizing, fullscreen,
+  focus, keyboard input, display scaling, and clean teardown/file release.
+- Representative containers/codecs, audio/subtitle tracks, seeking, and hardware decoding where
+  the machine supports it. Broad support is a tested compatibility matrix, not "every format".
+- CPU, memory, dropped frames, and seek responsiveness against external mpv with the same files
+  and settings. Keep decoded video frames out of the normal JavaScript/JSON message channel.
+- A packaged Windows build on a machine without development tools. Assess macOS feasibility
+  before promising equivalent embedded behavior there.
+
+Record the rendering approach, dependencies, measurements, limitations, and integration effort.
+A playback interface can preserve application logic across external and embedded implementations;
+it cannot make native rendering, packaging, and window integration disappear.
+
+If the prototype meets the agreed criteria, implement it in Electron. If it exposes a material
+limitation, compare a focused Qt or .NET prototype (or Tauri when appropriate) before migrating.
+Do not assume any framework makes native media embedding effortless.
 
 ## 5. Tech stack: ✅ decided: TypeScript + Electron
 
-**Chosen 2026-09-15:** Electron + React + TypeScript, scaffolded with electron-vite, tests with
-vitest. Lucas picked it partly because it's more to learn.
-- **Default player:** mpv, bundled.
-- **VLC:** a supported option.
-- **Custom built-in player:** Lucas still wants to try a more complex one later. It's a future
-  project, not ruled out.
+**Current choice:** Electron + React + TypeScript, scaffolded with electron-vite, tests with
+vitest. Keep this stack for the shuffler and initial dashboard work. This is a practical fit for
+Lucas's goals and existing start, not a claim that Electron is universally best or most efficient.
+- **First player:** bundled external mpv only.
+- **Planned player:** custom embedded native playback, subject to the early prototype in §4.
+- **Learning objective:** explain architecture, state transitions, performance measurements,
+  failure handling, and tradeoffs. A harder language is not automatically a better portfolio.
+
+### Existing setup notes
+
+The following installation/version notes are inherited from the initial setup session. This
+planning revision did not revalidate them. Check the actual lockfile, installed tools, and a
+clean install before relying on or changing these claims.
+
 - **Requires Node ≥ 22.12**, because `electron-builder` loads an ESM-only library (`@noble/hashes`)
   using `require()`. On older Node, `npm install`'s postinstall fails with `ERR_REQUIRE_ESM`.
   The Mac is now on Node 26.8.2 / npm 11.19.1.
@@ -135,27 +191,69 @@ vitest. Lucas picked it partly because it's more to learn.
   - Approvals are **pinned to exact versions**. After upgrading one of these packages, run
     `npm install-scripts ls` and approve the new version.
 
-Options that were considered:
+### Tradeoffs and criteria for reconsidering the stack
 
-| | TypeScript + Electron | Python + PySide6 (Qt) + mpv |
+| Option | Relevant benefit | Cost / uncertainty |
 |---|---|---|
-| Good-looking dashboard | ✅ Easiest (web tech, familiar from his site) | ⚠️ More effort |
-| Built-in player for every format | ❌ Hard | ✅ Easy (embed libmpv) |
-| Controlling an external player | ✅ | ✅ |
-| System-wide hotkeys / trash | ✅ Built in | ✅ Add-on packages |
-| Packaging Windows + Mac | ✅ Mature | ⚠️ Clunkier, sometimes flagged by antivirus |
-| Size | ~150 MB | ~60–100 MB |
+| Electron + TypeScript + mpv | Shared language for UI/application logic; consistent browser engine; fits the shuffler and dashboard | Chromium/Node baseline overhead; embedded native rendering needs a prototype |
+| Tauri + TypeScript/Rust + native media engine | Reuses web UI and avoids bundling a full browser engine | Adds Rust and migration work; native video integration still needs proof |
+| Qt + native media engine | Worth evaluating for a player-centered native desktop design | UI rewrite and toolkit/language learning; rendering and packaging still require work |
+| .NET desktop UI + native media engine | Worth evaluating for the Windows-first target | New stack; verify the chosen UI toolkit's embedding and macOS path |
 
-Other options:
-- **Flutter + media_kit:** modern UI plus an embedded player for every format, cross-platform.
-  Requires learning Dart.
-- **C# + Avalonia + LibVLCSharp:** strong on Windows, weaker Mac story.
-- **Tauri:** the OS webview varies between platforms, which is bad for a video app. Skipped.
+Tauri's system webviews differ between platforms, but that does not limit an external mpv
+process's codec support. Package sizes must be measured with equivalent bundled dependencies;
+previous rough size comparisons are not decision evidence.
 
-**Recommendation:**
-- **TypeScript + Electron, with bundled mpv as the default player** and VLC/others as options.
-  External playback is the default anyway, so the embedded-player advantage matters less.
-- **Switch to Python + Qt** if a true built-in player for every format becomes a must-have.
+Electron is not a guarantee of low memory, low CPU, or easy embedding. Switching the app shell
+also does not automatically improve native video decoding. Reconsider the stack when measured
+resource use or the player prototype misses a concrete requirement, or if Lucas explicitly
+changes the learning goal. Do not migrate for framework reputation alone.
+
+### Architecture: clear boundaries inside one desktop application
+
+These are target responsibilities, not a claim that these modules already exist. Introduce them
+as features arrive; avoid a generic plugin framework or services that the MVP does not need.
+
+| Layer | Owns | Boundary |
+|---|---|---|
+| React renderer | Dashboard/shuffler views, input, display state | No direct filesystem, shell, database, or player process access |
+| Preload bridge | Narrow, typed operations and event subscriptions | Validate inputs at the privileged receiving side; never expose arbitrary IPC or shell execution |
+| Application coordinator | Shuffle session, navigation, pending trash, playback transitions | One authority for commands/events; explicit states and errors |
+| Pure domain logic | Shuffle bag, cycle coverage, history rules | No React, Electron, filesystem, or player dependency |
+| Adapters | mpv control, OS trash, folder reads, later storage/indexing | Small interfaces; real platform behavior tested separately |
+| Background work | Later indexing, probing, thumbnails, CPU-heavy tasks | Bounded concurrency, cancellation, progress, and cleanup |
+
+Keep context isolation and renderer sandboxing enabled, Node integration disabled, and a
+restrictive content security policy. Validate IPC senders and requests. Resolve file actions
+against the active session rather than accepting unrestricted paths from renderer input.
+
+Use asynchronous filesystem operations; move CPU-heavy work off the main/UI threads when it
+arrives. Add SQLite with the indexer, not as a requirement for the initial shuffle algorithm.
+Persist per-folder progress separately from the UI and recover safely from invalid saved state.
+
+### Efficiency: measure the whole application
+
+- Measure a packaged release build on the Windows desktop, with hardware, sample files,
+  library size, and playback settings recorded. Development builds are not the baseline.
+- Record cold launch to interactive, idle memory/CPU, playback memory/CPU, dropped frames,
+  seek latency, and responsiveness while scanning. Account for all Electron and player/helper
+  processes; use consistent memory metrics and distinguish OS cache from process memory.
+- Start with a baseline after the first usable flow. Then set explicit budgets for the target
+  machine and use the same scenario to compare changes; no performance claims without results.
+- Exercise repeated Next/Back/load/unload operations. Check that memory and handle counts settle
+  after warm-up and that listeners, child processes, timers, and caches are cleaned up.
+- Later: render only visible rows in large lists, cache thumbnails with limits, limit indexing
+  concurrency, and provide cancellation. Pause unnecessary dashboard work during playback.
+- Keep short design notes explaining the chosen tradeoffs, including the native-player prototype.
+  Architecture is demonstrated through behavior, tests, and measured results, not folder count.
+
+References for implementation and review:
+- [Electron performance](https://www.electronjs.org/docs/latest/tutorial/performance)
+- [Electron security](https://www.electronjs.org/docs/latest/tutorial/security)
+- [Electron trash API](https://www.electronjs.org/docs/latest/api/shell#shelltrashitempath)
+- [mpv JSON IPC](https://mpv.io/manual/master/#json-ipc)
+- [mpv embedding examples](https://github.com/mpv-player/mpv-examples)
+- [Tauri webviews](https://v2.tauri.app/reference/webview-versions/)
 
 ## 6. Layout
 
@@ -166,21 +264,23 @@ Build the shuffler first, inside an app shell with a sidebar, so the dashboard s
 │ ▶ Shuffle│  📁 D:\Videos\Clips            [Change]      │
 │ ▦ Dash   │                                              │
 │ ⚙ Setting│   Now playing: some_clip.mkv                 │
-│          │   Cycle 2 · 140 / 340 seen                   │
+│          │   Cycle 2 · 140 / 340 opened                 │
 │          │                                              │
 │          │     [ ◀ Back ]  [ ⤮ Next ]  [ 🗑 Delete ]     │
-│          │   Player: mpv ▾    Hotkeys: ← → Del          │
+│          │   Player: mpv · shortcuts in player          │
 │          │                                              │
 │          │   Recent:  clip_a.mp4 · clip_b.mkv · …       │
 └──────────┴──────────────────────────────────────────────┘
 ```
 
 Dashboard (later): row of drive cards (used/free), space-by-category bar, largest/recent file
-lists. Not designed in detail yet.
+lists and an integrated player. Final video placement follows the embedding prototype; layout
+is not designed in detail yet.
 
 ## 7. Roadmap
 
 ### Phase 0 — Setup
+
 - [x] Lucas picks the stack (§5): TypeScript + Electron
 - [ ] Review the old Python code when Lucas shares it
 - [x] Scaffold project (electron-vite react-ts), `.gitignore` with personal-data guards, vitest,
@@ -192,43 +292,71 @@ lists. Not designed in detail yet.
 - [ ] Create **public** GitHub repo and push, **after the shuffler basics work** (end of Phase 1)
 
 ### Phase 1 — Shuffler MVP ⭐
+
 - [ ] Pick folder (top-level files only)
 - [ ] Scan for video files (allowlisted extensions)
 - [ ] Shuffle engine (bag + playlist/cursor, endless cycles, seam rule) **with unit tests**
 - [ ] mpv integration: launch, load file, detect end of video → autoplay next, key bindings inside mpv
 - [ ] Next / Back / Delete-to-trash (unload first, undo window)
-- [ ] App shell with sidebar + shuffler screen (§6), system-wide hotkeys
-- [ ] Show current filename + cycle progress
+- [ ] App shell with sidebar + shuffler screen (§6), player-local shortcuts
+- [ ] Show current filename + successful-open coverage and failures
+- [ ] Verify rapid navigation, EOF races, load failure, player exit, undo, failed trash, and empty folders
+- [ ] Package on Windows now: bundle mpv and verify control/file release/trash on the target machine
+- [ ] Record initial performance baseline (§5); agree budgets before optimization claims
+
+### Phase 1B — Embedded player feasibility
+
+- [ ] Prototype embedded native playback using the criteria in §4, with a packaged Windows build
+- [ ] Compare against external mpv and assess macOS feasibility
+- [ ] Document the decision: continue Electron embedding or compare a narrowly scoped alternative
 
 ### Phase 2 — Shuffler polish
+
 - [ ] Remember last folder and shuffle progress between launches
-- [ ] Player choice: VLC (HTTP interface), IINA (verify), generic relaunch fallback
 - [ ] "Show in Explorer/Finder" button
-- [ ] Favorites / weighting
-- [ ] Optional in-app player for common formats
+- [ ] Configurable shortcuts and clear error/recovery feedback
+- [ ] Repeat the baseline after material playback/performance changes
 
 ### Phase 3 — Indexer (feeds the dashboard)
+
 - [ ] Settings: choose which drives/folders to index (default: user Videos, Pictures, Documents,
       Downloads, Desktop)
 - [ ] Safe background scanner (rules in §2) → SQLite
 - [ ] Incremental rescans
 
 ### Phase 4 — Dashboard
+
 - [ ] Drives: capacity / used / free
 - [ ] Breakdown by category
 - [ ] Largest files, recently added, search
 - [ ] "Shuffle this" from a folder in the dashboard
+- [ ] Implement the validated embedded player with custom controls, subtitles/audio tracks,
+      history/resume, and the same authoritative shuffle session
+- [ ] Verify dashboard indexing/browsing remains responsive during playback
 
 ### Phase 5 — Bonus ideas
+
+- [ ] Favorites / weighting without breaking cycle coverage
+- [ ] Additional external player integrations only if needed
 - [ ] Thumbnail gallery for photos/videos
 - [ ] Duplicate finder (view-only, with trash as the only action)
 - [ ] Watch stats: most played, never watched, total hours of video
 - [ ] "Old Downloads" cleanup suggestions (view-only)
 
-### Phase 6 — Distribution
-- [ ] Packaged builds: Windows first, then Mac
+### Phase 6 — Release polish
+
+- [ ] Refine the Windows packaging already exercised in Phase 1
+- [ ] macOS build and platform-specific validation
+- [ ] Document supported media combinations, resource measurements, and known limitations
 
 ## 8. Concerns / risks
+
+- **Embedded rendering is unproven.** The early prototype controls this risk; changing the
+  application shell is a possible outcome, not a foregone conclusion.
+- **Electron has baseline overhead.** Measure the complete app plus player; do not promise
+  native-toolkit memory usage or assume the project cannot leak resources.
+- **Scope growth:** shuffler first; dashboard and embedded player remain planned. Extra external
+  player support and bonus tools must not crowd out the core flow.
 - **Controlling an external player** is the trickiest part of the MVP (focus, file locks,
   per-player differences). mpv first keeps it manageable.
 - **Scanning every drive is slow.** Scan in the background, cache results, let the user pick roots.
@@ -237,9 +365,14 @@ lists. Not designed in detail yet.
 - **Thumbnail cache privacy:** needs a "clear cache" button.
 
 ## 9. Open questions
+
 1. Old Python code: Lucas will share it later.
+2. Set performance budgets after measuring the first Windows release build.
+3. Embedded playback approach, macOS limitations, and initial compatibility matrix: resolve
+   through Phase 1B, rather than assuming integration is solved.
 
 ## 10. Change Log
+
 - **2026-09-15:** Project started. Wrote initial plan: safety rules, shuffle-bag algorithm,
   phased roadmap, open questions.
 - **2026-09-15:** Lucas answered the first questions.
@@ -268,3 +401,12 @@ lists. Not designed in detail yet.
   - Fixed by upgrading to **Electron 44.3.0**. It has no install script and downloads the binary
     on first run, so it was removed from `allowScripts`.
   - Verified on Node 26: clean `npm ci`, type check, build, tests, and a real app launch.
+
+- **2026-09-15 — Architecture and scope review:** Lucas confirmed the shuffler is first, while
+  the dashboard, a custom built-in native player, efficiency, and demonstrable architecture all
+  remain important. Keep Electron/React/TypeScript for the initial delivery without claiming
+  guaranteed efficiency. Added an early embedded-player prototype and measurements as the
+  basis for any stack change. Defined application/domain/adapter boundaries and runtime IPC
+  validation; deferred extra external players. Moved Windows packaging into Phase 1. Clarified
+  shuffle progress/history and fail-closed trash/undo behavior. Removed unsupported framework
+  ease/size comparisons. Existing setup/version notes were preserved, not reverified.
