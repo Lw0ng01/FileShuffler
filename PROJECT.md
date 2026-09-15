@@ -118,11 +118,20 @@ vitest. Lucas picked it partly because it's more to learn.
 - **Requires Node ≥ 22.12**, because `electron-builder` loads an ESM-only library (`@noble/hashes`)
   using `require()`. On older Node, `npm install`'s postinstall fails with `ERR_REQUIRE_ESM`.
   The Mac is now on Node 26.8.2 / npm 11.19.1.
+- **Electron 44+ is required on Node 26.**
+  - Electron ≤ 39 unpacks its binary with `extract-zip` 2.0.1 / `yauzl` 2.10.0. On Node 26 that
+    silently stops after the first file, leaving no `Electron.app` and giving "Electron failed to
+    install correctly". It works on Node 24.
+  - Upgraded to **Electron 44.3.0**, which uses `@electron-internal/extract-zip`. Verified on
+    Node 26: clean install, build, and the app launches.
+- **Electron 44 has no install script.** It downloads its binary the first time it runs (for
+  example the first `npm run dev` prints "Downloading Electron binary...").
+  - The download is cached in `~/Library/Caches/electron` (Mac) or
+    `%LOCALAPPDATA%\electron\Cache` (Windows).
+  - To download it ahead of time: `npx install-electron`.
 - **npm 11 blocks packages' install scripts unless approved.** The approved list lives in
-  `package.json` → `allowScripts`: electron (downloads the Electron binary), esbuild (compiler
-  binary), fsevents (Mac only), electron-winstaller (Windows installer builds).
-  - Without these approvals, a fresh clone installs "fine" but Electron has no binary and the app
-    won't start.
+  `package.json` → `allowScripts`: esbuild (compiler binary), fsevents (Mac only),
+  electron-winstaller (Windows installer builds).
   - Approvals are **pinned to exact versions**. After upgrading one of these packages, run
     `npm install-scripts ls` and approve the new version.
 
@@ -179,6 +188,7 @@ lists. Not designed in detail yet.
 - [x] Local git repo + first commit
 - [x] Upgrade Node on the Mac to ≥ 22.12 (now 26.8.2). Use ≥ 22.12 on the Windows desktop too.
 - [x] Approve npm 11 install scripts (`allowScripts` in package.json)
+- [x] Upgrade Electron 39 → 44.3.0 (Electron 39 can't install on Node 26)
 - [ ] Create **public** GitHub repo and push, **after the shuffler basics work** (end of Phase 1)
 
 ### Phase 1 — Shuffler MVP ⭐
@@ -253,3 +263,8 @@ lists. Not designed in detail yet.
   - Decided: the GitHub repo will be **public**, created once the shuffler basics work.
   - Background Claude sessions must now work in git worktrees (`.claude/worktrees/`, gitignored)
     and commit on a branch. Lucas merges into `main`.
+  - Found by testing a fresh clone: the Electron 39 binary never unpacked on Node 26. The build
+    still passed, which hid the problem. Confirmed Node 24 works.
+  - Fixed by upgrading to **Electron 44.3.0**. It has no install script and downloads the binary
+    on first run, so it was removed from `allowScripts`.
+  - Verified on Node 26: clean `npm ci`, type check, build, tests, and a real app launch.
