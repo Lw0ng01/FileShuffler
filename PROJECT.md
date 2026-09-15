@@ -4,7 +4,8 @@
 > change happens (see Change Log at the bottom). `CLAUDE.md` covers *how to work in the code*;
 > this file covers *what and why*.
 
-**Status:** Phase 1 (working app screen on macOS; next: verify and package on Windows) ·
+**Status:** Phase 1 (app works on macOS; Windows desktop set up, mpv and trash checked there;
+next: click through the app on Windows, then package) ·
 **Stack:** Electron + React + TypeScript (electron-vite) · **Name:** FileShuffler. Lucas doesn't
 care about the name; keep it unless they say otherwise.
 
@@ -12,46 +13,57 @@ care about the name; keep it unless they say otherwise.
 
 ## Resume here
 
-Last updated 2026-09-15, at the end of the first session (on macOS). A new session starts without
-that session's chat or its local memory. This section, the rest of this doc and `CLAUDE.md` are the
-handoff; keep this section current at the end of each session.
+Last updated 2026-09-15, at the end of the second session (the first on the Windows desktop). A new
+session starts without earlier chats or local memory. This section, the rest of this doc and
+`CLAUDE.md` are the handoff; keep this section current at the end of each session.
 
 **Where things stand**
 - The Phase 1 app works on macOS: choose a folder, shuffle, play in mpv with autoplay, Next/Back,
   and Delete with a 5-second undo before trashing. See §2, §3, §4 and §6 (Implementation notes).
-- `npm test` runs 100 unit tests. Six more run against a real mpv when `MPV_PATH` is set.
+- The Windows desktop is set up: Node 24.21, npm 11.19, Git 2.55 and mpv 0.41 from winget
+  (§5 Existing setup notes). `npm ci`, typecheck and Electron 44.3.0 work.
+- `npm test` runs 101 unit tests. Six more run against a real mpv when `MPV_PATH` is set. All 107
+  pass on Windows.
+- Checked on Windows with disposable clips (§2 How delete is implemented, §4 Implementation):
+  - mpv's named pipe, loads, end of file, key bindings and unload-until-idle (the real-mpv tests).
+  - `shell.trashItem` sent clips to the Recycle Bin on the internal NTFS drive and on an external
+    exFAT drive. mpv doesn't lock a file it is playing.
+  - Fixed: an unplugged drive looked like a deleted file, because Windows reports both as `ENOENT`.
+- The old Python shuffler was reviewed. It confirms §3's guess about why it felt bad.
 - Public repo: https://github.com/Lw0ng01/FileShuffler.
 - Commits use GitHub's private email. In a new clone, run
   `git config user.email "71304042+Lw0ng01@users.noreply.github.com"` before committing. Never
   commit personal emails or local paths.
 
 **Next steps, in order**
-1. Set up the Windows desktop: Node 22.12+ (the current LTS), Git, and mpv from mpv.io (on the PATH,
-   or set `FILESHUFFLER_MPV` to `mpv.exe`). Then `npm ci`, `npm test` and `npm run dev`.
-2. Review Lucas's old Python shuffler when they share it, and compare its shuffle with §3.
-3. Verify on Windows:
-   - the named-pipe connection to mpv, and the keys inside mpv;
-   - delete-to-trash on a normal drive, and on a USB or network drive (it must be refused, never
-     done permanently);
-   - that mpv releases the file before it is trashed.
-4. Package for Windows: bundle mpv in `resources/mpv/` (see `findMpv.ts`), run
+1. Click through the app on Windows with `npm run dev` and generated clips: choose a folder, Next,
+   Back, `>`/`<`/`DEL` inside the mpv window, Undo, and a delete that runs out its undo window and
+   lands in the Recycle Bin.
+2. Try a delete where recycling isn't supported: a removable USB stick or a network share. It must
+   fail with an error and keep the file, never delete permanently. No such drive was at hand yet.
+3. Package for Windows: bundle mpv in `resources/mpv/` (see `findMpv.ts`), run
    `npm run build:win`, and test the installer on a machine without development tools.
-5. Record a first performance baseline and agree budgets (§5).
+4. Record a first performance baseline and agree budgets (§5).
 
 **How it was tested without real videos**
 - mpv can generate test clips, for example
   `mpv --no-config "av://lavfi:testsrc2=duration=30:size=320x180:rate=15" --o=clip.mkv`.
-- The screen was checked with a throwaway Electron script that was not committed; recreate it if
-  needed.
+- On macOS the screen was checked with a throwaway Electron script that was not committed; recreate
+  it if needed.
   - It replaced `dialog.showOpenDialog` with a stand-in, clicked through the UI with
     `webContents.executeJavaScript`, and saved screenshots with `capturePage()`.
   - Every delete was undone, so nothing reached the Trash.
-- Not yet exercised: a real trash from the UI, and anything on Windows.
+- On Windows a second throwaway Electron script (also not committed) played a copied clip in mpv
+  over a named pipe (`--vo=null --ao=null`), tried a rename and `shell.trashItem` while it played,
+  and trashed a clip on the external drive. Both clips were then found in the Recycle Bin.
+- Not yet exercised: a real trash from the UI, the app screen on Windows, and drives that can't
+  recycle.
 
 **Open decisions and known quirks**
 - Where mpv comes from in the packaged app: bundled or installed.
 - A video restored with Undo doesn't reappear in "Recently played" (cosmetic).
 - npm 11 runs install scripts only for packages approved in `allowScripts` (§5).
+- winget's mpv isn't added to the PATH on its own (§5 Existing setup notes).
 
 ---
 
@@ -85,8 +97,10 @@ small enough to finish, and **never introduce a permanent-delete path.**
    - Some removable and network locations do not support recycling. Disable the action where
      this is known; otherwise report a failed trash operation. Extra confirmation never permits
      permanent deletion. Test actual behavior on the target Windows storage types.
-   - ⚠️ Windows locks files that are open in another program. **Switch the player to the next
-     video (or unload the file) before trashing it** (see §4).
+   - ⚠️ Windows locks files that are open in some programs. **Switch the player to the next
+     video (or unload the file) before trashing it** (see §4). mpv itself holds no such lock: on
+     Windows a file it was playing could be renamed and trashed (checked 2026-09-15). Other
+     players such as VLC may lock, and unloading first means a file is never trashed mid-playback.
 3. **Undo window for delete.** Delete hides the file right away but only sends it to the trash
    after about 5 seconds, so it can be undone in the app. Cancel actions still in the undo window
    when the app closes; do not replay them after a restart. An OS trash operation already started
@@ -119,6 +133,9 @@ small enough to finish, and **never introduce a permanent-delete path.**
      and nanosecond modification time.
   3. If it's gone, just remove it from the session. If it changed or can't be read, keep it and show
      why. If it's the same file, call `shell.trashItem`.
+     - "Gone" means the file is missing but its folder is still there. Windows reports a missing
+       folder or drive (an unplugged USB drive) as `ENOENT` too, so without that check an unplugged
+       drive would look like a deleted file and be dropped from the session.
   4. If trashing fails, keep the file and show the error. There is no fallback of any kind.
 - **On close:** deletes still in the undo window are cancelled and never replayed. A trash
   operation that already started finishes.
@@ -126,7 +143,9 @@ small enough to finish, and **never introduce a permanent-delete path.**
   - `trashItem` uses `IFileOperation` with `FOFX_RECYCLEONDELETE`.
   - Its progress handler aborts (`E_ABORT`) whenever Windows says an item can't be recycled, so the
     promise rejects instead of deleting permanently.
-  - Still to confirm on a real USB or network drive on Windows.
+  - Checked on the Windows desktop (2026-09-15): clips on the internal NTFS drive and on an
+    external exFAT drive (which Windows lists as a local disk) went to the Recycle Bin.
+  - Still to confirm on a removable USB stick and a network share, where recycling isn't supported.
 - **Folder reading:** `listVideoFiles` in `src/main/files/videoFolder.ts`.
   - Top level only, regular files only.
   - Skips links, junctions and dot-files.
@@ -135,6 +154,8 @@ small enough to finish, and **never introduce a permanent-delete path.**
 - **Known limits:**
   - The Windows "hidden" attribute isn't checked, only dot-files.
   - FAT-formatted drives may not report stable file IDs; size and modification time still apply.
+    The external exFAT drive on the Windows desktop did report stable IDs that change when a copy
+    replaces the file.
 
 ## 3. The shuffle algorithm (the main thing to get right)
 
@@ -143,14 +164,19 @@ small enough to finish, and **never introduce a permanent-delete path.**
 - **Top level only.** Only video files directly inside the chosen folder are included.
   **Subfolders are ignored entirely** (not scanned, not played, never touched). *(Decided 2026-09-15.)*
 
-### Why the old one probably felt bad
+### Why the old one felt bad
 
-- **Picking with `random()` every time** (sampling *with replacement*) repeats videos quickly.
-  With 100 videos there's about a 50% chance of a repeat within the first 12 picks (the birthday
-  problem).
-- **`array.sort(() => Math.random() - 0.5)`** is a common shortcut, and it's biased: it doesn't
-  produce a uniform shuffle.
-- Check this against the old code once Lucas shares it.
+Lucas's old app (`fileshuffle.py`: customtkinter, packaged with PyInstaller as VideoCurator) was
+reviewed on 2026-09-15. It confirms the first guess:
+- **Every Next called `random.choice(pool)`** (sampling *with replacement*), so videos repeat
+  quickly, sometimes twice in a row. With 100 videos there's about a 50% chance of a repeat within
+  the first 12 picks (the birthday problem).
+- **No history**, so there was no Back.
+- It also scanned subfolders recursively, opened each video in the default player with
+  `os.startfile` (which it couldn't control or close), and deleted permanently with `os.remove`
+  after a yes/no prompt, with no undo.
+- Another common shortcut, `array.sort(() => Math.random() - 0.5)`, is biased too: it doesn't
+  produce a uniform shuffle. The old app didn't use it.
 
 ### The design: shuffle bag + playlist history
 
@@ -274,8 +300,12 @@ For every player:
   - With back-to-back loads, the replaced file ends with `stop`.
   - Key bindings arrive as `client-message`.
   - The integration tests run when `MPV_PATH` is set.
-- **Still to verify on Windows:** the named pipe connection, file release before trashing, and
-  the bundled mpv build.
+- **Verified on Windows** (2026-09-15, mpv v0.41.0-244, shinchiro build from winget):
+  - All 6 integration tests pass over the named pipe.
+  - A probe with a copied clip showed mpv doesn't lock a file it is playing: a rename and
+    `trashItem` both succeed. Trashing after `idle-active` therefore works too.
+- **Still to verify on Windows:** keys pressed in a real mpv window (the tests send `keypress`
+  over IPC), and the bundled mpv build.
 - **Not yet:** deciding where mpv comes from (bundled or installed) and connecting it to the
   Electron app.
 
@@ -320,6 +350,14 @@ Lucas's goals and existing start, not a claim that Electron is universally best 
 Verified 2026-09-15 on `main` after the Electron 44 merge: Node 26.8.2, npm 11.19.1, Electron
 44.3.0, approved install scripts, clean install, build and app launch. Re-check after any
 toolchain upgrade.
+
+Windows desktop, set up 2026-09-15: Node 24.21.0, npm 11.19.0, Git 2.55.0, Electron 44.3.0
+(downloaded on first run) and mpv v0.41.0-244. Clean `npm ci`, typecheck and tests pass.
+- **mpv from winget** (`winget install shinchiro.mpv`) installs to `C:\Program Files\MPV Player`
+  but doesn't add it to the PATH. Add that folder to the user PATH, or set `FILESHUFFLER_MPV`.
+  The installer is a community repackaging of shinchiro's builds; winget verifies its hash.
+- **Git for Windows defaults to `core.autocrlf=true`.** Files were checked out with CRLF and
+  Prettier flagged about 4,000 lines. `.gitattributes` now keeps LF on every platform.
 
 - **Requires Node ≥ 22.12**, because `electron-builder` loads an ESM-only library (`@noble/hashes`)
   using `require()`. On older Node, `npm install`'s postinstall fails with `ERR_REQUIRE_ESM`.
@@ -461,7 +499,8 @@ Build the shuffler first, inside an app shell with a sidebar, so the dashboard s
   - The → key worked.
   - The test folder was untouched, and mpv closed when the app quit.
 - **Not yet:** a real trash from the UI (only undo was exercised, to keep test files out of the
-  Trash), keyboard use inside the mpv window during the click-through, and anything on Windows.
+  Trash), keyboard use inside the mpv window during the click-through, and the app screen on
+  Windows.
 
 Dashboard (later): row of drive cards (used/free), space-by-category bar, largest/recent file
 lists and an integrated player. Final video placement follows the embedding prototype; layout
@@ -472,7 +511,7 @@ is not designed in detail yet.
 ### Phase 0 — Setup
 
 - [x] Lucas picks the stack (§5): TypeScript + Electron
-- [ ] Review the old Python code when Lucas shares it
+- [x] Review the old Python code (§3 Why the old one felt bad)
 - [x] Scaffold project (electron-vite react-ts), `.gitignore` with personal-data guards, vitest,
       fill in `CLAUDE.md` commands
 - [x] Local git repo + first commit
@@ -498,7 +537,8 @@ is not designed in detail yet.
 - [ ] Verify rapid navigation, EOF races, load failure, player exit, undo, failed trash, and empty folders.
       Unit tests cover these with a fake player and fake files. A click-through of the built app with
       real mpv on macOS passed (§6 Implementation). Still to do on Windows.
-- [ ] Package on Windows now: bundle mpv and verify control/file release/trash on the target machine
+- [ ] Package on Windows now: bundle mpv and verify control/file release/trash on the target machine.
+      mpv control, file release and trash are verified on the Windows desktop without packaging.
 - [ ] Record initial performance baseline (§5); agree budgets before optimization claims
 
 ### Phase 1B — Embedded player feasibility
@@ -565,7 +605,7 @@ is not designed in detail yet.
 
 ## 9. Open questions
 
-1. Old Python code: Lucas will share it later.
+1. ~~Old Python code~~: reviewed 2026-09-15 (§3 Why the old one felt bad).
 2. Set performance budgets after measuring the first Windows release build.
 3. Embedded playback approach, macOS limitations, and initial compatibility matrix: resolve
    through Phase 1B, rather than assuming integration is solved.
@@ -660,3 +700,19 @@ is not designed in detail yet.
   - The public repo is https://github.com/Lw0ng01/FileShuffler.
   - Added "Resume here" at the top of this doc, because a new session (for example on the Windows
     desktop) starts without this session's chat or local memory.
+- **2026-09-15:** Windows desktop set up, first Windows checks, and the old shuffler reviewed.
+  - Installed and checked: Node 24.21.0, npm 11.19.0, Git 2.55.0, and mpv v0.41.0-244 from winget
+    (`shinchiro.mpv`), which isn't added to the PATH on its own (§5 Existing setup notes).
+  - All 6 real-mpv integration tests pass over the Windows named pipe.
+  - One unit test failed on Windows: `lstat` reports `ENOENT`, not `ENOTDIR`, for a path through a
+    file, and also for a missing folder or drive. An unplugged drive would have looked like a
+    deleted file and been dropped from the session; nothing would have been trashed.
+    `readFileIdentity` now calls a file gone only when its folder still exists, with a new test.
+  - Probe with disposable clips: mpv doesn't lock a file it is playing, and `trashItem` sent clips
+    on the internal NTFS drive and an external exFAT drive to the Recycle Bin (confirmed there).
+    The exFAT drive reported stable file IDs.
+  - Reviewed the old Python shuffler: every Next used `random.choice`, confirming the repeat
+    problem in §3. It also deleted permanently with `os.remove`.
+  - Added `.gitattributes` (LF everywhere), because Git for Windows' `core.autocrlf=true` checked
+    files out with CRLF and Prettier flagged about 4,000 lines.
+  - Not yet: the app screen on Windows, and drives that can't recycle (Resume here).

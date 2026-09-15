@@ -1,4 +1,5 @@
-import { lstat } from 'node:fs/promises'
+import { lstat, stat } from 'node:fs/promises'
+import { dirname } from 'node:path'
 
 /**
  * Enough to tell whether the file at a path is still the same file (PROJECT.md §2.3), so a delete
@@ -15,9 +16,9 @@ export interface FileIdentity {
 }
 
 /**
- * The identity of whatever is at `path`, without following links. Resolves null only when nothing
- * exists there; rejects on any other error (a disconnected drive, missing permission), so callers
- * treat those as "can't tell".
+ * The identity of whatever is at `path`, without following links. Resolves null only when the file
+ * is missing from a folder that still exists; rejects on anything else (a disconnected drive, a
+ * missing folder, missing permission), so callers treat those as "can't tell".
  */
 export async function readFileIdentity(path: string): Promise<FileIdentity | null> {
   try {
@@ -30,8 +31,19 @@ export async function readFileIdentity(path: string): Promise<FileIdentity | nul
       mtimeNs: stats.mtimeNs
     }
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    // Windows also reports ENOENT when the folder or the whole drive is gone (an unplugged USB
+    // drive), so only a folder that is still there proves the file itself was removed.
+    if (await isFolder(dirname(path))) return null
     throw error
+  }
+}
+
+async function isFolder(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory()
+  } catch {
+    return false
   }
 }
 
