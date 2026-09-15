@@ -1,43 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { ShuffleSession } from '../domain/shuffle'
 import type { FileIdentity } from '../files/fileIdentity'
-import type { PlaybackAdapter, PlaybackEvent } from '../playback/types'
+import { FakePlayer } from '../playback/fakePlayer'
 import { ShuffleCoordinator, type CoordinatorState } from './coordinator'
-
-/** Records what the coordinator asks for and lets tests deliver player events by hand. */
-class FakePlayer implements PlaybackAdapter {
-  readonly loads: { token: number; path: string }[] = []
-  unloads = 0
-  private nextToken = 1
-  private readonly listeners = new Set<(event: PlaybackEvent) => void>()
-
-  load(path: string): number {
-    const token = this.nextToken++
-    this.loads.push({ token, path })
-    return token
-  }
-
-  async unload(): Promise<void> {
-    this.unloads += 1
-  }
-
-  onEvent(listener: (event: PlaybackEvent) => void): () => void {
-    this.listeners.add(listener)
-    return () => this.listeners.delete(listener)
-  }
-
-  dispose(): Promise<void> {
-    return Promise.resolve()
-  }
-
-  emit(event: PlaybackEvent): void {
-    for (const listener of [...this.listeners]) listener(event)
-  }
-
-  get lastToken(): number {
-    return (this.loads[this.loads.length - 1] as { token: number }).token
-  }
-}
 
 interface Setup {
   player: FakePlayer
@@ -186,6 +151,41 @@ describe('ShuffleCoordinator', () => {
       status: 'player-exited',
       lastError: 'Player exited: window closed'
     })
+  })
+
+  it('connects a new player after the old one exits and resumes the current file', () => {
+    const { player, coordinator } = setup(['a.mkv', 'b.mkv', 'c.mkv'])
+    coordinator.next()
+    const current = coordinator.getState().current
+    player.emit({ type: 'exited', reason: 'window closed' })
+
+    const replacement = new FakePlayer()
+    coordinator.replacePlayer(replacement)
+    expect(coordinator.getState()).toMatchObject({ status: 'idle', current })
+
+    coordinator.resume()
+    expect(replacement.loads).toEqual([{ token: 1, path: `/videos/${current}` }])
+
+    player.emit({ type: 'ended', token: 1 })
+    expect(replacement.loads).toHaveLength(1)
+    replacement.emit({ type: 'loaded', token: 1 })
+    expect(coordinator.getState().status).toBe('playing')
+  })
+
+  it('only replaces a player that has exited', () => {
+    const { coordinator } = setup(['a.mkv'])
+    coordinator.next()
+    expect(() => coordinator.replacePlayer(new FakePlayer())).toThrow(
+      'Only a player that has exited can be replaced'
+    )
+  })
+
+  it('resume starts the shuffle when nothing has played, and does nothing while loading', () => {
+    const { player, coordinator } = setup(['a.mkv', 'b.mkv'])
+    coordinator.resume()
+    expect(player.loads).toHaveLength(1)
+    coordinator.resume()
+    expect(player.loads).toHaveLength(1)
   })
 
   it('notifies state listeners and stops reacting after dispose', () => {
@@ -378,6 +378,19 @@ describe('ShuffleCoordinator deletes', () => {
     await vi.advanceTimersByTimeAsync(10000)
     expect(s.coordinator.getState().pendingDeletes).toEqual([])
     expect(s.trash).not.toHaveBeenCalled()
+  })
+
+  it('keeps a pending delete when the player is replaced, then trashes the file', async () => {
+    const s = setup(['a.mkv', 'b.mkv', 'c.mkv'])
+    const doomed = playFirst(s)
+    s.coordinator.deleteCurrent()
+    s.player.emit({ type: 'exited', reason: 'window closed' })
+    s.coordinator.replacePlayer(new FakePlayer())
+    expect(s.coordinator.getState().pendingDeletes.map((entry) => entry.id)).toEqual([doomed])
+
+    await vi.advanceTimersByTimeAsync(5000)
+    await settle()
+    expect(s.trash).toHaveBeenCalledWith(`/videos/${doomed}`)
   })
 
   it('cancels deletes still in the undo window when disposed, and never replays them', async () => {

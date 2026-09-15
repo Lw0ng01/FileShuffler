@@ -4,7 +4,7 @@
 > change happens (see Change Log at the bottom). `CLAUDE.md` covers *how to work in the code*;
 > this file covers *what and why*.
 
-**Status:** Phase 1 (engine, mpv playback, folder reading and delete done; next: app screen) · **Stack:** Electron + React + TypeScript
+**Status:** Phase 1 (working app screen on macOS; next: package and verify on Windows) · **Stack:** Electron + React + TypeScript
 (electron-vite) · **Name:** FileShuffler. Lucas doesn't care about the name;
 keep it unless he says otherwise.
 
@@ -378,6 +378,46 @@ Build the shuffler first, inside an app shell with a sidebar, so the dashboard s
 └──────────┴──────────────────────────────────────────────┘
 ```
 
+### Implementation (Phase 1)
+
+- **Screen** (`src/renderer/src/`): a sidebar (Shuffle active; Dashboard and Settings marked
+  "Soon") and one shuffler screen.
+  - **Folder bar:** shows the shortened path, with the full path in a tooltip, and a Change button.
+    Change is disabled while a delete can still be undone.
+  - **Card by state:** pick a folder, empty folder, ready (N videos, Start shuffle), starting mpv,
+    now playing (name and cycle progress), finished, or player closed (Reopen player).
+  - **Controls:** Back / Next / Delete appear only once something has played, so the ready card's
+    Start shuffle is the single main action.
+  - **Feedback:** an undo toast with a live countdown per pending delete, an error banner, key
+    reminders, and a recently played list.
+  - **In-app keys** (only while the window has focus, never global): → / ← next and back, Delete or
+    ⌘/Ctrl+Backspace to delete, ⌘/Ctrl+Z to undo the latest delete.
+  - Dark theme with a light variant that follows the system setting. System fonts only, so there
+    are no network requests.
+- **Main process:**
+  - `ShufflerService` (`src/main/app/shufflerService.ts`) owns one folder session at a time.
+  - It starts mpv on the first Play, only once even if Play is clicked twice. It reopens mpv at the
+    same file after its window is closed, or moves on if Next is pressed.
+  - It turns a missing mpv into a readable message and refuses to change folders while a delete
+    can be undone. Closing the app disposes it, which cancels pending deletes.
+- **Bridge:** `src/preload/index.ts` exposes `window.api.shuffler` with one fixed channel per
+  command (`src/shared/shuffler.ts`).
+  - `src/main/ipc.ts` rejects any caller other than the app window's top-level frame.
+  - It checks arguments at runtime. The renderer never sends paths; Undo accepts only a name string.
+- **Finding mpv** (`findMpv.ts`), in order: `FILESHUFFLER_MPV`, `resources/mpv/` in a packaged app,
+  common macOS install paths (apps opened from Finder don't get the shell PATH), then `mpv` on the
+  PATH.
+- **Verified on macOS** with a throwaway launch script: the built app, a stand-in for the native
+  folder picker, 30-second generated clips, and real mpv 0.41.0. 21 of 21 checks passed:
+  - Choosing a folder counted only the 5 top-level videos.
+  - Start, Next, Back and replaying with Next worked, along with progress and the recently played
+    list.
+  - Delete showed a toast with a countdown and disabled Change; Undo restored the video.
+  - The → key worked.
+  - The test folder was untouched, and mpv closed when the app quit.
+- **Not yet:** a real trash from the UI (only undo was exercised, to keep test files out of the
+  Trash), keyboard use inside the mpv window during the click-through, and anything on Windows.
+
 Dashboard (later): row of drive cards (used/free), space-by-category bar, largest/recent file
 lists and an integrated player. Final video placement follows the embedding prototype; layout
 is not designed in detail yet.
@@ -400,8 +440,7 @@ is not designed in detail yet.
 
 - [x] Harden the starter template: sandbox on, preload exposes no raw IPC, navigation and new
       windows blocked (§5)
-- [ ] Pick folder (top-level files only). Reading is done (`listVideoFiles`); the folder picker
-      comes with the app shell.
+- [x] Pick folder (top-level files only): native folder picker plus `listVideoFiles`
 - [x] Scan for video files (allowlisted extensions): `src/main/files/videoFolder.ts`
 - [x] Shuffle engine (bag + playlist/cursor, endless cycles, seam rule) **with unit tests** (§3)
 - [x] mpv integration behind the playback adapter (§4): launch, load file, detect end of video →
@@ -409,10 +448,11 @@ is not designed in detail yet.
       Verified against mpv 0.41.0 on macOS.
 - [x] Next / Back / Delete-to-trash (unload first, undo window), in the coordinator (§2 How
       delete is implemented). Buttons come with the app shell.
-- [ ] App shell with sidebar + shuffler screen (§6), player-local shortcuts
-- [ ] Show current filename + successful-open coverage and failures
+- [x] App shell with sidebar + shuffler screen (§6), player-local shortcuts (§6 Implementation)
+- [x] Show current filename + successful-open coverage and failures
 - [ ] Verify rapid navigation, EOF races, load failure, player exit, undo, failed trash, and empty folders.
-      Covered by unit tests with a fake player and fake files; still to exercise in the running app.
+      Unit tests cover these with a fake player and fake files. A click-through of the built app with
+      real mpv on macOS passed (§6 Implementation). Still to do on Windows.
 - [ ] Package on Windows now: bundle mpv and verify control/file release/trash on the target machine
 - [ ] Record initial performance baseline (§5); agree budgets before optimization claims
 
@@ -559,3 +599,12 @@ is not designed in detail yet.
     dependency changes, so no `npm install` was needed.
   - Mutation check: breaking the identity recheck, the wait for the player to release the file,
     cancel-on-close, or keeping the file when trashing fails each made a delete test fail.
+- **2026-09-15:** App screen implemented (Phase 1).
+  - `ShufflerService`, the IPC bridge with sender and argument checks, `findMpv`, and the React
+    shuffler screen (§6 Implementation).
+  - Coordinator gained `replacePlayer()` and `resume()`, so closing the mpv window keeps the session
+    and any pending deletes.
+  - The Back/Next/Delete row is hidden until something plays, because two competing main buttons
+    on the ready screen looked cluttered in the first screenshot.
+  - 100 unit tests pass (106 including the 6 real-mpv tests). A click-through of the built app with
+    real mpv passed 21 of 21 checks.

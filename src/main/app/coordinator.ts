@@ -69,14 +69,14 @@ interface DeleteInProgress {
  */
 export class ShuffleCoordinator {
   private readonly session: ShuffleSession
-  private readonly player: PlaybackAdapter
+  private player: PlaybackAdapter
   private readonly resolvePath: (id: string) => string
   private readonly trash: (path: string) => Promise<void>
   private readonly identify: (path: string) => Promise<FileIdentity | null>
   private readonly undoWindowMs: number
   private readonly listeners = new Set<(state: CoordinatorState) => void>()
   private readonly deletes = new Map<string, DeleteInProgress>()
-  private readonly stopListening: () => void
+  private stopListening: () => void
   private status: CoordinatorStatus = 'idle'
   private current: string | null = null
   private activeToken: number | null = null
@@ -119,6 +119,33 @@ export class ShuffleCoordinator {
     if (this.status === 'player-exited') return
     const id = this.session.back()
     if (id !== null) this.show(id)
+  }
+
+  /**
+   * Starts the shuffle if nothing has played yet or it finished, or reopens the current file
+   * after `replacePlayer`. Does nothing while a file is loading or playing.
+   */
+  resume(): void {
+    if (this.status === 'idle' && this.current !== null) this.show(this.current)
+    else if (this.status === 'idle' || this.status === 'finished') this.next()
+  }
+
+  /**
+   * Connects a new player after the previous one exited (for example the user closed the mpv
+   * window). Playback waits for `resume()` or a navigation command. Pending deletes carry over:
+   * the old player is gone, so it no longer holds any file.
+   */
+  replacePlayer(player: PlaybackAdapter): void {
+    if (this.status !== 'player-exited') {
+      throw new Error('Only a player that has exited can be replaced')
+    }
+    this.stopListening()
+    this.player = player
+    this.stopListening = player.onEvent((event) => this.handle(event))
+    this.activeToken = null
+    this.status = 'idle'
+    this.lastError = null
+    this.emit()
   }
 
   /**

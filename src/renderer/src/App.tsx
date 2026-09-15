@@ -1,20 +1,21 @@
-import Versions from './components/Versions'
-import electronLogo from './assets/electron.svg'
+import { ShufflerScreen } from './components/ShufflerScreen'
+import { Sidebar } from './components/Sidebar'
+import { useShuffler } from './hooks/useShuffler'
 
 function App(): React.JSX.Element {
+  const { view, actions, actionError } = useShuffler()
+
   return (
-    <>
-      <img alt="logo" className="logo" src={electronLogo} />
-      <div className="creator">Powered by electron-vite</div>
-      <div className="text">
-        Build an Electron app with <span className="react">React</span>
-        &nbsp;and <span className="ts">TypeScript</span>
-      </div>
-      <p className="tip">
-        Please try pressing <code>F12</code> to open the devTool
-      </p>
-      <Versions></Versions>
-    </>
+    <div className="app">
+      <Sidebar />
+      <main className="main">
+        {view === null ? (
+          <p className="loading">Loading…</p>
+        ) : (
+          <ShufflerScreen view={view} actions={actions} actionError={actionError} />
+        )}
+      </main>
+    </div>
   )
 }
 

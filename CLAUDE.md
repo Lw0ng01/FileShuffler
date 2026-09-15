@@ -30,8 +30,11 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
   - `src/main/playback/`: the player interface (`types.ts`) and the mpv adapter (`mpv/`,
     PROJECT.md §4)
   - `src/main/files/`: read-only folder listing and file identity checks (PROJECT.md §2)
+  - `src/main/app/shufflerService.ts`: one folder session (shuffle, coordinator, player lifecycle)
+  - `src/main/ipc.ts`: renderer commands, with sender and argument checks
 - `src/preload/`: the only bridge to the UI. Expose narrow, typed functions; keep `index.d.ts` in sync
-- `src/renderer/`: React UI, presentation only
+- `src/renderer/`: React UI, presentation only (`components/`, `hooks/useShuffler.ts`)
+- `src/shared/shuffler.ts`: the view type, API type and channel names shared by all three
 
 ## Toolchain gotchas
 
@@ -78,6 +81,7 @@ npm install
 npm run dev         # run app with hot reload
 npm test            # vitest (unit tests)
 MPV_PATH=/path/to/mpv npm test   # also run the real-mpv integration tests
+FILESHUFFLER_MPV=/path/to/mpv npm run dev   # use a specific mpv when it isn't installed normally
 npm run typecheck
 npm run lint
 npm run build       # typecheck + production build into out/

@@ -22,6 +22,9 @@ export const KEY_BINDINGS = [
   ''
 ].join('\n')
 
+/** How the bindings above are shown in the app. */
+export const KEY_LABELS = { next: '>', back: '<', delete: 'Del' } as const
+
 export interface MpvTimings {
   /** How long to wait for mpv to accept the IPC connection after starting. */
   connectTimeoutMs: number
