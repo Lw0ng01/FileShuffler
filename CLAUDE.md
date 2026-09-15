@@ -44,6 +44,9 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
 - npm 11 runs only the install scripts listed in `package.json` → `allowScripts` (exact
   versions). After upgrading esbuild, fsevents or electron-winstaller, run
   `npm install-scripts ls` and approve.
+- Windows: `lstat` reports `ENOENT` for a missing folder or drive too, not only a missing file
+  (see `fileIdentity.ts`). winget's mpv (`shinchiro.mpv`) isn't on the PATH until you add
+  `C:\Program Files\MPV Player` or set `FILESHUFFLER_MPV`.
 
 ## Code rules
 

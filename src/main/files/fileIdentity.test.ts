@@ -59,6 +59,15 @@ describe('file identity', () => {
   it('rejects when it cannot tell, instead of reporting the file as missing', async () => {
     const file = join(folder, 'clip.mkv')
     await writeFile(file, 'x')
-    await expect(readFileIdentity(join(file, 'child'))).rejects.toMatchObject({ code: 'ENOTDIR' })
+    // macOS says ENOTDIR for a path through a file; Windows says ENOENT.
+    await expect(readFileIdentity(join(file, 'child'))).rejects.toMatchObject({
+      code: expect.stringMatching(/^(ENOTDIR|ENOENT)$/)
+    })
+  })
+
+  it('rejects when the folder itself is gone, as when a drive is unplugged', async () => {
+    await expect(readFileIdentity(join(folder, 'gone', 'clip.mkv'))).rejects.toMatchObject({
+      code: 'ENOENT'
+    })
   })
 })
