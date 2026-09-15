@@ -4,7 +4,7 @@
 > change happens (see Change Log at the bottom). `CLAUDE.md` covers *how to work in the code*;
 > this file covers *what and why*.
 
-**Status:** Phase 1 (shuffle engine done; mpv integration next) · **Stack:** Electron + React + TypeScript
+**Status:** Phase 1 (shuffle engine and mpv playback done; next: folder scan, delete, app UI) · **Stack:** Electron + React + TypeScript
 (electron-vite) · **Name:** FileShuffler. Lucas doesn't care about the name;
 keep it unless he says otherwise.
 
@@ -164,6 +164,43 @@ For every player:
   restore the item and report the error; never force deletion.
 - Handle process exit, load errors, and IPC disconnects explicitly. Keep IPC local with suitable
   access restrictions; pass commands as structured data, not interpolated shell strings.
+
+### Implementation (Phase 1)
+
+- **Player interface:** `src/main/playback/types.ts`.
+  - `load()` returns a token immediately.
+  - Events: `loaded`, `ended` and `failed` (each with its token), `command` (`next`/`back`) and
+    `exited`.
+  - Nothing assumes pushed events, so a polling VLC adapter fits.
+- **Coordinator:** `src/main/app/coordinator.ts` connects `ShuffleSession` to a player.
+  - Ignores any event whose token isn't the active load.
+  - Counts coverage on `loaded`, autoplays on `ended`, and skips and reports `failed` files.
+  - Stops (`finished`) when nothing can play.
+  - Ignores commands once the player exits, rather than silently restarting it.
+- **mpv adapter:** `src/main/playback/mpv/` (`MpvIpcClient`, `MpvPlayer`, `launchMpv`).
+  - One mpv process per session, started without a shell. The IPC socket lives in a private temp
+    directory (a random named pipe on Windows).
+  - Flags: `--no-config`, because user scripts such as autoload would play files outside the
+    session; plus `--idle=yes`, `--force-window=yes`, `--keep-open=no` and `--ytdl=no`.
+  - Keys inside mpv: `>` for Next and `<` for Back. These are mpv's own playlist keys, so
+    arrow-key seeking still works. They arrive as `client-message` events, so no Lua script is
+    needed. Delete gets its key with the delete flow.
+  - Each load is matched to the `playlist_entry_id` in mpv's `loadfile` reply. Events that
+    arrive before the reply are buffered, because mpv's docs don't guarantee the order.
+  - `unload()` sends `stop` and then waits until `idle-active` is true, because `stop` replies
+    before the file is released.
+  - `dispose()` sends `quit`, force-stops mpv after 3 seconds, and removes the temp directory.
+- **Verified against mpv 0.41.0** (official macOS build), with a recorded protocol probe and
+  integration tests:
+  - A missing file ends with `end-file` reason `error`.
+  - A normal file sends `file-loaded`, then `end-file` reason `eof`.
+  - With back-to-back loads, the replaced file ends with `stop`.
+  - Key bindings arrive as `client-message`.
+  - The integration tests run when `MPV_PATH` is set.
+- **Still to verify on Windows:** the named pipe connection, file release before trashing, and
+  the bundled mpv build.
+- **Not yet:** deciding where mpv comes from (bundled or installed), connecting it to the Electron
+  app, and the delete key.
 
 ### Embedded player: an early feasibility milestone
 
@@ -334,8 +371,9 @@ is not designed in detail yet.
 - [ ] Pick folder (top-level files only)
 - [ ] Scan for video files (allowlisted extensions)
 - [x] Shuffle engine (bag + playlist/cursor, endless cycles, seam rule) **with unit tests** (§3)
-- [ ] mpv integration behind the playback adapter (§4): launch, load file, detect end of video →
-      autoplay next, key bindings inside mpv
+- [x] mpv integration behind the playback adapter (§4): launch, load file, detect end of video →
+      autoplay next, key bindings inside mpv. Not yet connected to the app window (App shell item).
+      Verified against mpv 0.41.0 on macOS.
 - [ ] Next / Back / Delete-to-trash (unload first, undo window)
 - [ ] App shell with sidebar + shuffler screen (§6), player-local shortcuts
 - [ ] Show current filename + successful-open coverage and failures
@@ -466,3 +504,11 @@ is not designed in detail yet.
     next cycle but never loop, pending deletes are skipped rather than removed (see
     §3 Implementation).
   - Tests were checked against deliberately broken versions to confirm they catch real bugs.
+- **2026-09-15:** mpv playback implemented (Phase 1).
+  - Player interface, coordinator and mpv adapter, with 27 unit tests using a fake player and a
+    fake mpv.
+  - 6 integration tests pass against a real mpv 0.41.0 (official macOS build, checksum verified).
+  - mpv's IPC behavior was checked against its docs and a recorded probe before writing the
+    adapter.
+  - Choices: `>`/`<` for Next/Back inside mpv, `--no-config` for predictable playback, and a file
+    counts as released only once mpv reports `idle-active`. See §4 Implementation.

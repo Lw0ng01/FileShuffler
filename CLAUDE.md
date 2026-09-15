@@ -26,6 +26,9 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
 - `src/main/`: main process: application coordinator and adapters (filesystem, trash, player control)
   - `src/main/domain/`: pure logic with tests beside it (`shuffle.ts` is the shuffle engine,
     PROJECT.md §3)
+  - `src/main/app/`: the coordinator that connects the shuffle session to a player
+  - `src/main/playback/`: the player interface (`types.ts`) and the mpv adapter (`mpv/`,
+    PROJECT.md §4)
 - `src/preload/`: the only bridge to the UI. Expose narrow, typed functions; keep `index.d.ts` in sync
 - `src/renderer/`: React UI, presentation only
 
@@ -73,6 +76,7 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
 npm install
 npm run dev         # run app with hot reload
 npm test            # vitest (unit tests)
+MPV_PATH=/path/to/mpv npm test   # also run the real-mpv integration tests
 npm run typecheck
 npm run lint
 npm run build       # typecheck + production build into out/
