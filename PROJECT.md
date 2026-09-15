@@ -4,7 +4,7 @@
 > change happens (see Change Log at the bottom). `CLAUDE.md` covers *how to work in the code*;
 > this file covers *what and why*.
 
-**Status:** Phase 0 (project set up, no features yet) · **Stack:** Electron + React + TypeScript
+**Status:** Phase 1 (shuffle engine done; mpv integration next) · **Stack:** Electron + React + TypeScript
 (electron-vite) · **Name:** FileShuffler. Lucas doesn't care about the name;
 keep it unless he says otherwise.
 
@@ -101,6 +101,31 @@ small enough to finish, and **never introduce a permanent-delete path.**
 - **New files found mid-session:** insert them at a random spot in the *unplayed* part of the bag.
 - **Persist per folder:** save which files have been played this cycle, so reopening the app
   continues the cycle instead of starting fresh. This matters because the goal is coverage.
+
+### Implementation (Phase 1)
+
+The engine lives in `src/main/domain/shuffle.ts` (`ShuffleSession`), with tests beside it. It is
+pure TypeScript: items are opaque string IDs, and randomness is injected.
+- **API:** `next()`, `back()`, `current()`, `markOpened(id)`, `markFailed(id)`,
+  `beginDelete(id)` / `cancelDelete(id)` / `completeDelete(id)`, `add(ids)`, `stats()`.
+- **Choices the spec left open:**
+  - `markOpened` counts only items drawn in the current cycle. Replaying a previous cycle's item
+    with Back does not add coverage.
+  - Failed items are skipped for the rest of the cycle and retried next cycle. A new cycle starts
+    only if at least one available item hasn't failed; otherwise `next()` returns null.
+  - Items in a pending delete stay in the cycle but are skipped. If the cycle ends first, they
+    carry into the next cycle.
+  - The seam rule uses constructive swaps with no retry loop. Known limitation: if items at the
+    start of a new cycle are skipped (failed or pending), later draws can reach a protected item
+    within the first K plays.
+  - History keeps 500 entries by default.
+- **Tests prove, without statistics:** the shuffle maps every sequence of random choices to a
+  distinct order (unbiased), the seam rule across 200 seeds and several folder sizes, coverage over
+  4 cycles, Back/Forward, failures, the delete/undo lifecycle, added files and the history limit.
+  A mutation check confirmed the tests fail for a disabled seam rule and for Next that doesn't
+  replay history. A sort-based shuffle is also rejected, but because it doesn't make exactly one
+  random choice per step (the scripted source runs out), not because the test measures its bias.
+- **Not yet:** persisting progress between launches (Phase 2).
 
 ### Possible upgrades (later)
 
@@ -308,7 +333,7 @@ is not designed in detail yet.
       windows blocked (§5)
 - [ ] Pick folder (top-level files only)
 - [ ] Scan for video files (allowlisted extensions)
-- [ ] Shuffle engine (bag + playlist/cursor, endless cycles, seam rule) **with unit tests**
+- [x] Shuffle engine (bag + playlist/cursor, endless cycles, seam rule) **with unit tests** (§3)
 - [ ] mpv integration behind the playback adapter (§4): launch, load file, detect end of video →
       autoplay next, key bindings inside mpv
 - [ ] Next / Back / Delete-to-trash (unload first, undo window)
@@ -435,3 +460,9 @@ is not designed in detail yet.
     `api.versions` instead of Electron's full IPC bridge (`@electron-toolkit/preload` removed).
   - `CLAUDE.md` trimmed to how-to-work guidance that links to this doc instead of repeating it.
   - Change log entries now use one format.
+- **2026-09-15:** Shuffle engine implemented (Phase 1).
+  - Pure `ShuffleSession` in `src/main/domain/shuffle.ts` with 26 deterministic tests.
+  - Resolved open details of §3: coverage counts only this cycle's draws, failed items are retried
+    next cycle but never loop, pending deletes are skipped rather than removed (see
+    §3 Implementation).
+  - Tests were checked against deliberately broken versions to confirm they catch real bugs.

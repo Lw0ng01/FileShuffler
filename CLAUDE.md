@@ -24,6 +24,8 @@ drive stack decisions.
 
 Electron + React + TypeScript via electron-vite. Tests use vitest.
 - `src/main/`: main process: application coordinator and adapters (filesystem, trash, player control)
+  - `src/main/domain/`: pure logic with tests beside it (`shuffle.ts` is the shuffle engine,
+    PROJECT.md §3)
 - `src/preload/`: the only bridge to the UI. Expose narrow, typed functions; keep `index.d.ts` in sync
 - `src/renderer/`: React UI, presentation only
 
