@@ -1,0 +1,25 @@
+node_modules
+dist
+out
+.DS_Store
+.eslintcache
+*.log*
+
+# --- Personal data guard (PROJECT.md §2.8): never commit media, caches or local config ---
+*.mp4
+*.mkv
+*.avi
+*.mov
+*.wmv
+*.webm
+*.m4v
+*.flv
+*.db
+*.sqlite
+*.sqlite3
+*.local.json
+.env
+.env.*
+cache/
+# Player binaries (mpv) get downloaded by a script, not committed
+resources/bin/

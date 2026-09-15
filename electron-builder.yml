@@ -1,0 +1,32 @@
+appId: com.lucaswong.fileshuffler
+productName: FileShuffler
+directories:
+  buildResources: build
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md,PROJECT.md,CLAUDE.md}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+asarUnpack:
+  - resources/**
+win:
+  executableName: FileShuffler
+nsis:
+  artifactName: ${name}-${version}-setup.${ext}
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: always
+mac:
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    - NSDocumentsFolderUsageDescription: FileShuffler reads your Documents folder to list files.
+    - NSDownloadsFolderUsageDescription: FileShuffler reads your Downloads folder to list files.
+    - NSDesktopFolderUsageDescription: FileShuffler reads your Desktop folder to list files.
+    - NSRemovableVolumesUsageDescription: FileShuffler reads external drives to list files.
+  notarize: false
+dmg:
+  artifactName: ${name}-${version}.${ext}
+npmRebuild: false
+# No `publish` block on purpose: the app makes no network calls (PROJECT.md §2.7).
