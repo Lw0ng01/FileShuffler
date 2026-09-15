@@ -23,3 +23,6 @@ out
 cache/
 # Player binaries (mpv) get downloaded by a script, not committed
 resources/bin/
+
+# Claude Code worktrees
+.claude/worktrees/

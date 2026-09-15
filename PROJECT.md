@@ -117,7 +117,14 @@ vitest. Lucas picked it partly because it's more to learn.
   project, not ruled out.
 - **Requires Node ≥ 22.12**, because `electron-builder` loads an ESM-only library (`@noble/hashes`)
   using `require()`. On older Node, `npm install`'s postinstall fails with `ERR_REQUIRE_ESM`.
-  Workaround: `NODE_OPTIONS=--experimental-require-module`.
+  The Mac is now on Node 26.8.2 / npm 11.19.1.
+- **npm 11 blocks packages' install scripts unless approved.** The approved list lives in
+  `package.json` → `allowScripts`: electron (downloads the Electron binary), esbuild (compiler
+  binary), fsevents (Mac only), electron-winstaller (Windows installer builds).
+  - Without these approvals, a fresh clone installs "fine" but Electron has no binary and the app
+    won't start.
+  - Approvals are **pinned to exact versions**. After upgrading one of these packages, run
+    `npm install-scripts ls` and approve the new version.
 
 Options that were considered:
 
@@ -170,8 +177,9 @@ lists. Not designed in detail yet.
 - [x] Scaffold project (electron-vite react-ts), `.gitignore` with personal-data guards, vitest,
       fill in `CLAUDE.md` commands
 - [x] Local git repo + first commit
-- [ ] Create GitHub repo, push (waiting on Lucas: public or private?)
-- [ ] Upgrade Node on the Mac to ≥ 22.12 (and use ≥ 22.12 on the Windows desktop)
+- [x] Upgrade Node on the Mac to ≥ 22.12 (now 26.8.2). Use ≥ 22.12 on the Windows desktop too.
+- [x] Approve npm 11 install scripts (`allowScripts` in package.json)
+- [ ] Create **public** GitHub repo and push, **after the shuffler basics work** (end of Phase 1)
 
 ### Phase 1 — Shuffler MVP ⭐
 - [ ] Pick folder (top-level files only)
@@ -220,7 +228,6 @@ lists. Not designed in detail yet.
 
 ## 9. Open questions
 1. Old Python code: Lucas will share it later.
-2. Should the GitHub repo be public or private?
 
 ## 10. Change Log
 - **2026-09-15:** Project started. Wrote initial plan: safety rules, shuffle-bag algorithm,
@@ -239,3 +246,10 @@ lists. Not designed in detail yet.
     URL (the app makes no network calls).
   - `.gitignore` now blocks media, databases, caches, `.env` and `*.local.json`.
   - Found the Node ≥ 22.12 requirement (§5).
+- **2026-09-15:** Lucas upgraded Node to 26.8.2.
+  - Clean install works without the workaround flag.
+  - npm 11 blocked install scripts, so approved electron, esbuild, fsevents and
+    electron-winstaller in `allowScripts` (§5).
+  - Decided: the GitHub repo will be **public**, created once the shuffler basics work.
+  - Background Claude sessions must now work in git worktrees (`.claude/worktrees/`, gitignored)
+    and commit on a branch. Lucas merges into `main`.

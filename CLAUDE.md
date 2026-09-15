@@ -18,8 +18,10 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
 - `src/preload/`: the safe bridge that exposes selected main-process functions to the UI
 - `src/renderer/`: React UI
 
-Requires **Node ≥ 22.12** (see PROJECT.md §5). On older Node, prefix npm commands with
-`NODE_OPTIONS=--experimental-require-module`.
+Requires **Node ≥ 22.12** (see PROJECT.md §5). npm 11 only runs install scripts listed in
+`package.json` → `allowScripts`, pinned to exact versions. After upgrading electron, esbuild,
+fsevents or electron-winstaller, run `npm install-scripts ls` and approve the new version, or a
+fresh clone won't download the Electron binary.
 
 ## Commands
 ```bash
