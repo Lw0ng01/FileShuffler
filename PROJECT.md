@@ -4,9 +4,54 @@
 > change happens (see Change Log at the bottom). `CLAUDE.md` covers *how to work in the code*;
 > this file covers *what and why*.
 
-**Status:** Phase 1 (working app screen on macOS; next: package and verify on Windows) · **Stack:** Electron + React + TypeScript
-(electron-vite) · **Name:** FileShuffler. Lucas doesn't care about the name;
-keep it unless he says otherwise.
+**Status:** Phase 1 (working app screen on macOS; next: verify and package on Windows) ·
+**Stack:** Electron + React + TypeScript (electron-vite) · **Name:** FileShuffler. Lucas doesn't
+care about the name; keep it unless they say otherwise.
+
+---
+
+## Resume here
+
+Last updated 2026-09-15, at the end of the first session (on macOS). A new session starts without
+that session's chat or its local memory. This section, the rest of this doc and `CLAUDE.md` are the
+handoff; keep this section current at the end of each session.
+
+**Where things stand**
+- The Phase 1 app works on macOS: choose a folder, shuffle, play in mpv with autoplay, Next/Back,
+  and Delete with a 5-second undo before trashing. See §2, §3, §4 and §6 (Implementation notes).
+- `npm test` runs 100 unit tests. Six more run against a real mpv when `MPV_PATH` is set.
+- Public repo: https://github.com/Lw0ng01/FileShuffler.
+- Commits use GitHub's private email. In a new clone, run
+  `git config user.email "71304042+Lw0ng01@users.noreply.github.com"` before committing. Never
+  commit personal emails or local paths.
+
+**Next steps, in order**
+1. Set up the Windows desktop: Node 22.12+ (the current LTS), Git, and mpv from mpv.io (on the PATH,
+   or set `FILESHUFFLER_MPV` to `mpv.exe`). Then `npm ci`, `npm test` and `npm run dev`.
+2. Review Lucas's old Python shuffler when they share it, and compare its shuffle with §3.
+3. Verify on Windows:
+   - the named-pipe connection to mpv, and the keys inside mpv;
+   - delete-to-trash on a normal drive, and on a USB or network drive (it must be refused, never
+     done permanently);
+   - that mpv releases the file before it is trashed.
+4. Package for Windows: bundle mpv in `resources/mpv/` (see `findMpv.ts`), run
+   `npm run build:win`, and test the installer on a machine without development tools.
+5. Record a first performance baseline and agree budgets (§5).
+
+**How it was tested without real videos**
+- mpv can generate test clips, for example
+  `mpv --no-config "av://lavfi:testsrc2=duration=30:size=320x180:rate=15" --o=clip.mkv`.
+- The screen was checked with a throwaway Electron script that was not committed; recreate it if
+  needed.
+  - It replaced `dialog.showOpenDialog` with a stand-in, clicked through the UI with
+    `webContents.executeJavaScript`, and saved screenshots with `capturePage()`.
+  - Every delete was undone, so nothing reached the Trash.
+- Not yet exercised: a real trash from the UI, and anything on Windows.
+
+**Open decisions and known quirks**
+- Where mpv comes from in the packaged app: bundled or installed.
+- A video restored with Undo doesn't reappear in "Recently played" (cosmetic).
+- npm 11 runs install scripts only for packages approved in `allowScripts` (§5).
 
 ---
 
@@ -608,3 +653,10 @@ is not designed in detail yet.
     on the ready screen looked cluttered in the first screenshot.
   - 100 unit tests pass (106 including the 6 real-mpv tests). A click-through of the built app with
     real mpv passed 21 of 21 checks.
+- **2026-09-15:** Published to GitHub and added a handoff section.
+  - Before publishing, every commit was rewritten to use GitHub's private email instead of Lucas's
+    personal address. Every commit and every file version was then checked for emails, home folder
+    paths, tokens and keys.
+  - The public repo is https://github.com/Lw0ng01/FileShuffler.
+  - Added "Resume here" at the top of this doc, because a new session (for example on the Windows
+    desktop) starts without this session's chat or local memory.
