@@ -4,8 +4,8 @@
 > change happens (see Change Log at the bottom). `CLAUDE.md` covers *how to work in the code*;
 > this file covers *what and why*.
 
-**Status:** Phase 1 (app works on macOS; Windows desktop set up, mpv and trash checked there;
-next: click through the app on Windows, then package) ·
+**Status:** Phase 1 (app works on macOS and runs on Windows; mpv and trash checked there;
+next: finish the Windows click-through, then package) ·
 **Stack:** Electron + React + TypeScript (electron-vite) · **Name:** FileShuffler. Lucas doesn't
 care about the name; keep it unless they say otherwise.
 
@@ -29,6 +29,8 @@ session starts without earlier chats or local memory. This section, the rest of 
   - `shell.trashItem` sent clips to the Recycle Bin on the internal NTFS drive and on an external
     exFAT drive. mpv doesn't lock a file it is playing.
   - Fixed: an unplugged drive looked like a deleted file, because Windows reports both as `ENOENT`.
+- Lucas ran the app on Windows (`npm run dev` from Command Prompt). Shuffling a small folder
+  worked, and a delete from the app landed in the Recycle Bin (external exFAT drive).
 - The old Python shuffler was reviewed. It confirms §3's guess about why it felt bad.
 - Public repo: https://github.com/Lw0ng01/FileShuffler.
 - Commits use GitHub's private email. In a new clone, run
@@ -36,9 +38,9 @@ session starts without earlier chats or local memory. This section, the rest of 
   commit personal emails or local paths.
 
 **Next steps, in order**
-1. Click through the app on Windows with `npm run dev` and generated clips: choose a folder, Next,
-   Back, `>`/`<`/`DEL` inside the mpv window, Undo, and a delete that runs out its undo window and
-   lands in the Recycle Bin.
+1. Finish the Windows click-through with `npm run dev`: a larger folder, `>`/`<`/`DEL` inside the
+   mpv window, and Undo. Choosing a small folder, shuffling, and a delete that lands in the Recycle
+   Bin already work.
 2. Try a delete where recycling isn't supported: a removable USB stick or a network share. It must
    fail with an error and keep the file, never delete permanently. No such drive was at hand yet.
 3. Package for Windows: bundle mpv in `resources/mpv/` (see `findMpv.ts`), run
@@ -56,14 +58,15 @@ session starts without earlier chats or local memory. This section, the rest of 
 - On Windows a second throwaway Electron script (also not committed) played a copied clip in mpv
   over a named pipe (`--vo=null --ao=null`), tried a rename and `shell.trashItem` while it played,
   and trashed a clip on the external drive. Both clips were then found in the Recycle Bin.
-- Not yet exercised: a real trash from the UI, the app screen on Windows, and drives that can't
-  recycle.
+- Not yet exercised on Windows: Undo, keys inside the mpv window, a large folder, and drives that
+  can't recycle.
 
 **Open decisions and known quirks**
 - Where mpv comes from in the packaged app: bundled or installed.
 - A video restored with Undo doesn't reappear in "Recently played" (cosmetic).
 - npm 11 runs install scripts only for packages approved in `allowScripts` (§5).
 - winget's mpv isn't added to the PATH on its own (§5 Existing setup notes).
+- In PowerShell, `npm run dev` fails by default; use Command Prompt or `npm.cmd run dev` (§5).
 
 ---
 
@@ -358,6 +361,11 @@ Windows desktop, set up 2026-09-15: Node 24.21.0, npm 11.19.0, Git 2.55.0, Elect
   The installer is a community repackaging of shinchiro's builds; winget verifies its hash.
 - **Git for Windows defaults to `core.autocrlf=true`.** Files were checked out with CRLF and
   Prettier flagged about 4,000 lines. `.gitattributes` now keeps LF on every platform.
+- **PowerShell can't run `npm` out of the box.** In PowerShell `npm` is a script (`npm.ps1`), and
+  Windows 11 Home's default execution policy (Restricted) blocks scripts. Use Command Prompt or
+  `npm.cmd run dev`, or allow local scripts once with
+  `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`. A terminal opened before installing Node
+  also keeps the old PATH, so open a new one afterwards.
 
 - **Requires Node ≥ 22.12**, because `electron-builder` loads an ESM-only library (`@noble/hashes`)
   using `require()`. On older Node, `npm install`'s postinstall fails with `ERR_REQUIRE_ESM`.
@@ -498,9 +506,9 @@ Build the shuffler first, inside an app shell with a sidebar, so the dashboard s
   - Delete showed a toast with a countdown and disabled Change; Undo restored the video.
   - The → key worked.
   - The test folder was untouched, and mpv closed when the app quit.
-- **Not yet:** a real trash from the UI (only undo was exercised, to keep test files out of the
-  Trash), keyboard use inside the mpv window during the click-through, and the app screen on
-  Windows.
+- **Run on Windows** by Lucas (2026-09-15, `npm run dev` from Command Prompt): shuffling a small
+  folder worked, and a delete from the app landed in the Recycle Bin (external exFAT drive).
+- **Not yet:** keyboard use inside the mpv window, Undo on Windows, and a larger folder.
 
 Dashboard (later): row of drive cards (used/free), space-by-category bar, largest/recent file
 lists and an integrated player. Final video placement follows the embedding prototype; layout
@@ -538,7 +546,8 @@ is not designed in detail yet.
       Unit tests cover these with a fake player and fake files. A click-through of the built app with
       real mpv on macOS passed (§6 Implementation). Still to do on Windows.
 - [ ] Package on Windows now: bundle mpv and verify control/file release/trash on the target machine.
-      mpv control, file release and trash are verified on the Windows desktop without packaging.
+      mpv control, file release and trash are verified on the Windows desktop without packaging,
+      including a delete from the running app.
 - [ ] Record initial performance baseline (§5); agree budgets before optimization claims
 
 ### Phase 1B — Embedded player feasibility
@@ -716,3 +725,9 @@ is not designed in detail yet.
   - Added `.gitattributes` (LF everywhere), because Git for Windows' `core.autocrlf=true` checked
     files out with CRLF and Prettier flagged about 4,000 lines.
   - Not yet: the app screen on Windows, and drives that can't recycle (Resume here).
+- **2026-09-15:** First run of the app on Windows.
+  - Lucas ran `npm run dev` from Command Prompt. Shuffling a small folder worked, and a delete from
+    the app went to the Recycle Bin on the external exFAT drive (confirmed in the Recycle Bin).
+  - `npm run dev` had failed in PowerShell: the window predated the Node install, and Windows'
+    default execution policy blocks `npm.ps1`. Noted in §5 and `CLAUDE.md`.
+  - Not yet: Undo, keys inside the mpv window, a larger folder, and drives that can't recycle.

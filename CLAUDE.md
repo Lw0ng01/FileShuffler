@@ -47,6 +47,8 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
 - Windows: `lstat` reports `ENOENT` for a missing folder or drive too, not only a missing file
   (see `fileIdentity.ts`). winget's mpv (`shinchiro.mpv`) isn't on the PATH until you add
   `C:\Program Files\MPV Player` or set `FILESHUFFLER_MPV`.
+- Windows PowerShell blocks `npm.ps1` under the default execution policy. Use Command Prompt or
+  `npm.cmd` (PROJECT.md §5).
 
 ## Code rules
 
