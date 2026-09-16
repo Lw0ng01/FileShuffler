@@ -22,7 +22,7 @@ session starts without earlier chats or local memory. This section, the rest of 
   and Delete with a 5-second undo before trashing. See §2, §3, §4 and §6 (Implementation notes).
 - The Windows desktop is set up: Node 24.21, npm 11.19, Git 2.55 and mpv 0.41 from winget
   (§5 Existing setup notes). `npm ci`, typecheck and Electron 44.3.0 work.
-- `npm test` runs 120 unit tests. Six more run against a real mpv when `MPV_PATH` is set. All 126
+- `npm test` runs 160 unit tests. Six more run against a real mpv when `MPV_PATH` is set. All 166
   pass on Windows.
 - Checked on Windows with disposable clips (§2 How delete is implemented, §4 Implementation):
   - mpv's named pipe, loads, end of file, key bindings and unload-until-idle (the real-mpv tests).
@@ -431,6 +431,19 @@ Windows desktop, set up 2026-09-15: Node 24.21.0, npm 11.19.0, Git 2.55.0, Elect
   - Approvals are **pinned to exact versions**. After upgrading one of these packages, run
     `npm install-scripts ls` and approve the new version.
 
+### Index store: Node's built-in SQLite ✅ decided 2026-09-16
+
+The indexer stores what it finds through `node:sqlite`, the SQLite built into Node itself.
+- Checked before choosing: Electron 44.3.0 runs Node 24.20, and a real insert and read worked
+  inside Electron, not just in plain Node.
+- It avoids a native dependency such as `better-sqlite3`, which would need rebuilding for every
+  Electron upgrade, another entry in `allowScripts`, and a working toolchain on every machine that
+  builds the app.
+- The store sits behind `IndexDb` (`src/main/library/indexDb.ts`), so swapping the engine later is
+  a contained change rather than a rewrite.
+- The database lives in the app's data folder beside the shuffler's progress, never with the user's
+  files (§2.8).
+
 ### Tradeoffs and criteria for reconsidering the stack
 
 | Option | Relevant benefit | Cost / uncertainty |
@@ -629,10 +642,34 @@ The front end comes last, as the least complex part. Two things that order depen
 
 ### Phase 3 — Indexer (feeds the dashboard)
 
-- [ ] Settings: choose which drives/folders to index (default: user Videos, Pictures, Documents,
-      Downloads, Desktop)
-- [ ] Safe background scanner (rules in §2) → SQLite
-- [ ] Incremental rescans
+- [x] Safe scanner (rules in §2) → SQLite
+- [x] Incremental rescans: files are keyed by path, so a rescan updates rather than duplicates, and
+      a mark-and-sweep drops what the scan no longer found
+- [x] Roots chosen through `IndexerService` and the library IPC; a first run offers the user's
+      Videos, Pictures, Music, Documents and Downloads
+- [ ] Settings screen to pick them, and the dashboard itself (front end comes later, see the
+      working order above)
+- [ ] Decide when scans run on their own: at startup, on a schedule, or only on request
+
+**Implementation (Phase 3)**
+
+- `src/main/files/scanRules.ts`: extends the shuffler's video allowlist into video, photo, audio
+  and document categories, and holds the skip rules from §2.5. The shuffler and the indexer share
+  one video list, so they can't drift apart.
+- `src/main/files/scanner.ts`: reads chosen folders and everything inside them. Read-only, never
+  follows symlinks or junctions, skips system and dot folders (roots included), walks level by
+  level with bounded concurrency and a depth cap, hands files over in fixed-size batches, reports
+  progress, stops promptly when cancelled, and records a folder it couldn't read instead of
+  abandoning the whole drive.
+- `src/main/library/indexDb.ts`: roots and files in SQLite (§5), with totals by category and by
+  drive, largest, recently changed, and a name search that treats `%` and `_` as plain text. Scan
+  ids always increase past the highest stored, because two scans inside one millisecond would
+  otherwise share an id and the sweep would silently delete nothing.
+- `src/main/app/indexerService.ts`: one scan at a time, cancellable, throttled progress. **A
+  cancelled pass deliberately skips the sweep**: it only saw part of the folder, so treating
+  "not seen yet" as "deleted" would empty the index.
+- `src/main/libraryIpc.ts`: the same rules as the shuffler's IPC — the app's own window only, with
+  paths, limits and search terms checked at runtime and limits capped.
 
 ### Phase 4 — Dashboard
 
@@ -856,3 +893,16 @@ machines, not Lucas's.
     different app-data folders, so saved cycles don't carry across (§3 Implementation).
   - Phase 5 is now cleanup tools and stats rather than loose bonus ideas, and Phase 0's public-repo
     item is ticked.
+- **2026-09-16:** Indexer backend, the first piece of the dashboard (Phase 3).
+  - Scan rules, a safe scanner, a SQLite store, the indexer service and the library IPC, with tests
+    for each. No UI yet: the dashboard screen is next, in line with the working order (§7).
+  - **Index store decided:** Node's built-in `node:sqlite`, after checking it really works inside
+    Electron 44 (§5). No native dependency to rebuild, nothing new in `allowScripts`.
+  - Rescans update by path and sweep away files that are gone, so the index follows the disk
+    without duplicating rows.
+  - Found by testing: scan ids taken from `Date.now()` collided within a millisecond, which
+    silently disabled the sweep. Ids now always increase past the highest one stored.
+  - Found by testing: a folder holding more files than one batch was handed over as a single huge
+    write; batches are now flushed at their exact size.
+  - A cancelled scan keeps what it found but skips the sweep, so cancelling can never empty the
+    index.

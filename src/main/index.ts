@@ -2,8 +2,12 @@ import { app, BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent } f
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { LIBRARY_CHANNELS } from '../shared/library'
 import { CHANNELS } from '../shared/shuffler'
+import { IndexerService } from './app/indexerService'
 import { ShufflerService } from './app/shufflerService'
+import { IndexDb } from './library/indexDb'
+import { registerLibraryIpc } from './libraryIpc'
 import { readFileIdentity } from './files/fileIdentity'
 import { ProgressStore } from './files/progressStore'
 import { listVideoFiles } from './files/videoFolder'
@@ -45,6 +49,28 @@ const shuffler = new ShufflerService({
 shuffler.onView((view) => {
   if (mainWindow !== null && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(CHANNELS.view, view)
+  }
+})
+
+// The index lives beside the shuffler's progress, in the app's own data folder (PROJECT.md §2.8).
+const indexDb = new IndexDb(join(app.getPath('userData'), 'index.db'))
+const library = new IndexerService({
+  db: indexDb,
+  // Offered on a first run. Electron throws for a folder this system doesn't define, so each one
+  // is asked for separately and a missing one is simply left out.
+  defaultRoots: () =>
+    (['videos', 'pictures', 'music', 'documents', 'downloads'] as const).flatMap((name) => {
+      try {
+        return [app.getPath(name)]
+      } catch {
+        return []
+      }
+    })
+})
+
+library.onView((view) => {
+  if (mainWindow !== null && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(LIBRARY_CHANNELS.view, view)
   }
 })
 
@@ -115,6 +141,8 @@ app.whenReady().then(() => {
   })
 
   registerShufflerIpc(ipcMain, shuffler, isTrustedSender)
+  registerLibraryIpc(ipcMain, library, isTrustedSender)
+  library.addDefaultRoots()
   createWindow()
   // Reopens last time's folder where its cycle left off; the view updates when it's ready.
   void shuffler.restoreLastSession()
@@ -131,7 +159,9 @@ let shutdownComplete = false
 app.on('before-quit', (event) => {
   if (shutdownComplete) return
   event.preventDefault()
+  library.dispose()
   shuffler.dispose().finally(() => {
+    indexDb.close()
     shutdownComplete = true
     app.quit()
   })

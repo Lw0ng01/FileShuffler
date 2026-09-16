@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { LIBRARY_CHANNELS, type LibraryApi, type LibraryView } from '../shared/library'
 import { CHANNELS, type ShufflerApi, type ShufflerView } from '../shared/shuffler'
 
 // The only surface the renderer can reach (PROJECT.md §5). Each function maps to one fixed
@@ -23,4 +24,22 @@ const shuffler: ShufflerApi = {
   }
 }
 
-contextBridge.exposeInMainWorld('api', { shuffler })
+const library: LibraryApi = {
+  getView: () => ipcRenderer.invoke(LIBRARY_CHANNELS.getView),
+  addRoot: (path) => ipcRenderer.invoke(LIBRARY_CHANNELS.addRoot, path),
+  removeRoot: (path) => ipcRenderer.invoke(LIBRARY_CHANNELS.removeRoot, path),
+  scan: () => ipcRenderer.invoke(LIBRARY_CHANNELS.scan),
+  cancelScan: () => ipcRenderer.invoke(LIBRARY_CHANNELS.cancelScan),
+  largest: (limit) => ipcRenderer.invoke(LIBRARY_CHANNELS.largest, limit),
+  recent: (limit) => ipcRenderer.invoke(LIBRARY_CHANNELS.recent, limit),
+  search: (term, limit) => ipcRenderer.invoke(LIBRARY_CHANNELS.search, term, limit),
+  onView: (listener) => {
+    const handler = (_event: IpcRendererEvent, view: LibraryView): void => listener(view)
+    ipcRenderer.on(LIBRARY_CHANNELS.view, handler)
+    return () => {
+      ipcRenderer.removeListener(LIBRARY_CHANNELS.view, handler)
+    }
+  }
+}
+
+contextBridge.exposeInMainWorld('api', { shuffler, library })
