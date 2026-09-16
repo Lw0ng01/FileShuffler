@@ -1,0 +1,108 @@
+import type { IpcMainInvokeEvent } from 'electron'
+import { describe, expect, it, vi } from 'vitest'
+import { LIBRARY_CHANNELS } from '../shared/library'
+import type { IpcRegistry } from './ipc'
+import { registerLibraryIpc, type LibraryBackend } from './libraryIpc'
+
+/** Stands in for Electron's ipcMain, keeping the handlers so a test can call them. */
+class FakeIpc implements IpcRegistry {
+  readonly handlers = new Map<string, (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown>()
+
+  handle(
+    channel: string,
+    listener: (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown
+  ): void {
+    this.handlers.set(channel, listener)
+  }
+
+  removeHandler(channel: string): void {
+    this.handlers.delete(channel)
+  }
+
+  invoke(channel: string, ...args: unknown[]): unknown {
+    const handler = this.handlers.get(channel)
+    if (handler === undefined) throw new Error(`no handler for ${channel}`)
+    return handler({} as IpcMainInvokeEvent, ...args)
+  }
+}
+
+function setup(trusted = true): { ipc: FakeIpc; backend: LibraryBackend; unregister: () => void } {
+  const ipc = new FakeIpc()
+  const backend = {
+    getView: vi.fn(),
+    addRoot: vi.fn(),
+    removeRoot: vi.fn(),
+    scanAll: vi.fn(),
+    cancelScan: vi.fn(),
+    largest: vi.fn(),
+    recent: vi.fn(),
+    search: vi.fn()
+  } as unknown as LibraryBackend
+  const unregister = registerLibraryIpc(ipc, backend, () => trusted)
+  return { ipc, backend, unregister }
+}
+
+describe('registerLibraryIpc', () => {
+  it('forwards each command to the indexer', () => {
+    const { ipc, backend } = setup()
+    ipc.invoke(LIBRARY_CHANNELS.getView)
+    ipc.invoke(LIBRARY_CHANNELS.addRoot, 'D:\\Videos')
+    ipc.invoke(LIBRARY_CHANNELS.removeRoot, 'D:\\Videos')
+    ipc.invoke(LIBRARY_CHANNELS.scan)
+    ipc.invoke(LIBRARY_CHANNELS.cancelScan)
+    ipc.invoke(LIBRARY_CHANNELS.largest, 10)
+    ipc.invoke(LIBRARY_CHANNELS.recent)
+    ipc.invoke(LIBRARY_CHANNELS.search, 'beach', 5)
+
+    expect(backend.getView).toHaveBeenCalledTimes(1)
+    expect(backend.addRoot).toHaveBeenCalledWith('D:\\Videos')
+    expect(backend.removeRoot).toHaveBeenCalledWith('D:\\Videos')
+    expect(backend.scanAll).toHaveBeenCalledTimes(1)
+    expect(backend.cancelScan).toHaveBeenCalledTimes(1)
+    expect(backend.largest).toHaveBeenCalledWith(10)
+    expect(backend.recent).toHaveBeenCalledWith(undefined)
+    expect(backend.search).toHaveBeenCalledWith('beach', 5)
+  })
+
+  it('rejects a root that is not a path', () => {
+    const { ipc, backend } = setup()
+    for (const bad of [undefined, 42, '', 'x'.repeat(4097), { path: 'D:\\' }]) {
+      expect(() => ipc.invoke(LIBRARY_CHANNELS.addRoot, bad)).toThrow('Expected a folder path')
+    }
+    expect(backend.addRoot).not.toHaveBeenCalled()
+  })
+
+  it('rejects a limit that is not a positive number, and caps a huge one', () => {
+    const { ipc, backend } = setup()
+    for (const bad of [0, -5, 'ten', Number.NaN]) {
+      expect(() => ipc.invoke(LIBRARY_CHANNELS.largest, bad)).toThrow('positive row limit')
+    }
+    ipc.invoke(LIBRARY_CHANNELS.largest, 10_000)
+    expect(backend.largest).toHaveBeenCalledWith(500)
+  })
+
+  it('rejects a search term that is not a string, or too long', () => {
+    const { ipc, backend } = setup()
+    expect(() => ipc.invoke(LIBRARY_CHANNELS.search, 42)).toThrow('Expected a search term')
+    expect(() => ipc.invoke(LIBRARY_CHANNELS.search, 'x'.repeat(257))).toThrow(
+      'Expected a search term'
+    )
+    expect(backend.search).not.toHaveBeenCalled()
+  })
+
+  it('rejects every request from an untrusted sender', () => {
+    const { ipc, backend } = setup(false)
+    expect(() => ipc.invoke(LIBRARY_CHANNELS.scan)).toThrow('untrusted sender')
+    expect(backend.scanAll).not.toHaveBeenCalled()
+  })
+
+  it('removes all of its handlers', () => {
+    const { ipc, unregister } = setup()
+    const commands = Object.values(LIBRARY_CHANNELS).filter(
+      (channel) => channel !== LIBRARY_CHANNELS.view
+    )
+    expect(ipc.handlers.size).toBe(commands.length)
+    unregister()
+    expect(ipc.handlers.size).toBe(0)
+  })
+})

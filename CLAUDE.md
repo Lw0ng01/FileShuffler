@@ -32,13 +32,18 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
   - `src/main/app/`: the coordinator that connects the shuffle session to a player
   - `src/main/playback/`: the player interface (`types.ts`) and the mpv adapter (`mpv/`,
     PROJECT.md §4)
-  - `src/main/files/`: read-only folder listing and file identity checks (PROJECT.md §2), plus
-    saved cycle progress (`progressStore.ts`), which writes only inside the app's data folder
+  - `src/main/files/`: read-only folder listing and file identity checks (PROJECT.md §2), saved
+    cycle progress (`progressStore.ts`), and the indexer's scan rules and walker (`scanRules.ts`,
+    `scanner.ts`). Only `progressStore.ts` writes, and only inside the app's data folder
+  - `src/main/library/`: the index store (`indexDb.ts`) on Node's built-in SQLite (PROJECT.md §5)
+  - `src/main/app/indexerService.ts`: roots, scans and the numbers the dashboard reads
+  - `src/main/libraryIpc.ts`: library commands, with the same sender and argument checks as `ipc.ts`
   - `src/main/app/shufflerService.ts`: one folder session (shuffle, coordinator, player lifecycle)
   - `src/main/ipc.ts`: renderer commands, with sender and argument checks
 - `src/preload/`: the only bridge to the UI. Expose narrow, typed functions; keep `index.d.ts` in sync
 - `src/renderer/`: React UI, presentation only (`components/`, `hooks/useShuffler.ts`)
-- `src/shared/shuffler.ts`: the view type, API type and channel names shared by all three
+- `src/shared/shuffler.ts` and `src/shared/library.ts`: the view types, API types and channel names
+  shared by all three
 
 ## Toolchain gotchas
 
