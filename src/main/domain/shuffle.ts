@@ -69,10 +69,27 @@ export function buildCycleOrder(
   return order
 }
 
+/**
+ * Enough to carry a cycle across app launches (PROJECT.md §3). Failed items and Back/Forward
+ * history are left out on purpose: a failure is worth retrying next launch, and replaying history
+ * from a previous run would be confusing.
+ */
+export interface ShuffleSnapshot {
+  cycle: number
+  /** Items not yet drawn this cycle, in the order they will be drawn. */
+  bag: string[]
+  /** Items already drawn this cycle, in order. Feeds the seam rule when the next cycle starts. */
+  cycleDraws: string[]
+  /** Drawn this cycle and confirmed open by the player. */
+  opened: string[]
+}
+
 export interface ShuffleSessionOptions {
   random?: RandomSource
   /** Most Back/Forward entries kept in memory. Cycle coverage is tracked separately. */
   maxHistory?: number
+  /** Continues a saved cycle instead of starting a new one. Reconciled with the items given. */
+  restore?: ShuffleSnapshot
 }
 
 export interface ShuffleStats {
@@ -108,7 +125,54 @@ export class ShuffleSession {
     this.random = options.random ?? Math.random
     this.maxHistory = Math.max(1, options.maxHistory ?? 500)
     for (const id of items) this.items.add(id)
-    this.bag = buildCycleOrder([...this.items], [], this.random)
+
+    const restored = options.restore
+    if (restored === undefined) {
+      this.bag = buildCycleOrder([...this.items], [], this.random)
+      return
+    }
+
+    // The folder can have changed since the snapshot was saved: keep only what still exists, and
+    // drop duplicates, so a hand-edited or stale file can't make an item play twice in one cycle.
+    this.cycle = Number.isFinite(restored.cycle) ? Math.max(1, Math.floor(restored.cycle)) : 1
+    const seen = new Set<string>()
+    for (const id of restored.cycleDraws) {
+      if (!this.items.has(id) || seen.has(id)) continue
+      seen.add(id)
+      this.cycleDraws.push(id)
+      this.drawnThisCycle.add(id)
+    }
+    for (const id of restored.opened) {
+      if (this.drawnThisCycle.has(id)) this.opened.add(id)
+    }
+    this.bag = []
+    for (const id of restored.bag) {
+      if (!this.items.has(id) || seen.has(id)) continue
+      seen.add(id)
+      this.bag.push(id)
+    }
+    // Files added while the app was closed join the unplayed part, as they would mid-session.
+    for (const id of this.items) {
+      if (!seen.has(id)) this.bag.splice(randomInt(this.random, this.bag.length + 1), 0, id)
+    }
+  }
+
+  /** The state needed to continue this cycle after a restart. */
+  snapshot(): ShuffleSnapshot {
+    return {
+      cycle: this.cycle,
+      bag: [...this.bag],
+      cycleDraws: [...this.cycleDraws],
+      opened: [...this.opened]
+    }
+  }
+
+  /**
+   * Reshuffles now and starts a new cycle, throwing away this cycle's coverage. The seam rule
+   * still applies, so what just played won't come straight back. False when nothing can play.
+   */
+  restartCycle(): boolean {
+    return this.startNextCycle()
   }
 
   /** The item at the history cursor, or null before anything has been drawn. */

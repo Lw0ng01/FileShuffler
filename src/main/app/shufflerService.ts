@@ -1,7 +1,8 @@
 import { join } from 'node:path'
 import type { ShufflerStatus, ShufflerView, UndoResult } from '../../shared/shuffler'
-import { ShuffleSession, type RandomSource } from '../domain/shuffle'
+import { ShuffleSession, type RandomSource, type ShuffleSnapshot } from '../domain/shuffle'
 import type { FileIdentity } from '../files/fileIdentity'
+import type { ProgressSource } from '../files/progressStore'
 import type { PlaybackAdapter } from '../playback/types'
 import { ShuffleCoordinator, type CoordinatorState } from './coordinator'
 
@@ -14,11 +15,15 @@ export interface ShufflerServiceDeps {
   identify: (path: string) => Promise<FileIdentity | null>
   /** Key labels bound inside the player window, shown in the UI. */
   playerKeys: ShufflerView['playerKeys']
+  /** Remembers where each folder's cycle got to, so closing the app doesn't restart it. */
+  progress?: ProgressSource
   random?: RandomSource
   undoWindowMs?: number
 }
 
 const RECENT_LIMIT = 6
+/** Progress is saved this long after the last change, so a burst of Next presses writes once. */
+const SAVE_DELAY_MS = 1000
 
 /**
  * Owns one shuffle session at a time: the chosen folder, the shuffle, the coordinator and the
@@ -37,6 +42,7 @@ export class ShufflerService {
   private recent: string[] = []
   private error: string | null = null
   private disposed = false
+  private saveTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(deps: ShufflerServiceDeps) {
     this.deps = deps
@@ -83,13 +89,64 @@ export class ShufflerService {
       return this.getView()
     }
 
+    await this.saveProgress()
     await this.closeSession()
+    if (this.disposed) return this.getView()
     this.folder = folder
-    this.session = new ShuffleSession(names, { random: this.deps.random })
+    this.session = new ShuffleSession(names, {
+      random: this.deps.random,
+      restore: (await this.readProgress(folder)) ?? undefined
+    })
     this.recent = []
     this.error = null
+    // Records this as the folder to reopen next launch, even if nothing plays yet.
+    this.scheduleSave()
     this.emit()
     return this.getView()
+  }
+
+  /**
+   * Reopens the folder from last time, ready to play where its cycle left off (PROJECT.md §3).
+   * Called at startup. Does nothing if there is no saved folder or it can't be read now, for
+   * example because the drive is unplugged.
+   */
+  async restoreLastSession(): Promise<void> {
+    if (this.session !== null || this.disposed) return
+    let folder: string | null
+    try {
+      folder = (await this.deps.progress?.lastFolder()) ?? null
+    } catch {
+      return
+    }
+    if (folder === null) return
+
+    let names: string[]
+    try {
+      names = await this.deps.listVideos(folder)
+    } catch {
+      return
+    }
+    // chooseFolder may have won the race while this was reading.
+    if (this.session !== null || this.disposed) return
+
+    this.folder = folder
+    this.session = new ShuffleSession(names, {
+      random: this.deps.random,
+      restore: (await this.readProgress(folder)) ?? undefined
+    })
+    this.emit()
+  }
+
+  /**
+   * Reshuffles everything and starts a new cycle, discarding this cycle's coverage (PROJECT.md §3).
+   * Whatever is playing keeps playing; the next video comes from the new order.
+   */
+  async restartCycle(): Promise<void> {
+    if (this.session === null) return
+    this.session.restartCycle()
+    this.cancelScheduledSave()
+    await this.saveProgress()
+    this.emit()
   }
 
   /** Starts the shuffle, or reopens the player at the current file after its window was closed. */
@@ -119,8 +176,47 @@ export class ShufflerService {
   /** Closes the player and cancels deletes still in their undo window (PROJECT.md §2.3). */
   async dispose(): Promise<void> {
     this.disposed = true
+    this.cancelScheduledSave()
+    await this.saveProgress()
     await this.closeSession()
     this.listeners.clear()
+  }
+
+  private async readProgress(folder: string): Promise<ShuffleSnapshot | null> {
+    try {
+      return (await this.deps.progress?.read(folder)) ?? null
+    } catch {
+      // Saved progress is a convenience: never let it stop a folder from opening.
+      return null
+    }
+  }
+
+  private scheduleSave(): void {
+    if (this.deps.progress === undefined || this.saveTimer !== null) return
+    this.saveTimer = setTimeout(() => {
+      this.saveTimer = null
+      void this.saveProgress()
+    }, SAVE_DELAY_MS)
+    // Saving progress is never a reason to keep the process alive.
+    if (typeof this.saveTimer.unref === 'function') this.saveTimer.unref()
+  }
+
+  private cancelScheduledSave(): void {
+    if (this.saveTimer === null) return
+    clearTimeout(this.saveTimer)
+    this.saveTimer = null
+  }
+
+  private async saveProgress(): Promise<void> {
+    const store = this.deps.progress
+    const folder = this.folder
+    const session = this.session
+    if (store === undefined || folder === null || session === null) return
+    try {
+      await store.save(folder, session.snapshot())
+    } catch {
+      // A failed save must never interrupt playback; the cycle is only a convenience.
+    }
   }
 
   private status(state: CoordinatorState | null): ShufflerStatus {
@@ -205,6 +301,7 @@ export class ShufflerService {
     }
     // Playback moved on, so any earlier service message (folder or launch problem) is stale.
     this.error = null
+    this.scheduleSave()
     this.emit()
   }
 

@@ -12,6 +12,7 @@ const shuffler: ShufflerApi = {
   back: () => ipcRenderer.invoke(CHANNELS.back),
   deleteCurrent: () => ipcRenderer.invoke(CHANNELS.deleteCurrent),
   undoDelete: (id) => ipcRenderer.invoke(CHANNELS.undoDelete, id),
+  restartCycle: () => ipcRenderer.invoke(CHANNELS.restartCycle),
   onView: (listener) => {
     // Pass on only the view, never the IPC event object.
     const handler = (_event: IpcRendererEvent, view: ShufflerView): void => listener(view)

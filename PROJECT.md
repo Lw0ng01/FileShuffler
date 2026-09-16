@@ -22,7 +22,7 @@ session starts without earlier chats or local memory. This section, the rest of 
   and Delete with a 5-second undo before trashing. See §2, §3, §4 and §6 (Implementation notes).
 - The Windows desktop is set up: Node 24.21, npm 11.19, Git 2.55 and mpv 0.41 from winget
   (§5 Existing setup notes). `npm ci`, typecheck and Electron 44.3.0 work.
-- `npm test` runs 103 unit tests. Six more run against a real mpv when `MPV_PATH` is set. All 109
+- `npm test` runs 120 unit tests. Six more run against a real mpv when `MPV_PATH` is set. All 126
   pass on Windows.
 - Checked on Windows with disposable clips (§2 How delete is implemented, §4 Implementation):
   - mpv's named pipe, loads, end of file, key bindings and unload-until-idle (the real-mpv tests).
@@ -34,6 +34,8 @@ session starts without earlier chats or local memory. This section, the rest of 
   keys inside the mpv window, and a folder of about 1400 videos on that drive all worked too.
 - Undo now shows a short note saying what it did, because the toast used to just vanish
   (§6 Implementation). The shuffle was also checked at 1400 videos (§3 Implementation).
+- The shuffle survives a restart: the app reopens last time's folder and carries on through the
+  same cycle, with a Restart cycle button to reshuffle on demand (§3 and §6 Implementation).
 - The old Python shuffler was reviewed. It confirms §3's guess about why it felt bad.
 - Public repo: https://github.com/Lw0ng01/FileShuffler.
 - Commits use GitHub's private email. In a new clone, run
@@ -47,8 +49,8 @@ session starts without earlier chats or local memory. This section, the rest of 
 2. Package for Windows: bundle mpv in `resources/mpv/` (see `findMpv.ts`), run
    `npm run build:win`, and test the installer on a machine without development tools.
 3. Record a first performance baseline and agree budgets (§5).
-4. Consider remembering shuffle progress between launches (Phase 2). At 1400 videos a cycle is
-   long, so starting fresh on every launch undoes the coverage the shuffle is built around.
+4. Then build out beyond the shuffler, in the order Lucas picked (2026-09-15): the dashboard
+   (Phases 3–4), cleanup tools such as a duplicate finder, and stats with favorites (Phase 5).
 
 **How it was tested without real videos**
 - mpv can generate test clips, for example
@@ -70,6 +72,8 @@ session starts without earlier chats or local memory. This section, the rest of 
 - npm 11 runs install scripts only for packages approved in `allowScripts` (§5).
 - winget's mpv isn't added to the PATH on its own (§5 Existing setup notes).
 - In PowerShell, `npm run dev` fails by default; use Command Prompt or `npm.cmd run dev` (§5).
+- Saved cycle progress lives in the app's data folder (`progress.json`). Deleting it only means
+  cycles start fresh.
 
 ---
 
@@ -215,7 +219,8 @@ reviewed on 2026-09-15. It confirms the first guess:
 The engine lives in `src/main/domain/shuffle.ts` (`ShuffleSession`), with tests beside it. It is
 pure TypeScript: items are opaque string IDs, and randomness is injected.
 - **API:** `next()`, `back()`, `current()`, `markOpened(id)`, `markFailed(id)`,
-  `beginDelete(id)` / `cancelDelete(id)` / `completeDelete(id)`, `add(ids)`, `stats()`.
+  `beginDelete(id)` / `cancelDelete(id)` / `completeDelete(id)`, `add(ids)`, `stats()`,
+  `snapshot()`, `restartCycle()`.
 - **Choices the spec left open:**
   - `markOpened` counts only items drawn in the current cycle. Replaying a previous cycle's item
     with Back does not add coverage.
@@ -243,8 +248,21 @@ pure TypeScript: items are opaque string IDs, and randomness is injected.
   - Every video was equally likely to play first and to land anywhere in the cycle, and play order
     had no link to alphabetical (folder) order, so numbered episodes don't drift into sequence.
   - Back/Next replay, the 500-entry history limit, and delete/undo mid-cycle all behaved.
-- **Not yet:** persisting progress between launches (Phase 2). With a folder this size that is
-  felt: closing the app starts a fresh cycle, so already-watched videos can return early.
+- **Saved between launches** (2026-09-15, Phase 2): `snapshot()` and the `restore` option carry a
+  cycle across restarts — the cycle number, the bag still to be drawn, this cycle's draws and what
+  the player confirmed opening. Failed items and Back/Forward history are deliberately left out: a
+  failure is worth retrying next launch, and replaying an old run's history would make Back
+  confusing.
+  - A restored snapshot is reconciled with the folder as it is now. Videos deleted elsewhere drop
+    out, duplicates are ignored, and files added while the app was closed join the unplayed part at
+    a random position, exactly as they would mid-session.
+  - `ProgressStore` (`src/main/files/progressStore.ts`) keeps one JSON file in the app's own data
+    folder, writing a temporary file and renaming it so a crash can't leave half a file. A missing
+    or corrupt file reads as "no progress" instead of blocking startup, and only the 20 most recent
+    folders are kept. Nothing here writes to the user's own files.
+- **Restart cycle** *(Lucas asked for this alongside the memory, 2026-09-15)*: `restartCycle()`
+  reshuffles everything and starts a new cycle, so a remembered cycle can always be abandoned. It
+  reuses the normal new-cycle path, so the seam rule still prevents an immediate repeat.
 
 ### Possible upgrades (later)
 
@@ -495,6 +513,8 @@ Build the shuffler first, inside an app shell with a sidebar, so the dashboard s
     Start shuffle is the single main action.
   - **Feedback:** an undo toast with a live countdown per pending delete, an error banner, a short
     note confirming what an Undo did (it clears itself), key reminders, and a recently played list.
+  - **Restart cycle:** a button beside the progress bar. It asks to confirm first, because
+    restarting throws away this cycle's coverage.
   - **In-app keys** (only while the window has focus, never global): → / ← next and back, Delete or
     ⌘/Ctrl+Backspace to delete, ⌘/Ctrl+Z to undo the latest delete.
   - Dark theme with a light variant that follows the system setting. System fonts only, so there
@@ -505,6 +525,9 @@ Build the shuffler first, inside an app shell with a sidebar, so the dashboard s
     same file after its window is closed, or moves on if Next is pressed.
   - It turns a missing mpv into a readable message and refuses to change folders while a delete
     can be undone. Closing the app disposes it, which cancels pending deletes.
+  - Progress is saved about a second after the last change (so a burst of Next presses writes once)
+    and again when the app closes. `restoreLastSession()` reopens last time's folder at startup,
+    ready to play; an unreadable folder, for example on an unplugged drive, is skipped in silence.
 - **Bridge:** `src/preload/index.ts` exposes `window.api.shuffler` with one fixed channel per
   command (`src/shared/shuffler.ts`).
   - `src/main/ipc.ts` rejects any caller other than the app window's top-level frame.
@@ -577,7 +600,8 @@ is not designed in detail yet.
 
 - [ ] **VLC as a second player option** (user-installed VLC, local control interface) through the
       same playback adapter. Verify end-of-file/error detection and file release before trashing.
-- [ ] Remember last folder and shuffle progress between launches
+- [x] Remember last folder and shuffle progress between launches, with a Restart cycle button
+      (§3 Implementation, §6 Implementation)
 - [ ] "Show in Explorer/Finder" button
 - [ ] Configurable shortcuts and clear error/recovery feedback
 - [ ] Repeat the baseline after material playback/performance changes
@@ -759,3 +783,15 @@ is not designed in detail yet.
     IPC and preload, and the screen shows a short note that clears itself.
   - An undo really can be too late: once the trash step starts it cannot be cancelled, so that case
     says so rather than implying the file came back.
+- **2026-09-15:** Cycle memory and a Restart cycle button (Phase 2).
+  - The app now reopens last time's folder and carries on through the same cycle instead of
+    starting over, which matters most at 1400 videos where a cycle takes a long time.
+  - `ShuffleSession` gained `snapshot()`, a `restore` option and `restartCycle()`. `ProgressStore`
+    keeps one JSON file in the app's data folder: temporary file then rename, a corrupt file reads
+    as no progress, and the 20 most recent folders are kept (§3 Implementation).
+  - A restored cycle is reconciled with the folder as it is now, so videos deleted elsewhere drop
+    out and new ones join the unplayed part at random.
+  - Lucas asked for the Restart cycle button alongside the memory, so a remembered cycle can always
+    be abandoned. It confirms first, because restarting discards coverage.
+  - Direction after the shuffler, chosen by Lucas: the dashboard, cleanup tools, and stats with
+    favorites. Shuffling photos and music was considered and left out for now.

@@ -5,6 +5,7 @@ import icon from '../../resources/icon.png?asset'
 import { CHANNELS } from '../shared/shuffler'
 import { ShufflerService } from './app/shufflerService'
 import { readFileIdentity } from './files/fileIdentity'
+import { ProgressStore } from './files/progressStore'
 import { listVideoFiles } from './files/videoFolder'
 import { registerShufflerIpc } from './ipc'
 import { findMpv } from './playback/mpv/findMpv'
@@ -36,7 +37,9 @@ const shuffler = new ShufflerService({
   // Rejects instead of deleting permanently when the item can't be recycled (PROJECT.md §2).
   trash: (path) => shell.trashItem(path),
   identify: readFileIdentity,
-  playerKeys: KEY_LABELS
+  playerKeys: KEY_LABELS,
+  // Stays in the app's own data folder, never with the user's files (PROJECT.md §2.8).
+  progress: new ProgressStore(join(app.getPath('userData'), 'progress.json'))
 })
 
 shuffler.onView((view) => {
@@ -113,6 +116,8 @@ app.whenReady().then(() => {
 
   registerShufflerIpc(ipcMain, shuffler, isTrustedSender)
   createWindow()
+  // Reopens last time's folder where its cycle left off; the view updates when it's ready.
+  void shuffler.restoreLastSession()
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
