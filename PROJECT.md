@@ -22,7 +22,7 @@ session starts without earlier chats or local memory. This section, the rest of 
   and Delete with a 5-second undo before trashing. See §2, §3, §4 and §6 (Implementation notes).
 - The Windows desktop is set up: Node 24.21, npm 11.19, Git 2.55 and mpv 0.41 from winget
   (§5 Existing setup notes). `npm ci`, typecheck and Electron 44.3.0 work.
-- `npm test` runs 210 unit tests. Six more run against a real mpv when `MPV_PATH` is set. All 216
+- `npm test` runs 220 unit tests. Six more run against a real mpv when `MPV_PATH` is set. All 226
   pass on Windows.
 - Checked on Windows with disposable clips (§2 How delete is implemented, §4 Implementation):
   - mpv's named pipe, loads, end of file, key bindings and unload-until-idle (the real-mpv tests).
@@ -41,6 +41,8 @@ session starts without earlier chats or local memory. This section, the rest of 
   Phase 3 and Phase 4). The indexer behind it is in §7 Phase 3 Implementation.
 - A Stats tab shows what the shuffler has played: totals, most played, recently played, never
   played, and a starred favorites list (§6 Stats). Favorites don't affect the shuffle.
+- Browsing: search can be narrowed by category, drive and size and sorted by size, date or name,
+  and long lists have Show more (§6 Dashboard). A settings screen is the next branch.
 - Front-end feedback waiting for the design pass: Cleanup should be its own tab rather than a
   section at the bottom of the dashboard, which took scrolling to find (Lucas, 2026-09-16).
 - The old Python shuffler was reviewed. It confirms §3's guess about why it felt bad.
@@ -597,6 +599,16 @@ folders to index are chosen on the dashboard itself.
   - **Add folder**, **Scan now** and **Stop scan**, with live progress while scanning.
   - **Search** by name, and **Largest** and **Recently changed** lists, which are hidden while
     search results are showing.
+  - **Filters and sorting** *(Lucas, 2026-09-16)*: category chips, a drive picker and a minimum
+    size, which work without typing, so "videos over 1 GB on F:" is two clicks. Sort by date
+    changed, size or name, with the direction named in words ("Largest first", "A to Z").
+  - **Show more** on search results, Largest, Recently changed, biggest folders and duplicates,
+    with "Showing 25 of 1,284" where the store knows the total. Pages come from the store with an
+    offset, so a big library is never loaded into the window at once.
+  - Behind it is one query, `IndexDb.queryFiles`: every filter is bound as a parameter, and the
+    sort comes from a fixed table rather than from text the window sends, so a query can't carry
+    SQL of its own. The IPC check drops unknown fields and rejects anything off its lists or out
+    of range.
   - **Open** and **Show** on every file row *(Lucas asked for this, 2026-09-16)*: open in the
     system's default application, or show the file in the file manager. The renderer sends only a
     name, and the main process opens it **only if that exact path is in the index**, so a bug or
@@ -643,6 +655,8 @@ The sidebar has a Stats tab *(Lucas chose a tab over another dashboard section, 
   necessarily indexed. It is still a path the app itself recorded.
 - Display formatting (sizes, counts, relative times, short paths) moved to `src/renderer/src/format.ts`
   so every tab says them the same way.
+- **Never played** can be sorted (newest, largest, A to Z) and extended with Show more. Once
+  re-sorted, the list refreshes itself after each play so it stays accurate.
 - **Not yet:** starring from the dashboard's lists, total watch time (mpv would need to report each
   video's duration), and a way to clear play history.
 
@@ -745,7 +759,8 @@ The front end comes last, as the least complex part. Two things that order depen
 - [x] Largest files, recently changed, search
 - [x] Open a file, or show it in the file manager, from any dashboard list (indexed paths only)
 - [ ] Settings screen for the indexed folders (they are chosen on the dashboard for now)
-- [ ] Thumbnails, and a first pass at how big libraries are paged or virtualized
+- [x] Paging for long lists (Show more), search filters and sorting (§6 Dashboard)
+- [ ] Thumbnails, and virtualized lists if a library outgrows Show more
 - [ ] "Shuffle this" from a folder in the dashboard
 - [ ] Implement the validated embedded player with custom controls, subtitles/audio tracks,
       history/resume, and the same authoritative shuffle session
@@ -1023,3 +1038,16 @@ machines, not Lucas's.
   - Plays and favorites share the index's SQLite database, so stats can combine the two.
   - New `StatsService`, stats IPC with the usual sender and argument checks, and the Stats tab.
     Display formatting moved to a shared `format.ts`.
+- **2026-09-16:** Browsing polish, part one: show more, search filters, and sorting.
+  - Lucas asked whether Never played covers every drive: it does, but shows only 10 rows sorted by
+    date, which can make it look like one folder. That prompted paging here.
+  - Lucas picked all four polish items. Show more, filters and sorting share one new query, so
+    they ship together; the settings screen is mostly front end and follows as its own branch.
+  - `IndexDb.queryFiles` filters by name, category, drive and size, sorts by size, date or name in
+    either direction, pages with an offset, and reports the total. The sort comes from a fixed
+    table and every filter is a bound parameter, so nothing from the window reaches the SQL text.
+  - The dashboard gained a filter bar and Show more on its lists. Never played on the Stats tab
+    can be re-sorted and extended.
+  - Found by testing: name order is case-insensitive, and a space sorts before a dot, so
+    "Beach photo.jpg" comes before "beach.mp4". The code was right and the test's expectation was
+    not.

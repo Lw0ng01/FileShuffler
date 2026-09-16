@@ -79,6 +79,17 @@ describe('StatsService', () => {
     expect(service.removeFavorite('D:\\Media\\a.mp4').favorites).toEqual([])
   })
 
+  it('lists more never-played videos on request, in the chosen order', () => {
+    const { db, service } = setup()
+    db.putFiles(db.startScan(), [
+      indexed('D:\\Media\\small.mp4', { size: 1, modifiedMs: 20 }),
+      indexed('D:\\Media\\big.mp4', { size: 900, modifiedMs: 10 })
+    ])
+
+    expect(service.neverPlayed(50, 'size').map((row) => row.name)).toEqual(['big.mp4', 'small.mp4'])
+    expect(service.neverPlayed(1, 'modified').map((row) => row.name)).toEqual(['small.mp4'])
+  })
+
   it('tells the window when something played', () => {
     const { db, service, views } = setup()
     db.recordOpened('D:\\Media\\a.mp4', 'a.mp4', 'D:\\Media', 1)

@@ -41,6 +41,7 @@ const library: LibraryApi = {
   duplicates: (limit) => ipcRenderer.invoke(LIBRARY_CHANNELS.duplicates, limit),
   notTouched: (days, limit) => ipcRenderer.invoke(LIBRARY_CHANNELS.notTouched, days, limit),
   checkDuplicate: (name, size) => ipcRenderer.invoke(LIBRARY_CHANNELS.checkDuplicate, name, size),
+  query: (query) => ipcRenderer.invoke(LIBRARY_CHANNELS.query, query),
   onView: (listener) => {
     const handler = (_event: IpcRendererEvent, view: LibraryView): void => listener(view)
     ipcRenderer.on(LIBRARY_CHANNELS.view, handler)
@@ -54,6 +55,7 @@ const stats: StatsApi = {
   getView: () => ipcRenderer.invoke(STATS_CHANNELS.getView),
   addFavorite: (path) => ipcRenderer.invoke(STATS_CHANNELS.addFavorite, path),
   removeFavorite: (path) => ipcRenderer.invoke(STATS_CHANNELS.removeFavorite, path),
+  neverPlayed: (limit, sort) => ipcRenderer.invoke(STATS_CHANNELS.neverPlayed, limit, sort),
   onView: (listener) => {
     const handler = (_event: IpcRendererEvent, view: StatsView): void => listener(view)
     ipcRenderer.on(STATS_CHANNELS.view, handler)

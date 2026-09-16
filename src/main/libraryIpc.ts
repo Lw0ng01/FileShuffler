@@ -1,5 +1,5 @@
 import type { IpcMainInvokeEvent } from 'electron'
-import { LIBRARY_CHANNELS } from '../shared/library'
+import { LIBRARY_CHANNELS, type LibraryCategory, type LibraryFileQuery } from '../shared/library'
 import type { IndexerService } from './app/indexerService'
 import type { IpcRegistry } from './ipc'
 
@@ -20,6 +20,7 @@ export type LibraryBackend = Pick<
   | 'duplicates'
   | 'notTouched'
   | 'checkDuplicate'
+  | 'query'
   | 'refreshDriveSpace'
 >
 
@@ -67,6 +68,81 @@ function asTerm(value: unknown): string {
   return value
 }
 
+const CATEGORIES: ReadonlySet<string> = new Set(['video', 'photo', 'audio', 'document'])
+const SORTS: ReadonlySet<string> = new Set(['size', 'modified', 'name'])
+/** A drive is `C:` or `/`; nothing longer is a real one. */
+const MAX_DRIVE_LENGTH = 16
+const MAX_DRIVES = 64
+const MAX_OFFSET = 10_000_000
+
+function asQueryNumber(value: unknown, field: string, max: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > max) {
+    throw new Error(`Expected a sensible ${field}`)
+  }
+  return Math.trunc(value)
+}
+
+/**
+ * Checks a browsing query field by field. Unknown fields are dropped, categories and sorts must
+ * come from fixed lists, and numbers must be finite and in range, so what reaches the store is
+ * exactly a `LibraryFileQuery` and nothing else.
+ */
+function asFileQuery(value: unknown): LibraryFileQuery {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('Expected a file query')
+  }
+  const input = value as Record<string, unknown>
+  const query: LibraryFileQuery = {}
+
+  if (input['term'] !== undefined) query.term = asTerm(input['term'])
+  if (input['categories'] !== undefined) {
+    const categories = input['categories']
+    if (
+      !Array.isArray(categories) ||
+      !categories.every((entry) => typeof entry === 'string' && CATEGORIES.has(entry))
+    ) {
+      throw new Error('Expected categories from the known list')
+    }
+    query.categories = categories as LibraryCategory[]
+  }
+  if (input['drives'] !== undefined) {
+    const drives = input['drives']
+    if (
+      !Array.isArray(drives) ||
+      drives.length > MAX_DRIVES ||
+      !drives.every(
+        (entry) => typeof entry === 'string' && entry.length > 0 && entry.length <= MAX_DRIVE_LENGTH
+      )
+    ) {
+      throw new Error('Expected a list of drives')
+    }
+    query.drives = drives as string[]
+  }
+  if (input['minSize'] !== undefined) {
+    query.minSize = asQueryNumber(input['minSize'], 'minimum size', Number.MAX_SAFE_INTEGER)
+  }
+  if (input['maxSize'] !== undefined) {
+    query.maxSize = asQueryNumber(input['maxSize'], 'maximum size', Number.MAX_SAFE_INTEGER)
+  }
+  if (input['sort'] !== undefined) {
+    if (typeof input['sort'] !== 'string' || !SORTS.has(input['sort'])) {
+      throw new Error('Expected a sort from the known list')
+    }
+    query.sort = input['sort'] as LibraryFileQuery['sort']
+  }
+  if (input['direction'] !== undefined) {
+    if (input['direction'] !== 'asc' && input['direction'] !== 'desc') {
+      throw new Error('Expected asc or desc')
+    }
+    query.direction = input['direction']
+  }
+  if (input['offset'] !== undefined) {
+    query.offset = asQueryNumber(input['offset'], 'offset', MAX_OFFSET)
+  }
+  if (input['limit'] !== undefined) query.limit = asLimit(input['limit'])
+  return query
+}
+
 /**
  * Registers the renderer's library commands, with the same rules as the shuffler's (PROJECT.md §5):
  * every call must come from the app's own window, and arguments are checked at runtime because
@@ -100,6 +176,7 @@ export function registerLibraryIpc(
   handle(LIBRARY_CHANNELS.largest, ([limit]) => backend.largest(asLimit(limit)))
   handle(LIBRARY_CHANNELS.recent, ([limit]) => backend.recent(asLimit(limit)))
   handle(LIBRARY_CHANNELS.search, ([term, limit]) => backend.search(asTerm(term), asLimit(limit)))
+  handle(LIBRARY_CHANNELS.query, ([query]) => backend.query(asFileQuery(query)))
   // The path is checked against the index in the service before anything is opened.
   handle(LIBRARY_CHANNELS.openFile, ([path]) => backend.openFile(asPath(path)))
   handle(LIBRARY_CHANNELS.showInFolder, ([path]) => backend.showInFolder(asPath(path)))

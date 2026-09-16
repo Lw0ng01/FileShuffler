@@ -44,7 +44,8 @@ function setup(trusted = true): { ipc: FakeIpc; backend: LibraryBackend; unregis
     biggestFolders: vi.fn(),
     duplicates: vi.fn(),
     notTouched: vi.fn(),
-    checkDuplicate: vi.fn()
+    checkDuplicate: vi.fn(),
+    query: vi.fn()
   } as unknown as LibraryBackend
   const unregister = registerLibraryIpc(ipc, backend, () => trusted)
   return { ipc, backend, unregister }
@@ -105,6 +106,57 @@ describe('registerLibraryIpc', () => {
     }
     expect(backend.notTouched).not.toHaveBeenCalled()
     expect(backend.checkDuplicate).not.toHaveBeenCalled()
+  })
+
+  it('forwards a browsing query, keeping only the fields it knows', () => {
+    const { ipc, backend } = setup()
+    ipc.invoke(LIBRARY_CHANNELS.query, {
+      term: 'beach',
+      categories: ['video', 'photo'],
+      drives: ['D:'],
+      minSize: 1_000,
+      maxSize: 5_000,
+      sort: 'size',
+      direction: 'asc',
+      offset: 50,
+      limit: 50,
+      sql: 'drop table files'
+    })
+
+    expect(backend.query).toHaveBeenCalledWith({
+      term: 'beach',
+      categories: ['video', 'photo'],
+      drives: ['D:'],
+      minSize: 1_000,
+      maxSize: 5_000,
+      sort: 'size',
+      direction: 'asc',
+      offset: 50,
+      limit: 50
+    })
+  })
+
+  it('rejects a browsing query with anything out of range or off the known lists', () => {
+    const { ipc, backend } = setup()
+    const bad = [
+      undefined,
+      'files',
+      [],
+      { categories: ['executable'] },
+      { categories: 'video' },
+      { drives: ['x'.repeat(17)] },
+      { minSize: -1 },
+      { maxSize: Number.POSITIVE_INFINITY },
+      { sort: 'path; drop table files' },
+      { direction: 'sideways' },
+      { offset: -5 },
+      { limit: 0 },
+      { term: 42 }
+    ]
+    for (const query of bad) {
+      expect(() => ipc.invoke(LIBRARY_CHANNELS.query, query)).toThrow()
+    }
+    expect(backend.query).not.toHaveBeenCalled()
   })
 
   it('rejects an open request that is not a path', () => {

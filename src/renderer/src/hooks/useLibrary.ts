@@ -1,11 +1,58 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
+  LibraryCategory,
   LibraryDigest,
   LibraryDuplicateGroup,
   LibraryFile,
+  LibraryFilePage,
+  LibraryFileQuery,
   LibraryFolder,
+  LibrarySort,
   LibraryView
 } from '../../../shared/library'
+
+/** What the dashboard's search box and filter bar are set to. */
+export interface SearchFilters {
+  term: string
+  categories: LibraryCategory[]
+  drive: string | null
+  /** Smallest size to show, in bytes, or null for any size. */
+  minSize: number | null
+  sort: LibrarySort
+  direction: 'asc' | 'desc'
+}
+
+export const EMPTY_FILTERS: SearchFilters = {
+  term: '',
+  categories: [],
+  drive: null,
+  minSize: null,
+  sort: 'modified',
+  direction: 'desc'
+}
+
+/**
+ * True when the search box or a filter narrows the index. Filters work without a search term, so
+ * "videos over 1 GB on F:" needs no typing.
+ */
+export function filtersActive(filters: SearchFilters): boolean {
+  return (
+    filters.term.trim().length > 0 ||
+    filters.categories.length > 0 ||
+    filters.drive !== null ||
+    filters.minSize !== null
+  )
+}
+
+function toQuery(filters: SearchFilters): LibraryFileQuery {
+  const query: LibraryFileQuery = { sort: filters.sort, direction: filters.direction }
+  const term = filters.term.trim()
+  if (term.length > 0) query.term = term
+  if (filters.categories.length > 0) query.categories = filters.categories
+  if (filters.drive !== null) query.drives = [filters.drive]
+  if (filters.minSize !== null) query.minSize = filters.minSize
+  return query
+}
 
 export interface LibraryActions {
   chooseRoot: () => void
@@ -13,9 +60,21 @@ export interface LibraryActions {
   scan: () => void
   cancelScan: () => void
   setTerm: (term: string) => void
+  toggleCategory: (category: LibraryCategory) => void
+  setDrive: (drive: string | null) => void
+  setMinSize: (bytes: number | null) => void
+  /** Picks what to sort by, with the direction that suits it: A to Z, largest or newest first. */
+  setSort: (sort: LibrarySort) => void
+  toggleDirection: () => void
+  clearFilters: () => void
+  showMoreResults: () => void
+  showMoreLargest: () => void
+  showMoreRecent: () => void
   openFile: (path: string) => void
   showInFolder: (path: string) => void
   loadCleanup: () => void
+  showMoreFolders: () => void
+  showMoreDuplicates: () => void
   checkDuplicate: (name: string, size: number) => void
 }
 
@@ -28,6 +87,9 @@ export interface CleanupLists {
   /** Fingerprints per checked group, keyed by `duplicateKey`. */
   checked: Record<string, LibraryDigest[]>
   checking: string | null
+  /** How many rows were asked for, so "show more" can tell when nothing is left. */
+  folderLimit: number
+  duplicateLimit: number
 }
 
 /** One key per duplicate group, since a name alone isn't unique. */
@@ -38,12 +100,17 @@ export function duplicateKey(name: string, size: number): string {
 /** How old "not touched in a long time" means. */
 export const STALE_DAYS = 180
 
-/** Rows shown in the largest and recently changed lists. */
-const LIST_LIMIT = 8
-/** Search results shown at once. */
-const SEARCH_LIMIT = 20
-/** Waits this long after typing stops before searching, so each keystroke isn't a query. */
+/** Rows added by each "show more", per list. */
+const LIST_PAGE = 8
+const SEARCH_PAGE = 25
+const FOLDER_PAGE = 10
+const DUPLICATE_PAGE = 15
+/** Waits this long after the last change before searching, so each keystroke isn't a query. */
 const SEARCH_DELAY_MS = 250
+
+const EMPTY_PAGE: LibraryFilePage = { rows: [], total: 0 }
+const LARGEST: LibraryFileQuery = { sort: 'size', direction: 'desc' }
+const RECENT: LibraryFileQuery = { sort: 'modified', direction: 'desc' }
 
 /** Electron prefixes errors thrown in the main process; keep only the useful part. */
 function cleanError(error: unknown): string {
@@ -54,22 +121,24 @@ function cleanError(error: unknown): string {
 /**
  * The library view from the main process, the lists the dashboard shows, and the actions that
  * change them. Mirrors `useShuffler`: the renderer holds no logic of its own (PROJECT.md §5).
+ * Filtering, sorting and paging all happen in the store; this only says what to ask for.
  */
 export function useLibrary(): {
   view: LibraryView | null
-  largest: LibraryFile[]
-  recent: LibraryFile[]
-  results: LibraryFile[] | null
-  term: string
+  largest: LibraryFilePage
+  recent: LibraryFilePage
+  /** Null while no search or filter is active, so the default lists show instead. */
+  results: LibraryFilePage | null
+  filters: SearchFilters
   error: string | null
   cleanup: CleanupLists
   actions: LibraryActions
 } {
   const [view, setView] = useState<LibraryView | null>(null)
-  const [largest, setLargest] = useState<LibraryFile[]>([])
-  const [recent, setRecent] = useState<LibraryFile[]>([])
-  const [results, setResults] = useState<LibraryFile[] | null>(null)
-  const [term, setTerm] = useState('')
+  const [largest, setLargest] = useState<LibraryFilePage>(EMPTY_PAGE)
+  const [recent, setRecent] = useState<LibraryFilePage>(EMPTY_PAGE)
+  const [results, setResults] = useState<LibraryFilePage | null>(null)
+  const [filters, setFilters] = useState<SearchFilters>(EMPTY_FILTERS)
   const [error, setError] = useState<string | null>(null)
   const [cleanup, setCleanup] = useState<CleanupLists>({
     loaded: false,
@@ -77,15 +146,27 @@ export function useLibrary(): {
     duplicates: [],
     stale: [],
     checked: {},
-    checking: null
+    checking: null,
+    folderLimit: FOLDER_PAGE,
+    duplicateLimit: DUPLICATE_PAGE
   })
+
+  /** Current state for the actions, which are created once and would otherwise see old values. */
+  const latest = useRef({ largest, recent, results, filters, cleanup })
+  useEffect(() => {
+    latest.current = { largest, recent, results, filters, cleanup }
+  }, [largest, recent, results, filters, cleanup])
+
   /** What the lists were built from, so they refresh only when the index actually changed. */
   const listsFor = useRef<number | null>(null)
 
   const refreshLists = useCallback(async (): Promise<void> => {
     const api = window.api.library
     try {
-      const [big, fresh] = await Promise.all([api.largest(LIST_LIMIT), api.recent(LIST_LIMIT)])
+      const [big, fresh] = await Promise.all([
+        api.query({ ...LARGEST, limit: LIST_PAGE }),
+        api.query({ ...RECENT, limit: LIST_PAGE })
+      ])
       setLargest(big)
       setRecent(fresh)
     } catch (caught) {
@@ -121,17 +202,16 @@ export function useLibrary(): {
     void refreshLists()
   }, [view, refreshLists])
 
-  // Only the query lives here. Clearing happens in `changeTerm`, because setting state straight
+  // Only the query lives here. Clearing happens in `updateFilters`, because setting state straight
   // away inside an effect makes React render twice for one change.
   useEffect(() => {
-    const text = term.trim()
-    if (text.length === 0) return
+    if (!filtersActive(filters)) return
     let active = true
     const timer = setTimeout(() => {
       window.api.library
-        .search(text, SEARCH_LIMIT)
-        .then((found) => {
-          if (active) setResults(found)
+        .query({ ...toQuery(filters), limit: SEARCH_PAGE })
+        .then((page) => {
+          if (active) setResults(page)
         })
         .catch((caught: unknown) => {
           if (active) setError(cleanError(caught))
@@ -141,12 +221,14 @@ export function useLibrary(): {
       active = false
       clearTimeout(timer)
     }
-  }, [term, view?.files])
+  }, [filters, view?.files])
 
-  const changeTerm = useCallback((next: string): void => {
-    setTerm(next)
-    // An empty box has nothing to search for, so the results go immediately.
-    if (next.trim().length === 0) setResults(null)
+  const updateFilters = useCallback((change: (current: SearchFilters) => SearchFilters): void => {
+    const next = change(latest.current.filters)
+    latest.current = { ...latest.current, filters: next }
+    setFilters(next)
+    // Nothing left to narrow by, so the default lists come back straight away.
+    if (!filtersActive(next)) setResults(null)
   }, [])
 
   const actions = useMemo<LibraryActions>(() => {
@@ -155,23 +237,88 @@ export function useLibrary(): {
       setError(null)
       task().catch((caught: unknown) => setError(cleanError(caught)))
     }
+
+    /** Fetches the page after what is showing and appends it, keeping the store's total. */
+    const more = (
+      base: LibraryFileQuery,
+      current: LibraryFilePage | null,
+      pageSize: number,
+      apply: (update: (previous: LibraryFilePage) => LibraryFilePage) => void
+    ): void => {
+      if (current === null || current.rows.length >= current.total) return
+      const offset = current.rows.length
+      run(async () => {
+        const next = await api.query({ ...base, offset, limit: pageSize })
+        apply((previous) => ({ rows: [...previous.rows, ...next.rows], total: next.total }))
+      })
+    }
+
     return {
       chooseRoot: () => run(() => api.chooseRoot()),
       removeRoot: (path) => run(() => api.removeRoot(path)),
       scan: () => run(() => api.scan()),
       cancelScan: () => run(() => api.cancelScan()),
-      setTerm: changeTerm,
+      setTerm: (term) => updateFilters((current) => ({ ...current, term })),
+      toggleCategory: (category) =>
+        updateFilters((current) => ({
+          ...current,
+          categories: current.categories.includes(category)
+            ? current.categories.filter((entry) => entry !== category)
+            : [...current.categories, category]
+        })),
+      setDrive: (drive) => updateFilters((current) => ({ ...current, drive })),
+      setMinSize: (minSize) => updateFilters((current) => ({ ...current, minSize })),
+      setSort: (sort) =>
+        updateFilters((current) => ({
+          ...current,
+          sort,
+          direction: sort === 'name' ? 'asc' : 'desc'
+        })),
+      toggleDirection: () =>
+        updateFilters((current) => ({
+          ...current,
+          direction: current.direction === 'asc' ? 'desc' : 'asc'
+        })),
+      clearFilters: () => updateFilters(() => EMPTY_FILTERS),
+      showMoreResults: () =>
+        more(toQuery(latest.current.filters), latest.current.results, SEARCH_PAGE, (update) =>
+          setResults((previous) => (previous === null ? previous : update(previous)))
+        ),
+      showMoreLargest: () => more(LARGEST, latest.current.largest, LIST_PAGE, setLargest),
+      showMoreRecent: () => more(RECENT, latest.current.recent, LIST_PAGE, setRecent),
       openFile: (path) => run(() => api.openFile(path)),
       showInFolder: (path) => run(() => api.showInFolder(path)),
       loadCleanup: () =>
         run(async () => {
           const [folders, duplicates, stale] = await Promise.all([
-            api.biggestFolders(10),
-            api.duplicates(15),
+            api.biggestFolders(FOLDER_PAGE),
+            api.duplicates(DUPLICATE_PAGE),
             api.notTouched(STALE_DAYS, 10)
           ])
           // Fingerprints belong to the groups they were taken from, so they start again here.
-          setCleanup({ loaded: true, folders, duplicates, stale, checked: {}, checking: null })
+          setCleanup({
+            loaded: true,
+            folders,
+            duplicates,
+            stale,
+            checked: {},
+            checking: null,
+            folderLimit: FOLDER_PAGE,
+            duplicateLimit: DUPLICATE_PAGE
+          })
+        }),
+      showMoreFolders: () =>
+        run(async () => {
+          const limit = latest.current.cleanup.folderLimit + FOLDER_PAGE
+          const folders = await api.biggestFolders(limit)
+          setCleanup((current) => ({ ...current, folders, folderLimit: limit }))
+        }),
+      showMoreDuplicates: () =>
+        run(async () => {
+          const limit = latest.current.cleanup.duplicateLimit + DUPLICATE_PAGE
+          const duplicates = await api.duplicates(limit)
+          // Fingerprints are keyed by group, so checks already made still apply.
+          setCleanup((current) => ({ ...current, duplicates, duplicateLimit: limit }))
         }),
       checkDuplicate: (name, size) => {
         const key = duplicateKey(name, size)
@@ -191,7 +338,7 @@ export function useLibrary(): {
         })
       }
     }
-  }, [changeTerm])
+  }, [updateFilters])
 
-  return { view, largest, recent, results, term, error, cleanup, actions }
+  return { view, largest, recent, results, filters, error, cleanup, actions }
 }

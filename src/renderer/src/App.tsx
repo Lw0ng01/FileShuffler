@@ -23,6 +23,7 @@ function App(): React.JSX.Element {
           <StatsScreen
             view={stats.view}
             favorites={stats.favorites}
+            neverPlayed={stats.neverPlayed}
             error={stats.error}
             actions={stats.actions}
             fileActions={library.actions}
@@ -33,7 +34,7 @@ function App(): React.JSX.Element {
             largest={library.largest}
             recent={library.recent}
             results={library.results}
-            term={library.term}
+            filters={library.filters}
             error={library.error}
             cleanup={library.cleanup}
             actions={library.actions}
