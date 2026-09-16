@@ -35,6 +35,7 @@ function setup(trusted = true): { ipc: FakeIpc; backend: LibraryBackend; unregis
     chooseRoot: vi.fn(),
     removeRoot: vi.fn(),
     scanAll: vi.fn(),
+    scanRoot: vi.fn(),
     cancelScan: vi.fn(),
     largest: vi.fn(),
     recent: vi.fn(),
@@ -92,6 +93,17 @@ describe('registerLibraryIpc', () => {
     expect(backend.duplicates).toHaveBeenCalledWith(undefined)
     expect(backend.notTouched).toHaveBeenCalledWith(90, 10)
     expect(backend.checkDuplicate).toHaveBeenCalledWith('clip.mp4', 100)
+  })
+
+  it('rescans one folder, and only when given a path', () => {
+    const { ipc, backend } = setup()
+    ipc.invoke(LIBRARY_CHANNELS.scanRoot, 'D:\\Videos')
+    expect(backend.scanRoot).toHaveBeenCalledWith('D:\\Videos')
+
+    for (const bad of [undefined, 42, '']) {
+      expect(() => ipc.invoke(LIBRARY_CHANNELS.scanRoot, bad)).toThrow('Expected a folder path')
+    }
+    expect(backend.scanRoot).toHaveBeenCalledTimes(1)
   })
 
   it('rejects cleanup arguments that are not numbers', () => {

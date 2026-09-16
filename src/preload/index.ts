@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { LIBRARY_CHANNELS, type LibraryApi, type LibraryView } from '../shared/library'
 import { CHANNELS, type ShufflerApi, type ShufflerView } from '../shared/shuffler'
+import { SETTINGS_CHANNELS, type SettingsApi, type SettingsView } from '../shared/settings'
 import { STATS_CHANNELS, type StatsApi, type StatsView } from '../shared/stats'
 
 // The only surface the renderer can reach (PROJECT.md §5). Each function maps to one fixed
@@ -31,6 +32,7 @@ const library: LibraryApi = {
   chooseRoot: () => ipcRenderer.invoke(LIBRARY_CHANNELS.chooseRoot),
   removeRoot: (path) => ipcRenderer.invoke(LIBRARY_CHANNELS.removeRoot, path),
   scan: () => ipcRenderer.invoke(LIBRARY_CHANNELS.scan),
+  scanRoot: (path) => ipcRenderer.invoke(LIBRARY_CHANNELS.scanRoot, path),
   cancelScan: () => ipcRenderer.invoke(LIBRARY_CHANNELS.cancelScan),
   largest: (limit) => ipcRenderer.invoke(LIBRARY_CHANNELS.largest, limit),
   recent: (limit) => ipcRenderer.invoke(LIBRARY_CHANNELS.recent, limit),
@@ -65,4 +67,19 @@ const stats: StatsApi = {
   }
 }
 
-contextBridge.exposeInMainWorld('api', { shuffler, library, stats })
+const settings: SettingsApi = {
+  getView: () => ipcRenderer.invoke(SETTINGS_CHANNELS.getView),
+  chooseMpv: () => ipcRenderer.invoke(SETTINGS_CHANNELS.chooseMpv),
+  useDefaultMpv: () => ipcRenderer.invoke(SETTINGS_CHANNELS.useDefaultMpv),
+  testMpv: () => ipcRenderer.invoke(SETTINGS_CHANNELS.testMpv),
+  clearData: (what) => ipcRenderer.invoke(SETTINGS_CHANNELS.clearData, what),
+  onView: (listener) => {
+    const handler = (_event: IpcRendererEvent, view: SettingsView): void => listener(view)
+    ipcRenderer.on(SETTINGS_CHANNELS.view, handler)
+    return () => {
+      ipcRenderer.removeListener(SETTINGS_CHANNELS.view, handler)
+    }
+  }
+}
+
+contextBridge.exposeInMainWorld('api', { shuffler, library, stats, settings })

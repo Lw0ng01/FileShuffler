@@ -740,6 +740,42 @@ kbd {
   font-size: 13px;
 }
 
+/* Settings */
+
+.settings-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-card {
+  gap: 6px;
+}
+
+.setting-path {
+  margin: 0;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.ok-text {
+  margin: 0;
+  color: var(--success);
+}
+
+.clear-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.clear-text .muted {
+  margin-left: 0;
+}
+
 .row-actions {
   display: inline-flex;
   flex: none;

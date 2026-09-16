@@ -10,6 +10,7 @@ export type LibraryBackend = Pick<
   | 'chooseRoot'
   | 'removeRoot'
   | 'scanAll'
+  | 'scanRoot'
   | 'cancelScan'
   | 'largest'
   | 'recent'
@@ -172,6 +173,7 @@ export function registerLibraryIpc(
   handle(LIBRARY_CHANNELS.chooseRoot, () => backend.chooseRoot())
   handle(LIBRARY_CHANNELS.removeRoot, ([path]) => backend.removeRoot(asPath(path)))
   handle(LIBRARY_CHANNELS.scan, () => backend.scanAll())
+  handle(LIBRARY_CHANNELS.scanRoot, ([path]) => backend.scanRoot(asPath(path)))
   handle(LIBRARY_CHANNELS.cancelScan, () => backend.cancelScan())
   handle(LIBRARY_CHANNELS.largest, ([limit]) => backend.largest(asLimit(limit)))
   handle(LIBRARY_CHANNELS.recent, ([limit]) => backend.recent(asLimit(limit)))

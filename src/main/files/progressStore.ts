@@ -1,6 +1,6 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import type { ShuffleSnapshot } from '../domain/shuffle'
+import { writeJsonAtomic } from './atomicJson'
 
 /** Bumped only if the saved shape changes; an older or unknown file is ignored, never migrated. */
 const VERSION = 1
@@ -101,6 +101,12 @@ export class ProgressStore implements ProgressSource {
     await this.write(data)
   }
 
+  /** Forgets every folder's saved progress, and which folder was open last (§6 Settings). */
+  async clearAll(): Promise<void> {
+    this.cache = emptyFile()
+    await this.write(this.cache)
+  }
+
   private async load(): Promise<StoredFile> {
     this.cache ??= await this.readFile()
     return this.cache
@@ -142,13 +148,7 @@ export class ProgressStore implements ProgressSource {
 
   /** Writes a temporary file and renames it, so a crash can never leave half a file behind. */
   private write(data: StoredFile): Promise<void> {
-    const run = async (): Promise<void> => {
-      await mkdir(dirname(this.file), { recursive: true })
-      const temporary = `${this.file}.tmp`
-      await writeFile(temporary, JSON.stringify(data), 'utf8')
-      await rename(temporary, this.file)
-    }
-    this.writes = this.writes.catch(() => undefined).then(run)
+    this.writes = this.writes.catch(() => undefined).then(() => writeJsonAtomic(this.file, data))
     return this.writes
   }
 }

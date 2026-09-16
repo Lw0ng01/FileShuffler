@@ -59,6 +59,7 @@ export interface LibraryActions {
   removeRoot: (path: string) => void
   scan: () => void
   cancelScan: () => void
+  scanRoot: (path: string) => void
   setTerm: (term: string) => void
   toggleCategory: (category: LibraryCategory) => void
   setDrive: (drive: string | null) => void
@@ -258,6 +259,7 @@ export function useLibrary(): {
       removeRoot: (path) => run(() => api.removeRoot(path)),
       scan: () => run(() => api.scan()),
       cancelScan: () => run(() => api.cancelScan()),
+      scanRoot: (path) => run(() => api.scanRoot(path)),
       setTerm: (term) => updateFilters((current) => ({ ...current, term })),
       toggleCategory: (category) =>
         updateFilters((current) => ({

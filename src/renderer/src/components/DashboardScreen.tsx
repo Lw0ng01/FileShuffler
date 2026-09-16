@@ -7,7 +7,7 @@ import type {
   LibrarySort,
   LibraryView
 } from '../../../shared/library'
-import { formatBytes, formatCount, formatWhen, shortenPath } from '../format'
+import { formatBytes, formatCount, shortenPath } from '../format'
 import {
   duplicateKey,
   filtersActive,
@@ -16,7 +16,7 @@ import {
   type LibraryActions,
   type SearchFilters
 } from '../hooks/useLibrary'
-import { DashboardIcon, FolderIcon, TrashIcon } from './Icons'
+import { DashboardIcon, FolderIcon } from './Icons'
 
 interface Props {
   view: LibraryView | null
@@ -27,6 +27,8 @@ interface Props {
   error: string | null
   cleanup: CleanupLists
   actions: LibraryActions
+  /** Opens Settings, where the indexed folders are managed. */
+  onManageFolders: () => void
 }
 
 const CATEGORY_LABELS: Record<LibraryCategory, string> = {
@@ -67,7 +69,8 @@ export function DashboardScreen({
   filters,
   error,
   cleanup,
-  actions
+  actions,
+  onManageFolders
 }: Props): React.JSX.Element {
   if (view === null) return <p className="loading">Loading…</p>
 
@@ -91,6 +94,9 @@ export function DashboardScreen({
           <button className="btn btn-small" onClick={actions.chooseRoot}>
             <FolderIcon size={16} />
             Add folder
+          </button>
+          <button className="btn btn-small" onClick={onManageFolders}>
+            Manage folders
           </button>
         </div>
       </header>
@@ -128,33 +134,6 @@ export function DashboardScreen({
         <>
           <Totals view={view} />
           <Drives view={view} />
-
-          <section className="dash-section" aria-label="Indexed folders">
-            <h2 className="section-title">Indexed folders</h2>
-            <ul className="roots">
-              {view.roots.map((root) => (
-                <li className="root-row" key={root.path}>
-                  <FolderIcon size={16} />
-                  <span className="root-path" title={root.path}>
-                    {shortenPath(root.path)}
-                  </span>
-                  <span className="muted">
-                    {formatCount(root.files)} · {formatBytes(root.bytes)} ·{' '}
-                    {formatWhen(root.lastScanAt, 'never scanned')}
-                  </span>
-                  <button
-                    className="btn btn-small"
-                    onClick={() => actions.removeRoot(root.path)}
-                    disabled={scanning}
-                    title="Forget this folder and everything indexed under it"
-                  >
-                    <TrashIcon size={16} />
-                    Remove
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
 
           <section className="dash-section" aria-label="Search">
             <h2 className="section-title">Search</h2>

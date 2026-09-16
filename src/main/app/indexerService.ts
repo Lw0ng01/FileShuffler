@@ -227,9 +227,27 @@ export class IndexerService {
 
   /** Indexes every root, one at a time. A second call while scanning joins the running scan. */
   async scanAll(): Promise<void> {
+    return this.beginScan()
+  }
+
+  /** Indexes one folder again, for example from Settings. Joins a scan already running. */
+  async scanRoot(path: string): Promise<void> {
+    return this.beginScan(path)
+  }
+
+  isScanning(): boolean {
+    return this.scanning !== null
+  }
+
+  /** Something outside the service changed the index, for example clearing it from Settings. */
+  notifyChanged(): void {
+    this.emit()
+  }
+
+  private beginScan(only?: string): Promise<void> {
     if (this.scanning !== null) return this.scanning
-    if (this.disposed) return
-    this.scanning = this.runScan().finally(() => {
+    if (this.disposed) return Promise.resolve()
+    this.scanning = this.runScan(only).finally(() => {
       this.scanning = null
       this.controller = null
       this.progress = null
@@ -248,7 +266,7 @@ export class IndexerService {
     this.listeners.clear()
   }
 
-  private async runScan(): Promise<void> {
+  private async runScan(only?: string): Promise<void> {
     const now = this.deps.now ?? Date.now
     const controller = new AbortController()
     this.controller = controller
@@ -261,7 +279,8 @@ export class IndexerService {
     let errors = 0
     let cancelled = false
 
-    for (const root of this.deps.db.roots()) {
+    const roots = this.deps.db.roots().filter((root) => only === undefined || root.path === only)
+    for (const root of roots) {
       if (controller.signal.aborted) {
         cancelled = true
         break

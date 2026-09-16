@@ -343,7 +343,7 @@ export class ShufflerService {
 function launchErrorMessage(error: unknown): string {
   const message = errorMessage(error)
   if (message.includes('ENOENT')) {
-    return "mpv wasn't found. Install mpv, or set FILESHUFFLER_MPV to the mpv program's path."
+    return "mpv wasn't found. Choose it in Settings, or install mpv from mpv.io."
   }
   return `Could not start mpv: ${message}`
 }
