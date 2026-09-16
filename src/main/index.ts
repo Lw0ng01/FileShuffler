@@ -10,7 +10,7 @@ import { IndexerService } from './app/indexerService'
 import { SettingsService } from './app/settingsService'
 import { ShufflerService } from './app/shufflerService'
 import { StatsService } from './app/statsService'
-import { IndexDb } from './library/indexDb'
+import { openIndex } from './library/openIndex'
 import { registerLibraryIpc } from './libraryIpc'
 import { registerSettingsIpc } from './settingsIpc'
 import { registerStatsIpc } from './statsIpc'
@@ -32,14 +32,27 @@ let mainWindow: BrowserWindow | null = null
 // things out in development never touches a real library. Set before anything below opens it.
 // Without this, Electron names the folder after package.json ("file-shuffler") for both.
 app.setPath('userData', join(app.getPath('appData'), dataFolderName(app.isPackaged)))
+
+// One copy of the app per data folder: two would write the same index and progress files and
+// could each start mpv. The lock follows the data folder, so development and the installed app
+// can still run side by side. A second launch focuses the open window instead (below), and
+// exits here, before it opens anything.
+if (!app.requestSingleInstanceLock()) {
+  app.exit(0)
+  process.exit(0)
+}
+
 if (!app.isPackaged) {
   // Development used that unpinned "file-shuffler" folder until now: bring its data across once.
   copyLegacyData(join(app.getPath('appData'), 'file-shuffler'), app.getPath('userData'))
 }
 
 // The index and play history live beside the shuffler's progress, in the app's own data folder
-// (PROJECT.md §2.8). Created first because both the shuffler and the library use it.
-const indexDb = new IndexDb(join(app.getPath('userData'), 'index.db'))
+// (PROJECT.md §2.8). Created first because both the shuffler and the library use it. A damaged
+// index is set aside rather than stopping the app from starting (openIndex.ts).
+const { db: indexDb, setAside: unreadableIndex } = openIndex(
+  join(app.getPath('userData'), 'index.db')
+)
 const stats = new StatsService({ db: indexDb })
 
 stats.onView((view) => {
@@ -219,6 +232,16 @@ function createWindow(): void {
 
   window.on('ready-to-show', () => {
     window.show()
+    if (unreadableIndex !== null) {
+      void dialog.showMessageBox(window, {
+        type: 'warning',
+        title: 'FileShuffler',
+        message: "The file index couldn't be read, so a new one was started.",
+        detail:
+          'Scan now on the Dashboard rebuilds the list of files. Play history and favorites were ' +
+          `kept in the index and couldn't be recovered. The old file was kept at:\n${unreadableIndex}`
+      })
+    }
   })
   window.on('closed', () => {
     if (mainWindow === window) mainWindow = null
@@ -249,6 +272,13 @@ app.whenReady().then(() => {
   // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
+  })
+
+  // Opening the app again brings its window forward rather than starting a second copy.
+  app.on('second-instance', () => {
+    if (mainWindow === null || mainWindow.isDestroyed()) return
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.focus()
   })
 
   registerShufflerIpc(ipcMain, shuffler, isTrustedSender)

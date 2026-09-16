@@ -35,7 +35,8 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
   - `src/main/files/`: read-only folder listing and file identity checks (PROJECT.md §2), saved
     cycle progress (`progressStore.ts`), and the indexer's scan rules and walker (`scanRules.ts`,
     `scanner.ts`). Only `progressStore.ts` writes, and only inside the app's data folder
-  - `src/main/library/`: the index store (`indexDb.ts`) on Node's built-in SQLite (PROJECT.md §5)
+  - `src/main/library/`: the index store (`indexDb.ts`) on Node's built-in SQLite (PROJECT.md §5).
+    `openIndex.ts` sets a damaged index aside at startup instead of crashing
   - `src/main/app/indexerService.ts`: roots, scans and the numbers the dashboard reads
   - `src/main/libraryIpc.ts`: library commands, with the same sender and argument checks as `ipc.ts`
   - `src/main/app/statsService.ts` and `src/main/statsIpc.ts`: play stats and favorites, read from
@@ -68,6 +69,9 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
 - App data is pinned in `src/main/index.ts`: `%APPDATA%\FileShuffler` for the installed app and
   `%APPDATA%\FileShuffler Dev` for `npm run dev`, kept separate on purpose. Don't rename them: that
   silently abandons saved data. mpv is not bundled in the installer (PROJECT.md §7 Phase 6).
+- Each data folder allows one running copy: a second launch focuses the first window and exits.
+  Launching `dist/win-unpacked/FileShuffler.exe` creates `%APPDATA%\FileShuffler`; remove it after
+  testing unless the installed app is really in use on that machine.
 
 ## Code rules
 

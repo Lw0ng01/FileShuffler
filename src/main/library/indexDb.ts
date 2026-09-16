@@ -195,14 +195,21 @@ export class IndexDb {
   constructor(file: string) {
     if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true })
     this.db = new DatabaseSync(file)
-    // WAL keeps reads working while a scan writes; NORMAL is the usual pairing and survives a
-    // crash losing at most the last transaction, which a rescan rebuilds anyway.
-    this.db.exec('pragma journal_mode = wal; pragma synchronous = normal;')
-    // Measured on a synthetic 250,000-file library (PROJECT.md §7 measure and harden): a 64 MB
-    // page cache and in-memory temporary tables, with the scanner's larger batches, cut a first
-    // index from 30 s to 12 s and a rescan from 19 s to 10 s, and halved most dashboard queries.
-    this.db.exec('pragma cache_size = -65536; pragma temp_store = memory;')
-    this.db.exec(SCHEMA)
+    try {
+      // WAL keeps reads working while a scan writes; NORMAL is the usual pairing and survives a
+      // crash losing at most the last transaction, which a rescan rebuilds anyway.
+      this.db.exec('pragma journal_mode = wal; pragma synchronous = normal;')
+      // Measured on a synthetic 250,000-file library (PROJECT.md §7 measure and harden): a 64 MB
+      // page cache and in-memory temporary tables, with the scanner's larger batches, cut a first
+      // index from 30 s to 12 s and a rescan from 19 s to 10 s, and halved most dashboard queries.
+      this.db.exec('pragma cache_size = -65536; pragma temp_store = memory;')
+      this.db.exec(SCHEMA)
+    } catch (error) {
+      // A damaged file opens without complaint and fails here. Let go of it, so Windows allows
+      // it to be set aside (openIndex.ts).
+      this.db.close()
+      throw error
+    }
   }
 
   addRoot(path: string): void {

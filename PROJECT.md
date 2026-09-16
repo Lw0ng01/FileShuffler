@@ -13,7 +13,7 @@ care about the name; keep it unless they say otherwise.
 
 ## Resume here
 
-Last updated 2026-09-15, at the end of the second session (the first on the Windows desktop). A new
+Last updated 2026-09-16, during measure and harden on the Windows desktop. A new
 session starts without earlier chats or local memory. This section, the rest of this doc and
 `CLAUDE.md` are the handoff; keep this section current at the end of each session.
 
@@ -22,8 +22,8 @@ session starts without earlier chats or local memory. This section, the rest of 
   and Delete with a 5-second undo before trashing. See §2, §3, §4 and §6 (Implementation notes).
 - The Windows desktop is set up: Node 24.21, npm 11.19, Git 2.55 and mpv 0.41 from winget
   (§5 Existing setup notes). `npm ci`, typecheck and Electron 44.3.0 work.
-- `npm test` runs 258 unit tests. Seven more run against a real mpv when `MPV_PATH` is set. All
-  265 pass on Windows.
+- `npm test` runs 262 unit tests. Seven more run against a real mpv when `MPV_PATH` is set. All
+  269 pass on Windows.
 - Features are frozen for v1. The agreed order from here is packaging (done, apart from a
   clean-machine test), measure and harden (in progress), a small refactor, then the front end
   (§7 working order).
@@ -56,15 +56,19 @@ session starts without earlier chats or local memory. This section, the rest of 
   `git config user.email "71304042+Lw0ng01@users.noreply.github.com"` before committing. Never
   commit personal emails or local paths.
 
+- Measure and harden so far: scans and the index were measured and sped up, the packaged app has a
+  startup and memory baseline, and startup survives a damaged index or a second launch (§5
+  Measurements, §10).
+
 **Next steps, in order**
-1. Try a delete where recycling isn't supported: a removable USB stick or a network share. It must
-   fail with an error and keep the file, never delete permanently. Lucas's external drive doesn't
-   count: Windows treats it as a local disk and it has a Recycle Bin.
-2. Package for Windows: bundle mpv in `resources/mpv/` (see `findMpv.ts`), run
-   `npm run build:win`, and test the installer on a machine without development tools.
-3. Record a first performance baseline and agree budgets (§5).
-4. Then build out beyond the shuffler, in the order Lucas picked (2026-09-15): the dashboard
-   (Phases 3–4), cleanup tools such as a duplicate finder, and stats with favorites (Phase 5).
+1. Lucas: try a delete where recycling isn't supported, on a removable USB stick or a network
+   share. It must fail with an error and keep the file, never delete permanently. His external
+   drive doesn't count: Windows treats it as a local disk and it has a Recycle Bin.
+2. Lucas: install `FileShuffler-Setup-1.0.0.exe` from a separate local Windows account with no
+   development tools, as the clean-machine test (§7 Phase 6).
+3. Decide whether a "folders to exclude" setting is worth breaking the feature freeze for (§9).
+4. Then the small refactor (§7 working order), starting with moving database work off the main
+   process, then the front end.
 
 **How it was tested without real videos**
 - mpv can generate test clips, for example
@@ -527,8 +531,9 @@ Persist per-folder progress separately from the UI and recover safely from inval
 
 ### Measurements (2026-09-16, measure and harden)
 
-Run in plain Node against the real scanner and index store. Speed transfers to the app; memory does
-not (the benchmarks hold their test data), so a packaged-app memory baseline is still to do.
+The scan and index numbers come from plain Node against the real scanner and index store. Speed
+transfers to the app; memory does not (the benchmarks hold their test data), which is why the
+packaged app was measured separately (below).
 
 **Real drives, read-only scans** (Lucas's PC; totals only were recorded):
 - External drive F: 10 folders, 1,928 files (847 GB) in 0.9 s.
@@ -562,12 +567,26 @@ What changed, each chosen by comparing variants on the same 250,000-file library
   drive totals took about 120 ms of each 200 ms on 250,000 files, on the main process. They are now
   recomputed only when the index changes.
 
+**Packaged app baseline** (`npm run build:unpack`, Ryzen 7 7700, 32 GB, NVMe; the window is shown
+at `ready-to-show`, memory read 10 s after it appears, summed over all four Electron processes):
+
+| Launch | Window visible | Working set | Private memory |
+|---|---|---|---|
+| First run, no data | 824 ms | 304 MB | 187 MB |
+| Warm start (three runs) | 317–333 ms | 302–303 MB | 188 MB |
+| Warm start with Lucas's real 8.7 MB index (two runs) | 290–333 ms | 302–305 MB | 189 MB |
+
+- Idle memory is Electron's floor: the index size made no measurable difference at this size.
+- The first run's extra half second is Chromium building its caches in a new data folder.
+- Proposed budgets to hold from here: window visible under 1 s on a warm start, idle private
+  memory under 250 MB. Not yet measured: memory during a long scan and during playback (mpv is its
+  own process), and a machine slower than this one.
+
 **Still to address:**
 - The database runs synchronously on Electron's main process, so a slow query freezes the window.
   At a million files, totals after a change and the biggest-folders list each take about a second.
   Moving database work to a worker thread belongs to the refactor step (§7 working order).
-- Not yet measured: the packaged app's startup time and memory, a delete on a removable USB stick
-  or network share, and a clean machine.
+- Not yet tested: a delete on a removable USB stick or network share, and a clean machine.
 
 References for implementation and review:
 - [Electron performance](https://www.electronjs.org/docs/latest/tutorial/performance)
@@ -760,8 +779,9 @@ The front end comes last, as the least complex part. Two things that order depen
 1. **Packaging spike** — installer, mpv, licensing, data folder, clean-machine test (§7 Phase 6).
 2. **Measure and harden** — a full-drive scan, a packaged-build performance baseline, deletes on a
    USB stick or network share, and error paths on a machine that isn't Lucas's. *Scan and index
-   measured and improved (§5 Measurements); the packaged-app baseline, the USB and network delete
-   tests, and the clean machine remain.*
+   measured and improved, and the packaged-app baseline recorded (§5 Measurements). A damaged index
+   and a second launch no longer break startup (§10, 2026-09-16). The USB and network delete tests
+   and the clean machine remain, both for Lucas.*
 3. **A small refactor** where the code actually strains (`src/main/index.ts`, the dashboard screen,
    duplicated IPC test fakes). Not a rewrite.
 4. **Front end** — structure first (Cleanup as its own tab, starring from the dashboard, a
@@ -1225,3 +1245,23 @@ machines, not Lucas's.
   - Still open: database work on the main process (about 1 s freezes at a million files, for the
     refactor step), a packaged-app memory and startup baseline, USB and network delete tests, the
     clean machine, and whether to add a folder-exclusion setting for games (§9).
+- **2026-09-16:** Measure and harden, part two: the packaged app and startup failures.
+  - **Baseline:** the packaged app shows its window about 0.3 s after launch (0.8 s on a first
+    run) and idles at about 190 MB private memory across its four processes; Lucas's real index
+    made no difference (§5 Measurements). Proposed budgets: under 1 s and under 250 MB.
+  - **A damaged index no longer stops the app from starting.** The index opened before any window
+    existed, so an unreadable `index.db` crashed startup, taking the shuffler with it. Now a file
+    SQLite reports as damaged or not a database is renamed to `index.db.unreadable-<time>` beside a
+    fresh index, and a warning explains that Scan now rebuilds the file list and that play history
+    and favorites were in the old file. Any other failure, such as a locked file, still stops
+    startup, since moving a healthy index aside would lose history for nothing
+    (`src/main/library/openIndex.ts`). Checked in the packaged build with a garbage index.
+  - Found while testing: a damaged file opens without error and fails on the first statement, and
+    SQLite discards its journal files itself when that connection closes. `IndexDb` now closes the
+    connection when setup fails; otherwise Windows couldn't rename the file.
+  - **Only one copy runs per data folder.** Two copies would write the same index and progress files
+    and could each start mpv. A second launch now brings the open window forward and exits before
+    opening anything. Development and the installed app use different data folders, so they can
+    still run side by side. Checked in the packaged build.
+  - Still open: the USB and network delete tests and the clean machine (Lucas), and the
+    folder-exclusion question (§9).
