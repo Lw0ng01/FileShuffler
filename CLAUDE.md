@@ -65,8 +65,9 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
   `C:\Program Files\MPV Player` or set `FILESHUFFLER_MPV`.
 - Windows PowerShell blocks `npm.ps1` under the default execution policy. Use Command Prompt or
   `npm.cmd` (PROJECT.md §5).
-- `npm run dev` and an installed build use different app-data folders (`file-shuffler` vs
-  `FileShuffler`), so saved cycle progress doesn't carry between them.
+- App data is pinned in `src/main/index.ts`: `%APPDATA%\FileShuffler` for the installed app and
+  `%APPDATA%\FileShuffler Dev` for `npm run dev`, kept separate on purpose. Don't rename them: that
+  silently abandons saved data. mpv is not bundled in the installer (PROJECT.md §7 Phase 6).
 
 ## Code rules
 

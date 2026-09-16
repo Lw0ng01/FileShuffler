@@ -14,6 +14,7 @@ import { IndexDb } from './library/indexDb'
 import { registerLibraryIpc } from './libraryIpc'
 import { registerSettingsIpc } from './settingsIpc'
 import { registerStatsIpc } from './statsIpc'
+import { copyLegacyData, dataFolderName } from './files/dataFolder'
 import { readDriveSpace } from './files/driveSpace'
 import { fileDigest } from './files/fileDigest'
 import { readFileIdentity } from './files/fileIdentity'
@@ -26,6 +27,15 @@ import { KEY_LABELS, launchMpv } from './playback/mpv/mpvPlayer'
 import { probeMpv } from './playback/mpv/probeMpv'
 
 let mainWindow: BrowserWindow | null = null
+
+// The installed app and development runs keep separate data (PROJECT.md §7 Phase 6), so trying
+// things out in development never touches a real library. Set before anything below opens it.
+// Without this, Electron names the folder after package.json ("file-shuffler") for both.
+app.setPath('userData', join(app.getPath('appData'), dataFolderName(app.isPackaged)))
+if (!app.isPackaged) {
+  // Development used that unpinned "file-shuffler" folder until now: bring its data across once.
+  copyLegacyData(join(app.getPath('appData'), 'file-shuffler'), app.getPath('userData'))
+}
 
 // The index and play history live beside the shuffler's progress, in the app's own data folder
 // (PROJECT.md §2.8). Created first because both the shuffler and the library use it.

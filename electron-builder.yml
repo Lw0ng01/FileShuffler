@@ -14,7 +14,7 @@ asarUnpack:
 win:
   executableName: FileShuffler
 nsis:
-  artifactName: ${name}-${version}-setup.${ext}
+  artifactName: FileShuffler-Setup-${version}.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always

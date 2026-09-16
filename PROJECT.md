@@ -22,8 +22,8 @@ session starts without earlier chats or local memory. This section, the rest of 
   and Delete with a 5-second undo before trashing. See §2, §3, §4 and §6 (Implementation notes).
 - The Windows desktop is set up: Node 24.21, npm 11.19, Git 2.55 and mpv 0.41 from winget
   (§5 Existing setup notes). `npm ci`, typecheck and Electron 44.3.0 work.
-- `npm test` runs 248 unit tests. Seven more run against a real mpv when `MPV_PATH` is set. All
-  255 pass on Windows.
+- `npm test` runs 253 unit tests. Seven more run against a real mpv when `MPV_PATH` is set. All
+  260 pass on Windows.
 - Checked on Windows with disposable clips (§2 How delete is implemented, §4 Implementation):
   - mpv's named pipe, loads, end of file, key bindings and unload-until-idle (the real-mpv tests).
   - `shell.trashItem` sent clips to the Recycle Bin on the internal NTFS drive and on an external
@@ -78,7 +78,8 @@ session starts without earlier chats or local memory. This section, the rest of 
   share).
 
 **Open decisions and known quirks**
-- Where mpv comes from in the packaged app: bundled or installed.
+- mpv is not bundled; people install it (§7 Phase 6 spike findings). Whether to build a custom
+  player instead is open (§4 Embedded player).
 - A video restored with Undo doesn't reappear in "Recently played" (cosmetic).
 - npm 11 runs install scripts only for packages approved in `allowScripts` (§5).
 - winget's mpv isn't added to the PATH on its own (§5 Existing setup notes). Choosing it in
@@ -86,9 +87,10 @@ session starts without earlier chats or local memory. This section, the rest of 
 - In PowerShell, `npm run dev` fails by default; use Command Prompt or `npm.cmd run dev` (§5).
 - Saved cycle progress lives in the app's data folder (`progress.json`). Deleting it only means
   cycles start fresh.
-- A development run (`npm run dev`) and an installed build use *different* app-data folders, so
-  progress built up in development doesn't carry into the installed app. Decide before the public
-  release whether to pin one folder name (§3 Implementation, §7 Phase 6).
+- The installed app keeps its data in `%APPDATA%\FileShuffler` and development runs in
+  `%APPDATA%\FileShuffler Dev` *(Lucas, 2026-09-16)*, so experiments never touch a real library.
+  Before that was pinned, both used `file-shuffler`; the first development run copies FileShuffler's
+  own files from there and leaves the old folder as a backup (§7 Phase 6 spike).
 
 ---
 
@@ -280,10 +282,11 @@ pure TypeScript: items are opaque string IDs, and randomness is injected.
     folder, writing a temporary file and renaming it so a crash can't leave half a file. A missing
     or corrupt file reads as "no progress" instead of blocking startup, and only the 20 most recent
     folders are kept. Nothing here writes to the user's own files.
-  - **Known quirk:** Electron derives that folder from the app's name, which is `file-shuffler` in
-    development and `FileShuffler` in a packaged build, so the two keep separate progress files.
-    Harmless while testing, but decide before the public release whether to pin one name; changing
-    it later silently abandons everyone's saved cycles.
+  - **Data folder:** pinned in `src/main/index.ts` (`dataFolderName`): `FileShuffler` for the
+    installed app, `FileShuffler Dev` for development. Electron would otherwise name it after
+    `package.json` (`file-shuffler`) for *both*. An earlier note here said the packaged build used a
+    different folder; the packaging spike showed that was wrong. Renaming it again later would
+    silently abandon everyone's saved cycles, so treat the name as fixed.
 - **Restart cycle** *(Lucas asked for this alongside the memory, 2026-09-15)*: `restartCycle()`
   reshuffles everything and starts a new cycle, so a remembered cycle can always be abandoned. It
   reuses the normal new-cycle path, so the seam rule still prevents an immediate repeat.
@@ -365,8 +368,9 @@ For every player:
     `trashItem` both succeed. Trashing after `idle-active` therefore works too.
 - **Still to verify on Windows:** keys pressed in a real mpv window (the tests send `keypress`
   over IPC), and the bundled mpv build.
-- **Not yet:** deciding where mpv comes from (bundled or installed) and connecting it to the
-  Electron app.
+- **Where mpv comes from, decided 2026-09-16:** not bundled. People install it and Settings finds
+  or chooses it (§6 Settings, §7 Phase 6 spike findings). Lucas finds mpv's window unattractive,
+  which adds weight to the embedded-player milestone below.
 
 ### Embedded player: an early feasibility milestone
 
@@ -699,6 +703,15 @@ The front end comes last, as the least complex part. Two things that order depen
 - **"Front end last" applies to polish, not correctness.** A feature still ships with whatever UI
   it needs, and the security baseline (§5) never waits.
 
+**Where that leaves things** *(agreed 2026-09-16)*: features are frozen for v1. Next, in order:
+1. **Packaging spike** — installer, mpv, licensing, data folder, clean-machine test (§7 Phase 6).
+2. **Measure and harden** — a full-drive scan, a packaged-build performance baseline, deletes on a
+   USB stick or network share, and error paths on a machine that isn't Lucas's.
+3. **A small refactor** where the code actually strains (`src/main/index.ts`, the dashboard screen,
+   duplicated IPC test fakes). Not a rewrite.
+4. **Front end** — structure first (Cleanup as its own tab, starring from the dashboard, a
+   first-run guide), then visual polish. The custom-player question (§4) feeds into this.
+
 ### Phase 0 — Setup
 
 - [x] Lucas picks the stack (§5): TypeScript + Electron
@@ -818,20 +831,46 @@ dashboard in Phases 3–4. Shuffling photos and music was offered and left out f
 The app is meant to be downloadable by other people (§1), so this phase is about strangers'
 machines, not Lucas's.
 
-- [ ] Refine the Windows packaging already exercised in Phase 1
+- [x] Build the Windows installer (spike findings below)
+
+**Spike findings (2026-09-16)**
+- `npm run build:win` worked unchanged: about 45 s, a one-click per-user NSIS installer
+  (`FileShuffler-Setup-<version>.exe`, about 112 MB; 368 MB installed, mostly Electron). No admin
+  rights needed.
+- The packaged app starts and stays up, and leaves no stray mpv behind.
+- **One unexplained early exit.** In one launch the packaged app had exited within 8 seconds, with
+  no crash output captured. Five later launches did not repeat it, including three from a fresh
+  first run with no data folder and two with Electron's logging on. Not reproduced, so not fixed:
+  watch for it during the clean-machine test.
+- Neither the installer nor the app is signed, so SmartScreen will warn on download.
+- **mpv is not bundled** *(Lucas, 2026-09-16)*. People install it themselves and point Settings at
+  it, which "Choose mpv" already supports. That avoids GPL distribution duties, keeps the
+  installer smaller, and keeps the no-network rule (§2.7). A first-run screen that says so belongs
+  to the front-end pass.
+- Lucas finds mpv's own window unattractive and would consider a **custom built-in player**
+  instead. That is the Phase 1B embedded-player milestone (§4), with a real trade-off: Chromium's
+  own `<video>` looks fully custom and carries no GPL duty but plays far fewer formats (MKV, AVI,
+  WMV are unreliable or unsupported), while embedding libmpv keeps mpv's formats and brings the GPL
+  question back. To be decided with a prototype, not assumed.
+- **Clean-machine test still to do.** Windows 11 Home has no Windows Sandbox, so it needs another PC,
+  a virtual machine, or at least a fresh Windows user account (no mpv on its PATH, empty app data).
+- Found by the spike: without a pinned folder, the packaged app used the same `file-shuffler` data
+  folder as development, contrary to an earlier note. Now pinned (§3 Implementation).
 - [ ] macOS build and platform-specific validation
 - [ ] Document supported media combinations, resource measurements, and known limitations
-- [ ] **Licensing:** add a LICENSE for this project, and settle mpv's terms *before* shipping it
-      inside the installer. mpv is free software under the GPL (some builds LGPL), so bundling it
-      means carrying its license text and meeting its source-availability terms. The alternative is
-      not to bundle it and to point users at mpv.io instead. Check the exact build we ship.
+- [x] **mpv's terms:** settled by not bundling it (below). mpv is GPLv2+ by default and LGPLv2.1+
+      only when built with `-Dgpl=false` (its `Copyright` file); the Windows build in use states
+      neither and ships no license files. Bundling would mean shipping license texts and publishing
+      matching source for mpv and every library in that build, with every release.
+- [ ] **A LICENSE for FileShuffler itself:** deferred by Lucas (2026-09-16). Settle it before the
+      first public release: a public repository with no license means nobody may legally reuse it.
 - [ ] **Unsigned installer:** Windows SmartScreen warns on a download from an unknown publisher,
       and the user has to click through "More info → Run anyway". Either say so plainly in the
       README or buy a code-signing certificate. Never coach people to disable protections.
 - [ ] **A README for users**, not developers: what it does, install steps, the SmartScreen note,
       where saved progress lives, and how to remove it
-- [ ] **Decide the app-data folder name** so a development run and an installed build agree, before
-      anyone has cycles worth keeping (§3 Implementation)
+- [x] **Decide the app-data folder name:** `FileShuffler` installed, `FileShuffler Dev` in
+      development, kept separate on purpose (§3 Implementation)
 - [ ] **First run on a clean machine:** no mpv, no PATH entry, no development tools. The app must
       explain what's missing rather than fail silently. Choosing mpv in Settings now covers the
       no-PATH case; a guided first run that points there is still to do.
@@ -864,9 +903,11 @@ machines, not Lucas's.
 2. Set performance budgets after measuring the first Windows release build.
 3. Embedded playback approach, macOS limitations, and initial compatibility matrix: resolve
    through Phase 1B, rather than assuming integration is solved.
-4. Distribution: which licence this project carries, whether the installer bundles mpv (and on what
-   terms), and whether the unsigned SmartScreen warning is acceptable or worth paying to avoid
-   (§7 Phase 6).
+4. Distribution: which licence this project carries (deferred), and whether the unsigned
+   SmartScreen warning is acceptable or worth paying to avoid (§7 Phase 6). ~~Whether the installer
+   bundles mpv~~: no, decided 2026-09-16.
+5. A custom built-in player instead of mpv's window: Chromium video (custom look, fewer formats, no
+   GPL duty) versus embedded libmpv (mpv's formats, GPL question returns). Decide with a prototype.
 
 ## 10. Change Log
 
@@ -1096,3 +1137,17 @@ machines, not Lucas's.
     arrived: viewing history is personal and can now be erased.
   - Settings get their own file, so clearing data can't clear them, and the two JSON stores share
     one crash-safe write helper.
+- **2026-09-16:** Features frozen for v1; packaging spike.
+  - Lucas asked whether the app had enough features before moving to the front end. Agreed: yes for
+    v1, and the next steps follow his own working order, with packaging first because it is the
+    riskiest unknown (§7 working order).
+  - The installer builds unchanged and the packaged app runs. It is unsigned (§7 Phase 6).
+  - **mpv is not bundled** *(Lucas)*: mpv is GPLv2+, and shipping it would mean publishing matching
+    source for mpv and its libraries with every release. People install it and choose it in
+    Settings. Lucas also raised a custom built-in player, because mpv's window looks ugly to him;
+    recorded against the embedded-player milestone (§4, §9).
+  - FileShuffler's own license: deferred by Lucas, to settle before a public release.
+  - **Correction:** an earlier note said development and the installed app used different data
+    folders. The spike showed both used `file-shuffler`. Lucas chose to keep them apart, so they are
+    now pinned to `FileShuffler` and `FileShuffler Dev`, and the first development run copies the
+    old folder's data across once, leaving the original as a backup.
