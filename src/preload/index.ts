@@ -34,6 +34,8 @@ const library: LibraryApi = {
   largest: (limit) => ipcRenderer.invoke(LIBRARY_CHANNELS.largest, limit),
   recent: (limit) => ipcRenderer.invoke(LIBRARY_CHANNELS.recent, limit),
   search: (term, limit) => ipcRenderer.invoke(LIBRARY_CHANNELS.search, term, limit),
+  openFile: (path) => ipcRenderer.invoke(LIBRARY_CHANNELS.openFile, path),
+  showInFolder: (path) => ipcRenderer.invoke(LIBRARY_CHANNELS.showInFolder, path),
   onView: (listener) => {
     const handler = (_event: IpcRendererEvent, view: LibraryView): void => listener(view)
     ipcRenderer.on(LIBRARY_CHANNELS.view, handler)

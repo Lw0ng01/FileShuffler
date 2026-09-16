@@ -14,6 +14,8 @@ export const LIBRARY_CHANNELS = {
   largest: 'library:largest',
   recent: 'library:recent',
   search: 'library:search',
+  openFile: 'library:open-file',
+  showInFolder: 'library:show-in-folder',
   /** Main → renderer: a new `LibraryView`. */
   view: 'library:view'
 } as const
@@ -100,5 +102,9 @@ export interface LibraryApi {
   largest(limit?: number): Promise<LibraryFile[]>
   recent(limit?: number): Promise<LibraryFile[]>
   search(term: string, limit?: number): Promise<LibraryFile[]>
+  /** Opens an indexed file in whatever application the system uses for it. */
+  openFile(path: string): Promise<void>
+  /** Shows an indexed file in the system's file manager. */
+  showInFolder(path: string): Promise<void>
   onView(listener: (view: LibraryView) => void): () => void
 }

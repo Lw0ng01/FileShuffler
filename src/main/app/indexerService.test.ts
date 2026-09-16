@@ -51,6 +51,56 @@ function setup(deps: Partial<IndexerServiceDeps> = {}): {
   return { service, db, views }
 }
 
+describe('IndexerService opening files', () => {
+  async function withIndexedFile(deps: Partial<IndexerServiceDeps> = {}): Promise<IndexerService> {
+    const scan = fakeScan({ 'D:\\Videos': [scanFile('D:\\Videos\\a.mp4', 'D:\\Videos')] })
+    const { service } = setup({ scan, ...deps })
+    service.addRoot('D:\\Videos')
+    await service.scanAll()
+    return service
+  }
+
+  it('opens a file that is in the index', async () => {
+    const openPath = vi.fn(async () => '')
+    const service = await withIndexedFile({ openPath })
+
+    await service.openFile('D:\\Videos\\a.mp4')
+    expect(openPath).toHaveBeenCalledWith('D:\\Videos\\a.mp4')
+    expect(service.getView().lastError).toBeNull()
+  })
+
+  it('refuses a path that is not in the index', async () => {
+    const openPath = vi.fn(async () => '')
+    const service = await withIndexedFile({ openPath })
+
+    await service.openFile('C:\\Windows\\System32\\cmd.exe')
+    expect(openPath).not.toHaveBeenCalled()
+    expect(service.getView().lastError).toContain('is not in the index')
+  })
+
+  it('explains when the system cannot open the file', async () => {
+    const openPath = vi.fn(async () => 'no application is registered for .mp4')
+    const service = await withIndexedFile({ openPath })
+
+    await service.openFile('D:\\Videos\\a.mp4')
+    expect(service.getView().lastError).toBe(
+      'Could not open D:\\Videos\\a.mp4: no application is registered for .mp4'
+    )
+  })
+
+  it('shows an indexed file in the file manager, and refuses anything else', async () => {
+    const revealPath = vi.fn(async () => {})
+    const service = await withIndexedFile({ revealPath })
+
+    await service.showInFolder('D:\\Videos\\a.mp4')
+    expect(revealPath).toHaveBeenCalledWith('D:\\Videos\\a.mp4')
+
+    await service.showInFolder('D:\\Videos\\gone.mp4')
+    expect(revealPath).toHaveBeenCalledTimes(1)
+    expect(service.getView().lastError).toContain('is not in the index')
+  })
+})
+
 describe('IndexerService drives and folder picking', () => {
   it('indexes the folder the picker returns', async () => {
     const pickFolder = vi.fn(async () => 'D:\\Videos')

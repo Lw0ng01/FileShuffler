@@ -273,6 +273,11 @@ export class IndexDb {
       .map((row) => toFileRow(row as Row))
   }
 
+  /** Whether this exact path is in the index. Guards opening a file the app never catalogued. */
+  hasFile(path: string): boolean {
+    return this.db.prepare('select 1 from files where path = ?').get(path) !== undefined
+  }
+
   fileCount(): number {
     const row = this.db.prepare('select count(*) as files from files').get() as Row | undefined
     return row === undefined ? 0 : count(row['files'])

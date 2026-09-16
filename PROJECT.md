@@ -22,7 +22,7 @@ session starts without earlier chats or local memory. This section, the rest of 
   and Delete with a 5-second undo before trashing. See §2, §3, §4 and §6 (Implementation notes).
 - The Windows desktop is set up: Node 24.21, npm 11.19, Git 2.55 and mpv 0.41 from winget
   (§5 Existing setup notes). `npm ci`, typecheck and Electron 44.3.0 work.
-- `npm test` runs 167 unit tests. Six more run against a real mpv when `MPV_PATH` is set. All 173
+- `npm test` runs 173 unit tests. Six more run against a real mpv when `MPV_PATH` is set. All 179
   pass on Windows.
 - Checked on Windows with disposable clips (§2 How delete is implemented, §4 Implementation):
   - mpv's named pipe, loads, end of file, key bindings and unload-until-idle (the real-mpv tests).
@@ -593,6 +593,11 @@ folders to index are chosen on the dashboard itself.
   - **Add folder**, **Scan now** and **Stop scan**, with live progress while scanning.
   - **Search** by name, and **Largest** and **Recently changed** lists, which are hidden while
     search results are showing.
+  - **Open** and **Show** on every file row *(Lucas asked for this, 2026-09-16)*: open in the
+    system's default application, or show the file in the file manager. The renderer sends only a
+    name, and the main process opens it **only if that exact path is in the index**, so a bug or
+    injected script can't make the app launch something arbitrary (§5). Opening goes through the
+    OS, never a shell command. A path that has moved since the last scan says so.
 - **Hook** (`hooks/useLibrary.ts`): the view plus the lists, which come from separate queries.
   Lists refresh when the indexed file count changes rather than on every view, and typing is
   debounced so each keystroke isn't a query.
@@ -698,6 +703,7 @@ The front end comes last, as the least complex part. Two things that order depen
 - [x] Drives: capacity / used / free (`driveSpace.ts`, drive cards in §6 Dashboard)
 - [x] Breakdown by category
 - [x] Largest files, recently changed, search
+- [x] Open a file, or show it in the file manager, from any dashboard list (indexed paths only)
 - [ ] Settings screen for the indexed folders (they are chosen on the dashboard for now)
 - [ ] Thumbnails, and a first pass at how big libraries are paged or virtualized
 - [ ] "Shuffle this" from a folder in the dashboard
@@ -942,3 +948,11 @@ machines, not Lucas's.
     that invoked it without awaiting saw the call arrive too late.
   - Still to do here: "Shuffle this" from a dashboard folder, a settings screen, thumbnails, and
     paging for very large libraries.
+- **2026-09-16:** Open and Show on dashboard file rows, after Lucas tried the dashboard.
+  - Lucas asked to be able to act on what search finds. Every file row now has Open (the system's
+    default application) and Show (the file manager).
+  - The renderer names a file; the main process opens it only if that exact path is in the index,
+    so nothing arbitrary can be launched, and opening uses the OS rather than a shell command (§5).
+  - Lucas also set the order for what follows: cleanup tools first (duplicate finder, old
+    Downloads, biggest folders), then stats and favorites, then search and browsing polish.
+    Automatic scanning was offered and left out for now, so scans stay deliberate.

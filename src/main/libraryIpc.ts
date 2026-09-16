@@ -14,6 +14,8 @@ export type LibraryBackend = Pick<
   | 'largest'
   | 'recent'
   | 'search'
+  | 'openFile'
+  | 'showInFolder'
   | 'refreshDriveSpace'
 >
 
@@ -79,6 +81,9 @@ export function registerLibraryIpc(
   handle(LIBRARY_CHANNELS.largest, ([limit]) => backend.largest(asLimit(limit)))
   handle(LIBRARY_CHANNELS.recent, ([limit]) => backend.recent(asLimit(limit)))
   handle(LIBRARY_CHANNELS.search, ([term, limit]) => backend.search(asTerm(term), asLimit(limit)))
+  // The path is checked against the index in the service before anything is opened.
+  handle(LIBRARY_CHANNELS.openFile, ([path]) => backend.openFile(asPath(path)))
+  handle(LIBRARY_CHANNELS.showInFolder, ([path]) => backend.showInFolder(asPath(path)))
 
   return () => {
     for (const channel of channels) ipc.removeHandler(channel)

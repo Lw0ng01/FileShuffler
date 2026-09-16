@@ -100,6 +100,15 @@ describe('IndexDb', () => {
     expect(root?.lastScanAt).toBeGreaterThan(0)
   })
 
+  it('knows whether a path is in the index', () => {
+    const scan = db.startScan()
+    db.putFiles(scan, [file('D:\\Media\\a.mp4')])
+
+    expect(db.hasFile('D:\\Media\\a.mp4')).toBe(true)
+    expect(db.hasFile('D:\\Media\\other.mp4')).toBe(false)
+    expect(db.hasFile('C:\\Windows\\System32\\cmd.exe')).toBe(false)
+  })
+
   it('removes a root and everything indexed under it', () => {
     const scan = db.startScan()
     db.putFiles(scan, [file('D:\\Media\\a.mp4')])
