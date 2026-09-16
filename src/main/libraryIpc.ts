@@ -5,7 +5,16 @@ import type { IpcRegistry } from './ipc'
 
 export type LibraryBackend = Pick<
   IndexerService,
-  'getView' | 'addRoot' | 'removeRoot' | 'scanAll' | 'cancelScan' | 'largest' | 'recent' | 'search'
+  | 'getView'
+  | 'addRoot'
+  | 'chooseRoot'
+  | 'removeRoot'
+  | 'scanAll'
+  | 'cancelScan'
+  | 'largest'
+  | 'recent'
+  | 'search'
+  | 'refreshDriveSpace'
 >
 
 /** Longest path accepted from the renderer. Real folder paths are far shorter. */
@@ -56,8 +65,14 @@ export function registerLibraryIpc(
     })
   }
 
-  handle(LIBRARY_CHANNELS.getView, () => backend.getView())
+  // Drive capacity comes from the filesystem, so it is refreshed when the window asks for a view
+  // rather than on every internal update.
+  handle(LIBRARY_CHANNELS.getView, async () => {
+    await backend.refreshDriveSpace()
+    return backend.getView()
+  })
   handle(LIBRARY_CHANNELS.addRoot, ([path]) => backend.addRoot(asPath(path)))
+  handle(LIBRARY_CHANNELS.chooseRoot, () => backend.chooseRoot())
   handle(LIBRARY_CHANNELS.removeRoot, ([path]) => backend.removeRoot(asPath(path)))
   handle(LIBRARY_CHANNELS.scan, () => backend.scanAll())
   handle(LIBRARY_CHANNELS.cancelScan, () => backend.cancelScan())

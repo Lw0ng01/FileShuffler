@@ -8,6 +8,7 @@ import { IndexerService } from './app/indexerService'
 import { ShufflerService } from './app/shufflerService'
 import { IndexDb } from './library/indexDb'
 import { registerLibraryIpc } from './libraryIpc'
+import { readDriveSpace } from './files/driveSpace'
 import { readFileIdentity } from './files/fileIdentity'
 import { ProgressStore } from './files/progressStore'
 import { listVideoFiles } from './files/videoFolder'
@@ -56,6 +57,18 @@ shuffler.onView((view) => {
 const indexDb = new IndexDb(join(app.getPath('userData'), 'index.db'))
 const library = new IndexerService({
   db: indexDb,
+  pickFolder: async () => {
+    const options: Electron.OpenDialogOptions = {
+      title: 'Choose a folder to index',
+      buttonLabel: 'Index this folder',
+      properties: ['openDirectory']
+    }
+    const result = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, options)
+      : await dialog.showOpenDialog(options)
+    return result.canceled ? null : (result.filePaths[0] ?? null)
+  },
+  driveSpace: readDriveSpace,
   // Offered on a first run. Electron throws for a folder this system doesn't define, so each one
   // is asked for separately and a missing one is simply left out.
   defaultRoots: () =>

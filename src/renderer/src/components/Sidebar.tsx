@@ -1,6 +1,13 @@
 import { DashboardIcon, SettingsIcon, ShuffleIcon } from './Icons'
 
-export function Sidebar(): React.JSX.Element {
+export type Page = 'shuffle' | 'dashboard'
+
+interface Props {
+  page: Page
+  onNavigate: (page: Page) => void
+}
+
+export function Sidebar({ page, onNavigate }: Props): React.JSX.Element {
   return (
     <nav className="sidebar" aria-label="Main">
       <div className="brand">
@@ -9,14 +16,21 @@ export function Sidebar(): React.JSX.Element {
         </span>
         FileShuffler
       </div>
-      <button className="nav-item" aria-current="page">
+      <button
+        className="nav-item"
+        aria-current={page === 'shuffle' ? 'page' : undefined}
+        onClick={() => onNavigate('shuffle')}
+      >
         <ShuffleIcon />
         Shuffle
       </button>
-      <button className="nav-item" disabled title="Planned for a later phase">
+      <button
+        className="nav-item"
+        aria-current={page === 'dashboard' ? 'page' : undefined}
+        onClick={() => onNavigate('dashboard')}
+      >
         <DashboardIcon />
         Dashboard
-        <span className="soon">Soon</span>
       </button>
       <button className="nav-item" disabled title="Planned for a later phase">
         <SettingsIcon />

@@ -63,7 +63,8 @@ interface Job {
   depth: number
 }
 
-function driveOf(path: string): string {
+/** `C:` from `C:\Videos\clip.mp4`, `/` on other systems. */
+export function driveOf(path: string): string {
   const root = parse(path).root
   return root.endsWith('\\') || root.endsWith('/') ? root.slice(0, -1) || root : root
 }

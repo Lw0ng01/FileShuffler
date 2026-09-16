@@ -41,7 +41,8 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
   - `src/main/app/shufflerService.ts`: one folder session (shuffle, coordinator, player lifecycle)
   - `src/main/ipc.ts`: renderer commands, with sender and argument checks
 - `src/preload/`: the only bridge to the UI. Expose narrow, typed functions; keep `index.d.ts` in sync
-- `src/renderer/`: React UI, presentation only (`components/`, `hooks/useShuffler.ts`)
+- `src/renderer/`: React UI, presentation only (`components/`, `hooks/useShuffler.ts` and
+  `hooks/useLibrary.ts`). The sidebar switches between the Shuffle and Dashboard screens
 - `src/shared/shuffler.ts` and `src/shared/library.ts`: the view types, API types and channel names
   shared by all three
 

@@ -22,7 +22,7 @@ session starts without earlier chats or local memory. This section, the rest of 
   and Delete with a 5-second undo before trashing. See §2, §3, §4 and §6 (Implementation notes).
 - The Windows desktop is set up: Node 24.21, npm 11.19, Git 2.55 and mpv 0.41 from winget
   (§5 Existing setup notes). `npm ci`, typecheck and Electron 44.3.0 work.
-- `npm test` runs 160 unit tests. Six more run against a real mpv when `MPV_PATH` is set. All 166
+- `npm test` runs 167 unit tests. Six more run against a real mpv when `MPV_PATH` is set. All 173
   pass on Windows.
 - Checked on Windows with disposable clips (§2 How delete is implemented, §4 Implementation):
   - mpv's named pipe, loads, end of file, key bindings and unload-until-idle (the real-mpv tests).
@@ -36,6 +36,9 @@ session starts without earlier chats or local memory. This section, the rest of 
   (§6 Implementation). The shuffle was also checked at 1400 videos (§3 Implementation).
 - The shuffle survives a restart: the app reopens last time's folder and carries on through the
   same cycle, with a Restart cycle button to reshuffle on demand (§3 and §6 Implementation).
+- The dashboard exists: pick folders to index, scan them, and see space by category, drive cards
+  with free space, the largest and most recently changed files, and search (§6 Dashboard, §7
+  Phase 3 and Phase 4). The indexer behind it is in §7 Phase 3 Implementation.
 - The old Python shuffler was reviewed. It confirms §3's guess about why it felt bad.
 - Public repo: https://github.com/Lw0ng01/FileShuffler.
 - Commits use GitHub's private email. In a new clone, run
@@ -575,9 +578,28 @@ Build the shuffler first, inside an app shell with a sidebar, so the dashboard s
   later pass covered Undo, the keys inside the mpv window, and a folder of about 1400 videos.
 - **Not yet:** a delete from the UI on a drive that can't recycle (§2.2).
 
-Dashboard (later): row of drive cards (used/free), space-by-category bar, largest/recent file
-lists and an integrated player. Final video placement follows the embedding prototype; layout
-is not designed in detail yet.
+### Dashboard (Phase 4, first pass)
+
+The sidebar now switches between Shuffle and Dashboard; Settings stays for later, because the
+folders to index are chosen on the dashboard itself.
+
+- **Screen** (`src/renderer/src/components/DashboardScreen.tsx`), reading `useLibrary`:
+  - **Indexed total** with a space-by-category bar (video, photos, audio, documents) and a legend.
+  - **Drive cards**: free space of the whole drive, with a bar showing how much of the drive is
+    used and how much of it this app has catalogued. A drive whose size can't be read says so
+    rather than showing a wrong number.
+  - **Indexed folders**: each with its file count, size and when it was last scanned, plus Remove.
+    Removing is disabled while a scan runs.
+  - **Add folder**, **Scan now** and **Stop scan**, with live progress while scanning.
+  - **Search** by name, and **Largest** and **Recently changed** lists, which are hidden while
+    search results are showing.
+- **Hook** (`hooks/useLibrary.ts`): the view plus the lists, which come from separate queries.
+  Lists refresh when the indexed file count changes rather than on every view, and typing is
+  debounced so each keystroke isn't a query.
+- Both hooks stay subscribed while the app is open, so a shuffle keeps running while the dashboard
+  is on screen.
+- **Not yet:** "Shuffle this" from a folder, a settings screen, thumbnails, and the integrated
+  player (its placement still follows the embedding prototype, §4).
 
 ## 7. Roadmap
 
@@ -673,9 +695,11 @@ The front end comes last, as the least complex part. Two things that order depen
 
 ### Phase 4 — Dashboard
 
-- [ ] Drives: capacity / used / free
-- [ ] Breakdown by category
-- [ ] Largest files, recently added, search
+- [x] Drives: capacity / used / free (`driveSpace.ts`, drive cards in §6 Dashboard)
+- [x] Breakdown by category
+- [x] Largest files, recently changed, search
+- [ ] Settings screen for the indexed folders (they are chosen on the dashboard for now)
+- [ ] Thumbnails, and a first pass at how big libraries are paged or virtualized
 - [ ] "Shuffle this" from a folder in the dashboard
 - [ ] Implement the validated embedded player with custom controls, subtitles/audio tracks,
       history/resume, and the same authoritative shuffle session
@@ -906,3 +930,15 @@ machines, not Lucas's.
     write; batches are now flushed at their exact size.
   - A cancelled scan keeps what it found but skips the sweep, so cancelling can never empty the
     index.
+- **2026-09-16:** The dashboard screen (Phase 4, first pass).
+  - The sidebar switches between Shuffle and Dashboard. The new screen shows indexed totals with a
+    category bar, drive cards, the indexed folders with add, remove and scan, live scan progress,
+    search, and the largest and most recently changed files (§6 Dashboard).
+  - Drive cards needed something the index can't know: `driveSpace.ts` reads real capacity and free
+    space from the filesystem, returns null rather than throwing when a drive can't be read, and is
+    refreshed after a scan and whenever the window asks for a view.
+  - Adding a folder to index goes through the main process's folder picker, like the shuffler's.
+  - Found by testing: making `getView` refresh capacity turned its IPC handler async, so a test
+    that invoked it without awaiting saw the call arrive too late.
+  - Still to do here: "Shuffle this" from a dashboard folder, a settings screen, thumbnails, and
+    paging for very large libraries.
