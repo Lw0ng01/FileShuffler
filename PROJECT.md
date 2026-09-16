@@ -74,6 +74,9 @@ session starts without earlier chats or local memory. This section, the rest of 
 - In PowerShell, `npm run dev` fails by default; use Command Prompt or `npm.cmd run dev` (§5).
 - Saved cycle progress lives in the app's data folder (`progress.json`). Deleting it only means
   cycles start fresh.
+- A development run (`npm run dev`) and an installed build use *different* app-data folders, so
+  progress built up in development doesn't carry into the installed app. Decide before the public
+  release whether to pin one folder name (§3 Implementation, §7 Phase 6).
 
 ---
 
@@ -96,6 +99,11 @@ also demonstrate good system architecture, design, and measured efficiency. Keep
 small enough to finish, and **never introduce a permanent-delete path.**
 
 **Platforms:** Windows is the main target (Lucas's desktop). macOS is a nice-to-have (laptop).
+
+**Who it is for:** Lucas first, but the plan *(decided 2026-09-15)* is a public download on GitHub
+that other people can install and use. That raises the bar beyond "works on Lucas's machine":
+someone else's drives, no mpv installed, no development tools, and no way to ask us what went
+wrong. Error messages, the first run and the installer all have to stand on their own (§7 Phase 6).
 
 ## 2. Non-negotiable safety rules
 
@@ -260,6 +268,10 @@ pure TypeScript: items are opaque string IDs, and randomness is injected.
     folder, writing a temporary file and renaming it so a crash can't leave half a file. A missing
     or corrupt file reads as "no progress" instead of blocking startup, and only the 20 most recent
     folders are kept. Nothing here writes to the user's own files.
+  - **Known quirk:** Electron derives that folder from the app's name, which is `file-shuffler` in
+    development and `FileShuffler` in a packaged build, so the two keep separate progress files.
+    Harmless while testing, but decide before the public release whether to pin one name; changing
+    it later silently abandons everyone's saved cycles.
 - **Restart cycle** *(Lucas asked for this alongside the memory, 2026-09-15)*: `restartCycle()`
   reshuffles everything and starts a new cycle, so a remembered cycle can always be abandoned. It
   reuses the normal new-cycle path, so the seam rule still prevents an immediate repeat.
@@ -556,6 +568,14 @@ is not designed in detail yet.
 
 ## 7. Roadmap
 
+**Working order** *(Lucas, 2026-09-15)*: features first, while the shape of the app is still
+moving. Then optimization, then refactoring, then making the stack and the backend properly solid.
+The front end comes last, as the least complex part. Two things that order depends on:
+- **Optimization needs a baseline first** (§5). Measure the packaged Windows build, agree budgets,
+  then optimize against numbers rather than guesses.
+- **"Front end last" applies to polish, not correctness.** A feature still ships with whatever UI
+  it needs, and the security baseline (§5) never waits.
+
 ### Phase 0 — Setup
 
 - [x] Lucas picks the stack (§5): TypeScript + Electron
@@ -566,7 +586,8 @@ is not designed in detail yet.
 - [x] Upgrade Node on the Mac to ≥ 22.12 (now 26.8.2). Use ≥ 22.12 on the Windows desktop too.
 - [x] Approve npm 11 install scripts (`allowScripts` in package.json)
 - [x] Upgrade Electron 39 → 44.3.0 (Electron 39 can't install on Node 26)
-- [ ] Create **public** GitHub repo and push, **after the shuffler basics work** (end of Phase 1)
+- [x] Create **public** GitHub repo and push, after the shuffler basics worked:
+      https://github.com/Lw0ng01/FileShuffler
 
 ### Phase 1 — Shuffler MVP ⭐
 
@@ -623,20 +644,41 @@ is not designed in detail yet.
       history/resume, and the same authoritative shuffle session
 - [ ] Verify dashboard indexing/browsing remains responsive during playback
 
-### Phase 5 — Bonus ideas
+### Phase 5 — Cleanup tools and stats ⭐ *(picked by Lucas, 2026-09-15)*
 
-- [ ] Favorites / weighting without breaking cycle coverage
-- [ ] Other external players (IINA, generic) only if needed
+Lucas chose these as the directions that make this more than a video shuffler, alongside the
+dashboard in Phases 3–4. Shuffling photos and music was offered and left out for now.
+
+- [ ] **Cleanup tools**, all view-only, with moving to the Recycle Bin as the only action (§2):
+      duplicate finder, "old Downloads" suggestions, biggest space wasters
+- [ ] **Stats**: most played, never watched, total hours of video
+- [ ] **Favorites / weighting** without breaking cycle coverage (§3 Possible upgrades)
 - [ ] Thumbnail gallery for photos/videos
-- [ ] Duplicate finder (view-only, with trash as the only action)
-- [ ] Watch stats: most played, never watched, total hours of video
-- [ ] "Old Downloads" cleanup suggestions (view-only)
+- [ ] Other external players (IINA, generic) only if needed
 
-### Phase 6 — Release polish
+### Phase 6 — Release polish and public download
+
+The app is meant to be downloadable by other people (§1), so this phase is about strangers'
+machines, not Lucas's.
 
 - [ ] Refine the Windows packaging already exercised in Phase 1
 - [ ] macOS build and platform-specific validation
 - [ ] Document supported media combinations, resource measurements, and known limitations
+- [ ] **Licensing:** add a LICENSE for this project, and settle mpv's terms *before* shipping it
+      inside the installer. mpv is free software under the GPL (some builds LGPL), so bundling it
+      means carrying its license text and meeting its source-availability terms. The alternative is
+      not to bundle it and to point users at mpv.io instead. Check the exact build we ship.
+- [ ] **Unsigned installer:** Windows SmartScreen warns on a download from an unknown publisher,
+      and the user has to click through "More info → Run anyway". Either say so plainly in the
+      README or buy a code-signing certificate. Never coach people to disable protections.
+- [ ] **A README for users**, not developers: what it does, install steps, the SmartScreen note,
+      where saved progress lives, and how to remove it
+- [ ] **Decide the app-data folder name** so a development run and an installed build agree, before
+      anyone has cycles worth keeping (§3 Implementation)
+- [ ] **First run on a clean machine:** no mpv, no PATH entry, no development tools. The app must
+      explain what's missing rather than fail silently.
+- [ ] GitHub Releases: attach the installer, decide how versions are numbered, and keep notes on
+      what changed
 
 ## 8. Concerns / risks
 
@@ -652,6 +694,11 @@ is not designed in detail yet.
 - **Drives without a Recycle Bin** (USB/network): see §2.2.
 - **Cross-machine paths:** settings and shuffle history are per machine, never committed.
 - **Thumbnail cache privacy:** needs a "clear cache" button.
+- **Publishing to strangers** (§1): an unsigned installer looks untrustworthy to Windows, bundling
+  mpv carries its licensing terms, and a delete bug on someone else's files is far worse than on
+  ours. Treat the safety rules in §2 as release blockers, not preferences.
+- **Assumptions that only hold here:** a fast machine, an external drive that recycles, mpv already
+  installed, and an English Windows. None of these are guaranteed on someone else's PC.
 
 ## 9. Open questions
 
@@ -659,6 +706,9 @@ is not designed in detail yet.
 2. Set performance budgets after measuring the first Windows release build.
 3. Embedded playback approach, macOS limitations, and initial compatibility matrix: resolve
    through Phase 1B, rather than assuming integration is solved.
+4. Distribution: which licence this project carries, whether the installer bundles mpv (and on what
+   terms), and whether the unsigned SmartScreen warning is acceptable or worth paying to avoid
+   (§7 Phase 6).
 
 ## 10. Change Log
 
@@ -795,3 +845,14 @@ is not designed in detail yet.
     be abandoned. It confirms first, because restarting discards coverage.
   - Direction after the shuffler, chosen by Lucas: the dashboard, cleanup tools, and stats with
     favorites. Shuffling photos and music was considered and left out for now.
+- **2026-09-15:** Aimed at a public download, and set the working order.
+  - Lucas wants the app downloadable from GitHub for other people to use, so §1 now states that and
+    Phase 6 covers what strangers' machines need: a licence, mpv's bundling terms, the SmartScreen
+    warning on an unsigned installer, a user-facing README, and a clean-machine first run.
+  - Recorded the working order Lucas set: features, then optimization, then refactoring, then a
+    properly solid stack and backend, with the front end last. Noted that optimization still waits
+    on a measured baseline (§5), and that "front end last" means polish, not correctness.
+  - Noted a quirk worth settling before release: a development run and an installed build use
+    different app-data folders, so saved cycles don't carry across (§3 Implementation).
+  - Phase 5 is now cleanup tools and stats rather than loose bonus ideas, and Phase 0's public-repo
+    item is ticked.
