@@ -40,7 +40,11 @@ function setup(trusted = true): { ipc: FakeIpc; backend: LibraryBackend; unregis
     recent: vi.fn(),
     search: vi.fn(),
     openFile: vi.fn(),
-    showInFolder: vi.fn()
+    showInFolder: vi.fn(),
+    biggestFolders: vi.fn(),
+    duplicates: vi.fn(),
+    notTouched: vi.fn(),
+    checkDuplicate: vi.fn()
   } as unknown as LibraryBackend
   const unregister = registerLibraryIpc(ipc, backend, () => trusted)
   return { ipc, backend, unregister }
@@ -74,6 +78,33 @@ describe('registerLibraryIpc', () => {
     expect(backend.search).toHaveBeenCalledWith('beach', 5)
     expect(backend.openFile).toHaveBeenCalledWith('D:\\Videos\\a.mp4')
     expect(backend.showInFolder).toHaveBeenCalledWith('D:\\Videos\\a.mp4')
+  })
+
+  it('forwards the cleanup queries', () => {
+    const { ipc, backend } = setup()
+    ipc.invoke(LIBRARY_CHANNELS.biggestFolders, 5)
+    ipc.invoke(LIBRARY_CHANNELS.duplicates)
+    ipc.invoke(LIBRARY_CHANNELS.notTouched, 90, 10)
+    ipc.invoke(LIBRARY_CHANNELS.checkDuplicate, 'clip.mp4', 100)
+
+    expect(backend.biggestFolders).toHaveBeenCalledWith(5)
+    expect(backend.duplicates).toHaveBeenCalledWith(undefined)
+    expect(backend.notTouched).toHaveBeenCalledWith(90, 10)
+    expect(backend.checkDuplicate).toHaveBeenCalledWith('clip.mp4', 100)
+  })
+
+  it('rejects cleanup arguments that are not numbers', () => {
+    const { ipc, backend } = setup()
+    for (const bad of [0, -1, 'ninety']) {
+      expect(() => ipc.invoke(LIBRARY_CHANNELS.notTouched, bad)).toThrow('number of days')
+    }
+    for (const bad of [-1, 'big', undefined]) {
+      expect(() => ipc.invoke(LIBRARY_CHANNELS.checkDuplicate, 'clip.mp4', bad)).toThrow(
+        'file size'
+      )
+    }
+    expect(backend.notTouched).not.toHaveBeenCalled()
+    expect(backend.checkDuplicate).not.toHaveBeenCalled()
   })
 
   it('rejects an open request that is not a path', () => {

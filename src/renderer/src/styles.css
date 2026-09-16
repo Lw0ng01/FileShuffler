@@ -615,6 +615,43 @@ kbd {
   margin-left: 0;
 }
 
+.sub-title {
+  margin: 18px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.dupes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dupe {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--raised);
+}
+
+.dupe-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.dupe-head .muted {
+  margin-left: auto;
+}
+
+.dupe-verdict {
+  margin: 6px 0 0;
+  font-size: 12px;
+}
+
 .row-actions {
   display: inline-flex;
   flex: none;

@@ -51,6 +51,83 @@ function setup(deps: Partial<IndexerServiceDeps> = {}): {
   return { service, db, views }
 }
 
+describe('IndexerService cleanup lists', () => {
+  async function withFiles(
+    files: ScanFile[],
+    deps: Partial<IndexerServiceDeps> = {}
+  ): Promise<IndexerService> {
+    const { service } = setup({ scan: fakeScan({ 'D:\\Media': files }), ...deps })
+    service.addRoot('D:\\Media')
+    await service.scanAll()
+    return service
+  }
+
+  it('lists the folders holding the most, and possible duplicates', async () => {
+    const service = await withFiles([
+      scanFile('D:\\Media\\a\\clip.mp4', 'D:\\Media', { folder: 'D:\\Media\\a', size: 100 }),
+      scanFile('D:\\Media\\b\\clip.mp4', 'D:\\Media', { folder: 'D:\\Media\\b', size: 100 }),
+      scanFile('D:\\Media\\a\\other.mp4', 'D:\\Media', { folder: 'D:\\Media\\a', size: 5 })
+    ])
+
+    expect(service.biggestFolders(5)).toEqual([
+      { folder: 'D:\\Media\\a', drive: 'D:', files: 2, bytes: 105 },
+      { folder: 'D:\\Media\\b', drive: 'D:', files: 1, bytes: 100 }
+    ])
+    const groups = service.duplicates(5)
+    expect(groups).toHaveLength(1)
+    expect(groups[0]).toMatchObject({ name: 'clip.mp4', size: 100, wastedBytes: 100 })
+  })
+
+  it('lists files nothing has changed in a long time', async () => {
+    const now = 400 * 24 * 60 * 60 * 1000
+    const service = await withFiles(
+      [
+        scanFile('D:\\Media\\old.mp4', 'D:\\Media', { size: 900, modifiedMs: 1 }),
+        scanFile('D:\\Media\\new.mp4', 'D:\\Media', { size: 900, modifiedMs: now - 1000 })
+      ],
+      { now: () => now }
+    )
+
+    expect(service.notTouched(180, 10).map((row) => row.name)).toEqual(['old.mp4'])
+    expect(service.notTouched(3650, 10)).toEqual([])
+  })
+
+  it('fingerprints a group so real copies can be told from lookalikes', async () => {
+    const digest = vi.fn(async (path: string) => (path.includes('\\b\\') ? 'other' : 'same'))
+    const service = await withFiles(
+      [
+        scanFile('D:\\Media\\a\\clip.mp4', 'D:\\Media', { folder: 'D:\\Media\\a', size: 100 }),
+        scanFile('D:\\Media\\b\\clip.mp4', 'D:\\Media', { folder: 'D:\\Media\\b', size: 100 }),
+        scanFile('D:\\Media\\c\\clip.mp4', 'D:\\Media', { folder: 'D:\\Media\\c', size: 100 })
+      ],
+      { digest }
+    )
+
+    expect(await service.checkDuplicate('clip.mp4', 100)).toEqual([
+      { path: 'D:\\Media\\a\\clip.mp4', digest: 'same' },
+      { path: 'D:\\Media\\b\\clip.mp4', digest: 'other' },
+      { path: 'D:\\Media\\c\\clip.mp4', digest: 'same' }
+    ])
+    expect(digest).toHaveBeenCalledTimes(3)
+  })
+
+  it('reports a null fingerprint for a file it cannot read', async () => {
+    const digest = vi.fn(async () => null)
+    const service = await withFiles(
+      [
+        scanFile('D:\\Media\\a\\clip.mp4', 'D:\\Media', { folder: 'D:\\Media\\a', size: 100 }),
+        scanFile('D:\\Media\\b\\clip.mp4', 'D:\\Media', { folder: 'D:\\Media\\b', size: 100 })
+      ],
+      { digest }
+    )
+
+    expect(await service.checkDuplicate('clip.mp4', 100)).toEqual([
+      { path: 'D:\\Media\\a\\clip.mp4', digest: null },
+      { path: 'D:\\Media\\b\\clip.mp4', digest: null }
+    ])
+  })
+})
+
 describe('IndexerService opening files', () => {
   async function withIndexedFile(deps: Partial<IndexerServiceDeps> = {}): Promise<IndexerService> {
     const scan = fakeScan({ 'D:\\Videos': [scanFile('D:\\Videos\\a.mp4', 'D:\\Videos')] })

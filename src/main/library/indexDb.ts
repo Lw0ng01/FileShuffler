@@ -66,6 +66,21 @@ export interface FileRow {
   modifiedMs: number
 }
 
+export interface FolderTotal {
+  folder: string
+  drive: string
+  files: number
+  bytes: number
+}
+
+export interface DuplicateGroup {
+  name: string
+  size: number
+  files: FileRow[]
+  /** What deleting all but one copy would free. */
+  wastedBytes: number
+}
+
 type Row = Record<string, unknown>
 
 function text(value: unknown): string {
@@ -270,6 +285,64 @@ export class IndexDb {
          order by modified_ms desc, path limit ?`
       )
       .all(likePattern(term.trim()), Math.max(1, Math.trunc(limit)))
+      .map((row) => toFileRow(row as Row))
+  }
+
+  /** Folders holding the most indexed data, for "where has the space gone" (§7 Phase 5). */
+  biggestFolders(limit = 12): FolderTotal[] {
+    return this.db
+      .prepare(
+        `select folder, drive, count(*) as files, coalesce(sum(size), 0) as bytes
+         from files group by folder order by bytes desc, folder limit ?`
+      )
+      .all(Math.max(1, Math.trunc(limit)))
+      .map((row) => {
+        const entry = row as Row
+        return {
+          folder: text(entry['folder']),
+          drive: text(entry['drive']),
+          files: count(entry['files']),
+          bytes: count(entry['bytes'])
+        }
+      })
+  }
+
+  /**
+   * Files sharing a name and a size, biggest waste first. These only *look* like copies: nothing
+   * here reads the files, so the UI must say so and a check can confirm it (`fileDigest`).
+   */
+  duplicateCandidates(limit = 25): DuplicateGroup[] {
+    const groups = this.db
+      .prepare(
+        `select name, size, count(*) as copies
+         from files where size > 0
+         group by name, size having copies > 1
+         order by size * (copies - 1) desc, name limit ?`
+      )
+      .all(Math.max(1, Math.trunc(limit)))
+
+    return groups.map((row) => {
+      const entry = row as Row
+      const name = text(entry['name'])
+      const size = count(entry['size'])
+      const files = this.filesNamed(name, size)
+      return { name, size, files, wastedBytes: size * Math.max(0, files.length - 1) }
+    })
+  }
+
+  /** Every indexed file with this exact name and size. */
+  filesNamed(name: string, size: number): FileRow[] {
+    return this.db
+      .prepare('select * from files where name = ? and size = ? order by path')
+      .all(name, Math.round(size))
+      .map((row) => toFileRow(row as Row))
+  }
+
+  /** Big files nothing has changed in a long time: the usual cleanup candidates. */
+  notTouchedSince(before: number, limit = 20): FileRow[] {
+    return this.db
+      .prepare('select * from files where modified_ms < ? order by size desc, path limit ?')
+      .all(Math.trunc(before), Math.max(1, Math.trunc(limit)))
       .map((row) => toFileRow(row as Row))
   }
 
