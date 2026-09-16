@@ -69,6 +69,12 @@ const library = new IndexerService({
     return result.canceled ? null : (result.filePaths[0] ?? null)
   },
   driveSpace: readDriveSpace,
+  // Opening goes through the OS, never a shell command, and only for paths the index holds
+  // (checked in IndexerService).
+  openPath: (path) => shell.openPath(path),
+  revealPath: async (path) => {
+    shell.showItemInFolder(path)
+  },
   // Offered on a first run. Electron throws for a folder this system doesn't define, so each one
   // is asked for separately and a missing one is simply left out.
   defaultRoots: () =>

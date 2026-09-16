@@ -7,6 +7,8 @@ export interface LibraryActions {
   scan: () => void
   cancelScan: () => void
   setTerm: (term: string) => void
+  openFile: (path: string) => void
+  showInFolder: (path: string) => void
 }
 
 /** Rows shown in the largest and recently changed lists. */
@@ -122,7 +124,9 @@ export function useLibrary(): {
       removeRoot: (path) => run(() => api.removeRoot(path)),
       scan: () => run(() => api.scan()),
       cancelScan: () => run(() => api.cancelScan()),
-      setTerm: changeTerm
+      setTerm: changeTerm,
+      openFile: (path) => run(() => api.openFile(path)),
+      showInFolder: (path) => run(() => api.showInFolder(path))
     }
   }, [changeTerm])
 

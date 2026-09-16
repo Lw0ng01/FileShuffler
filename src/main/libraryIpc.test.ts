@@ -38,7 +38,9 @@ function setup(trusted = true): { ipc: FakeIpc; backend: LibraryBackend; unregis
     cancelScan: vi.fn(),
     largest: vi.fn(),
     recent: vi.fn(),
-    search: vi.fn()
+    search: vi.fn(),
+    openFile: vi.fn(),
+    showInFolder: vi.fn()
   } as unknown as LibraryBackend
   const unregister = registerLibraryIpc(ipc, backend, () => trusted)
   return { ipc, backend, unregister }
@@ -57,6 +59,8 @@ describe('registerLibraryIpc', () => {
     ipc.invoke(LIBRARY_CHANNELS.largest, 10)
     ipc.invoke(LIBRARY_CHANNELS.recent)
     ipc.invoke(LIBRARY_CHANNELS.search, 'beach', 5)
+    ipc.invoke(LIBRARY_CHANNELS.openFile, 'D:\\Videos\\a.mp4')
+    ipc.invoke(LIBRARY_CHANNELS.showInFolder, 'D:\\Videos\\a.mp4')
 
     expect(backend.refreshDriveSpace).toHaveBeenCalledTimes(1)
     expect(backend.getView).toHaveBeenCalledTimes(1)
@@ -68,6 +72,18 @@ describe('registerLibraryIpc', () => {
     expect(backend.largest).toHaveBeenCalledWith(10)
     expect(backend.recent).toHaveBeenCalledWith(undefined)
     expect(backend.search).toHaveBeenCalledWith('beach', 5)
+    expect(backend.openFile).toHaveBeenCalledWith('D:\\Videos\\a.mp4')
+    expect(backend.showInFolder).toHaveBeenCalledWith('D:\\Videos\\a.mp4')
+  })
+
+  it('rejects an open request that is not a path', () => {
+    const { ipc, backend } = setup()
+    for (const bad of [undefined, 42, '', { path: 'D:\\a.mp4' }]) {
+      expect(() => ipc.invoke(LIBRARY_CHANNELS.openFile, bad)).toThrow('Expected a folder path')
+      expect(() => ipc.invoke(LIBRARY_CHANNELS.showInFolder, bad)).toThrow('Expected a folder path')
+    }
+    expect(backend.openFile).not.toHaveBeenCalled()
+    expect(backend.showInFolder).not.toHaveBeenCalled()
   })
 
   it('rejects a root that is not a path', () => {

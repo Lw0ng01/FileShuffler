@@ -14,6 +14,10 @@ export interface IndexerServiceDeps {
   pickFolder?: () => Promise<string | null>
   /** Size and free space of the drive holding a path, or null when it can't be read. */
   driveSpace?: (path: string) => Promise<DriveSpace | null>
+  /** Opens a file in the system's default application. Resolves a reason when it fails. */
+  openPath?: (path: string) => Promise<string>
+  /** Shows a file in the system's file manager. */
+  revealPath?: (path: string) => Promise<void>
   now?: () => number
 }
 
@@ -133,6 +137,39 @@ export class IndexerService {
 
   search(term: string, limit?: number): LibraryFile[] {
     return this.deps.db.search(term, limit)
+  }
+
+  /**
+   * Opens a file in the system's default application. Only paths the indexer catalogued can be
+   * opened: the renderer names a file, and this checks that name against the index first, so a
+   * bug or injected script can never make the app launch something arbitrary (PROJECT.md §5).
+   */
+  async openFile(path: string): Promise<void> {
+    if (!this.known(path)) return
+    const failure = await this.deps.openPath?.(path)
+    if (failure !== undefined && failure.length > 0) {
+      this.error = `Could not open ${path}: ${failure}`
+      this.emit()
+    }
+  }
+
+  /** Shows an indexed file in the system's file manager, with the same check as opening. */
+  async showInFolder(path: string): Promise<void> {
+    if (!this.known(path)) return
+    try {
+      await this.deps.revealPath?.(path)
+    } catch (error) {
+      this.error = `Could not show ${path}: ${message(error)}`
+      this.emit()
+    }
+  }
+
+  private known(path: string): boolean {
+    if (this.deps.db.hasFile(path)) return true
+    // Usually the file was deleted or moved since the last scan, rather than anything sinister.
+    this.error = `${path} is not in the index. Scan again if it has moved or changed.`
+    this.emit()
+    return false
   }
 
   /** Indexes every root, one at a time. A second call while scanning joins the running scan. */

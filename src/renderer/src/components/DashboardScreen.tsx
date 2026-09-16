@@ -161,7 +161,7 @@ export function DashboardScreen({
               (results.length === 0 ? (
                 <p className="muted">Nothing matches “{term.trim()}”.</p>
               ) : (
-                <FileList files={results} />
+                <FileList files={results} actions={actions} />
               ))}
           </section>
 
@@ -169,11 +169,11 @@ export function DashboardScreen({
             <div className="two-col">
               <section className="dash-section" aria-label="Largest files">
                 <h2 className="section-title">Largest</h2>
-                <FileList files={largest} />
+                <FileList files={largest} actions={actions} />
               </section>
               <section className="dash-section" aria-label="Recently changed files">
                 <h2 className="section-title">Recently changed</h2>
-                <FileList files={recent} />
+                <FileList files={recent} actions={actions} />
               </section>
             </div>
           )}
@@ -269,7 +269,13 @@ function Drives({ view }: { view: LibraryView }): React.JSX.Element | null {
   )
 }
 
-function FileList({ files }: { files: LibraryFile[] }): React.JSX.Element {
+function FileList({
+  files,
+  actions
+}: {
+  files: LibraryFile[]
+  actions: LibraryActions
+}): React.JSX.Element {
   if (files.length === 0) return <p className="muted">Nothing here yet.</p>
   return (
     <ul className="files">
@@ -283,6 +289,22 @@ function FileList({ files }: { files: LibraryFile[] }): React.JSX.Element {
             {shortenPath(file.folder)}
           </span>
           <span className="muted">{formatBytes(file.size)}</span>
+          <span className="row-actions">
+            <button
+              className="btn btn-small"
+              onClick={() => actions.openFile(file.path)}
+              title={`Open ${file.name}`}
+            >
+              Open
+            </button>
+            <button
+              className="btn btn-small"
+              onClick={() => actions.showInFolder(file.path)}
+              title="Show this file in the file manager"
+            >
+              Show
+            </button>
+          </span>
         </li>
       ))}
     </ul>
