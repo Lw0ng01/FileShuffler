@@ -1,3 +1,4 @@
+import type { LibraryFile, LibrarySort } from '../../shared/library'
 import type { StatsView } from '../../shared/stats'
 import type { IndexDb } from '../library/indexDb'
 
@@ -62,6 +63,11 @@ export class StatsService {
     this.error = null
     this.emit()
     return this.getView()
+  }
+
+  /** A longer never-played list than the view carries, in the order the user picked. */
+  neverPlayed(limit: number, sort: LibrarySort): LibraryFile[] {
+    return this.deps.db.neverPlayed(limit, sort)
   }
 
   /** Something played or finished, so an open Stats tab should refresh. */

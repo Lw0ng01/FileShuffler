@@ -247,6 +247,105 @@ describe('IndexDb', () => {
     expect(db.favorites(10).map((row) => row.path)).toEqual(['D:\\Media\\a.mp4'])
   })
 
+  describe('queryFiles', () => {
+    beforeEach(() => {
+      db.putFiles(db.startScan(), [
+        file('D:\\Media\\beach.mp4', { size: 3_000, modifiedMs: 30 }),
+        file('D:\\Media\\Beach photo.jpg', { category: 'photo', size: 200, modifiedMs: 20 }),
+        file('E:\\Music\\song.flac', { category: 'audio', size: 900, drive: 'E:', modifiedMs: 10 }),
+        file('E:\\Films\\alpha.mkv', { size: 8_000, drive: 'E:', modifiedMs: 40 }),
+        file('D:\\Docs\\100% report.pdf', { category: 'document', size: 50, modifiedMs: 5 })
+      ])
+    })
+
+    const names = (page: { rows: { name: string }[] }): string[] => page.rows.map((row) => row.name)
+
+    it('returns everything newest first when no filter is given', () => {
+      const page = db.queryFiles()
+      expect(page.total).toBe(5)
+      expect(names(page)).toEqual([
+        'alpha.mkv',
+        'beach.mp4',
+        'Beach photo.jpg',
+        'song.flac',
+        '100% report.pdf'
+      ])
+    })
+
+    it('filters by name, category, drive and size, all together', () => {
+      expect(names(db.queryFiles({ term: 'beach' }))).toEqual(['beach.mp4', 'Beach photo.jpg'])
+      expect(names(db.queryFiles({ categories: ['video'] }))).toEqual(['alpha.mkv', 'beach.mp4'])
+      expect(names(db.queryFiles({ drives: ['E:'] }))).toEqual(['alpha.mkv', 'song.flac'])
+      expect(names(db.queryFiles({ minSize: 1_000 }))).toEqual(['alpha.mkv', 'beach.mp4'])
+      expect(names(db.queryFiles({ maxSize: 200 }))).toEqual(['Beach photo.jpg', '100% report.pdf'])
+      expect(
+        names(db.queryFiles({ term: 'beach', categories: ['video', 'photo'], minSize: 1_000 }))
+      ).toEqual(['beach.mp4'])
+    })
+
+    it('sorts by size, date or name, in either direction', () => {
+      expect(names(db.queryFiles({ sort: 'size', limit: 2 }))).toEqual(['alpha.mkv', 'beach.mp4'])
+      expect(names(db.queryFiles({ sort: 'size', direction: 'asc', limit: 2 }))).toEqual([
+        '100% report.pdf',
+        'Beach photo.jpg'
+      ])
+      // Name order ignores case, so "Beach photo" sits beside "beach". A space sorts before a dot,
+      // which puts "beach photo.jpg" ahead of "beach.mp4".
+      expect(names(db.queryFiles({ sort: 'name', direction: 'asc' }))).toEqual([
+        '100% report.pdf',
+        'alpha.mkv',
+        'Beach photo.jpg',
+        'beach.mp4',
+        'song.flac'
+      ])
+    })
+
+    it('pages through results while reporting the full total', () => {
+      const first = db.queryFiles({ sort: 'size', limit: 2 })
+      const second = db.queryFiles({ sort: 'size', limit: 2, offset: 2 })
+      const last = db.queryFiles({ sort: 'size', limit: 2, offset: 4 })
+
+      expect([first.total, second.total, last.total]).toEqual([5, 5, 5])
+      expect([...names(first), ...names(second), ...names(last)]).toEqual([
+        'alpha.mkv',
+        'beach.mp4',
+        'song.flac',
+        'Beach photo.jpg',
+        '100% report.pdf'
+      ])
+      expect(db.queryFiles({ offset: 99 }).rows).toEqual([])
+    })
+
+    it('treats wildcards in a search as plain text', () => {
+      expect(names(db.queryFiles({ term: '100%' }))).toEqual(['100% report.pdf'])
+      expect(names(db.queryFiles({ term: '_' }))).toEqual([])
+    })
+  })
+
+  it('sorts never-played videos by date, size or name', () => {
+    db.putFiles(db.startScan(), [
+      file('D:\\Media\\b-small-new.mp4', { size: 1, modifiedMs: 30 }),
+      file('D:\\Media\\a-big-old.mp4', { size: 900, modifiedMs: 10 }),
+      file('D:\\Media\\c-middle.mp4', { size: 50, modifiedMs: 20 })
+    ])
+
+    expect(db.neverPlayed(10).map((row) => row.name)).toEqual([
+      'b-small-new.mp4',
+      'c-middle.mp4',
+      'a-big-old.mp4'
+    ])
+    expect(db.neverPlayed(10, 'size').map((row) => row.name)).toEqual([
+      'a-big-old.mp4',
+      'c-middle.mp4',
+      'b-small-new.mp4'
+    ])
+    expect(db.neverPlayed(10, 'name').map((row) => row.name)).toEqual([
+      'a-big-old.mp4',
+      'b-small-new.mp4',
+      'c-middle.mp4'
+    ])
+  })
+
   it('knows whether a path is in the index', () => {
     const scan = db.startScan()
     db.putFiles(scan, [file('D:\\Media\\a.mp4')])

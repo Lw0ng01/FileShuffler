@@ -31,7 +31,8 @@ function setup(trusted = true): { ipc: FakeIpc; backend: StatsBackend; unregiste
   const backend = {
     getView: vi.fn(),
     addFavorite: vi.fn(),
-    removeFavorite: vi.fn()
+    removeFavorite: vi.fn(),
+    neverPlayed: vi.fn()
   } as unknown as StatsBackend
   const unregister = registerStatsIpc(ipc, backend, () => trusted)
   return { ipc, backend, unregister }
@@ -57,6 +58,23 @@ describe('registerStatsIpc', () => {
     }
     expect(backend.addFavorite).not.toHaveBeenCalled()
     expect(backend.removeFavorite).not.toHaveBeenCalled()
+  })
+
+  it('forwards a never-played request, capping the limit and checking the sort', () => {
+    const { ipc, backend } = setup()
+    ipc.invoke(STATS_CHANNELS.neverPlayed, 40, 'size')
+    ipc.invoke(STATS_CHANNELS.neverPlayed, 99_999, 'name')
+
+    expect(backend.neverPlayed).toHaveBeenCalledWith(40, 'size')
+    expect(backend.neverPlayed).toHaveBeenCalledWith(500, 'name')
+    for (const [limit, sort] of [
+      [0, 'size'],
+      [10, 'plays'],
+      [10, undefined]
+    ]) {
+      expect(() => ipc.invoke(STATS_CHANNELS.neverPlayed, limit, sort)).toThrow()
+    }
+    expect(backend.neverPlayed).toHaveBeenCalledTimes(2)
   })
 
   it('rejects every request from an untrusted sender', () => {

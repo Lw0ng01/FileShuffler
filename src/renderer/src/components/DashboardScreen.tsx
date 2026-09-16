@@ -3,23 +3,27 @@ import type {
   LibraryDigest,
   LibraryDuplicateGroup,
   LibraryFile,
+  LibraryFilePage,
+  LibrarySort,
   LibraryView
 } from '../../../shared/library'
+import { formatBytes, formatCount, formatWhen, shortenPath } from '../format'
 import {
   duplicateKey,
+  filtersActive,
   STALE_DAYS,
   type CleanupLists,
-  type LibraryActions
+  type LibraryActions,
+  type SearchFilters
 } from '../hooks/useLibrary'
-import { formatBytes, formatCount, formatWhen, shortenPath } from '../format'
 import { DashboardIcon, FolderIcon, TrashIcon } from './Icons'
 
 interface Props {
   view: LibraryView | null
-  largest: LibraryFile[]
-  recent: LibraryFile[]
-  results: LibraryFile[] | null
-  term: string
+  largest: LibraryFilePage
+  recent: LibraryFilePage
+  results: LibraryFilePage | null
+  filters: SearchFilters
   error: string | null
   cleanup: CleanupLists
   actions: LibraryActions
@@ -34,12 +38,33 @@ const CATEGORY_LABELS: Record<LibraryCategory, string> = {
 
 const CATEGORY_ORDER: LibraryCategory[] = ['video', 'photo', 'audio', 'document']
 
+const SIZE_OPTIONS: { label: string; bytes: number | null }[] = [
+  { label: 'Any size', bytes: null },
+  { label: 'Over 10 MB', bytes: 10 * 1024 ** 2 },
+  { label: 'Over 100 MB', bytes: 100 * 1024 ** 2 },
+  { label: 'Over 1 GB', bytes: 1024 ** 3 },
+  { label: 'Over 4 GB', bytes: 4 * 1024 ** 3 }
+]
+
+const SORT_LABELS: Record<LibrarySort, string> = {
+  modified: 'Date changed',
+  size: 'Size',
+  name: 'Name'
+}
+
+/** Says the direction in words that fit the sort, rather than a bare "ascending". */
+function directionLabel(sort: LibrarySort, direction: 'asc' | 'desc'): string {
+  if (sort === 'name') return direction === 'asc' ? 'A to Z' : 'Z to A'
+  if (sort === 'size') return direction === 'desc' ? 'Largest first' : 'Smallest first'
+  return direction === 'desc' ? 'Newest first' : 'Oldest first'
+}
+
 export function DashboardScreen({
   view,
   largest,
   recent,
   results,
-  term,
+  filters,
   error,
   cleanup,
   actions
@@ -136,16 +161,20 @@ export function DashboardScreen({
             <input
               className="search"
               type="search"
-              value={term}
+              value={filters.term}
               placeholder="Find a file by name"
               aria-label="Find a file by name"
               onChange={(event) => actions.setTerm(event.target.value)}
             />
+            <FilterBar view={view} filters={filters} actions={actions} />
             {results !== null &&
-              (results.length === 0 ? (
-                <p className="muted">Nothing matches “{term.trim()}”.</p>
+              (results.total === 0 ? (
+                <p className="muted">Nothing matches these filters.</p>
               ) : (
-                <FileList files={results} actions={actions} />
+                <>
+                  <FileList files={results.rows} actions={actions} />
+                  <ListFoot page={results} onMore={actions.showMoreResults} />
+                </>
               ))}
           </section>
 
@@ -153,17 +182,122 @@ export function DashboardScreen({
             <div className="two-col">
               <section className="dash-section" aria-label="Largest files">
                 <h2 className="section-title">Largest</h2>
-                <FileList files={largest} actions={actions} />
+                <FileList files={largest.rows} actions={actions} />
+                <ListFoot page={largest} onMore={actions.showMoreLargest} />
               </section>
               <section className="dash-section" aria-label="Recently changed files">
                 <h2 className="section-title">Recently changed</h2>
-                <FileList files={recent} actions={actions} />
+                <FileList files={recent.rows} actions={actions} />
+                <ListFoot page={recent} onMore={actions.showMoreRecent} />
               </section>
             </div>
           )}
 
           {results === null && <Cleanup cleanup={cleanup} actions={actions} />}
         </>
+      )}
+    </div>
+  )
+}
+
+function FilterBar({
+  view,
+  filters,
+  actions
+}: {
+  view: LibraryView
+  filters: SearchFilters
+  actions: LibraryActions
+}): React.JSX.Element {
+  return (
+    <div className="filters">
+      <div className="chips" role="group" aria-label="Categories">
+        {CATEGORY_ORDER.map((category) => {
+          const on = filters.categories.includes(category)
+          return (
+            <button
+              key={category}
+              className={`chip${on ? ' on' : ''}`}
+              aria-pressed={on}
+              onClick={() => actions.toggleCategory(category)}
+            >
+              <span className={`legend-dot ${category}`} />
+              {CATEGORY_LABELS[category]}
+            </button>
+          )
+        })}
+      </div>
+      <select
+        className="select"
+        aria-label="Drive"
+        value={filters.drive ?? ''}
+        onChange={(event) =>
+          actions.setDrive(event.target.value === '' ? null : event.target.value)
+        }
+      >
+        <option value="">All drives</option>
+        {view.drives.map((drive) => (
+          <option key={drive.drive} value={drive.drive}>
+            {drive.drive}
+          </option>
+        ))}
+      </select>
+      <select
+        className="select"
+        aria-label="Size"
+        value={filters.minSize === null ? '' : String(filters.minSize)}
+        onChange={(event) =>
+          actions.setMinSize(event.target.value === '' ? null : Number(event.target.value))
+        }
+      >
+        {SIZE_OPTIONS.map((option) => (
+          <option key={option.label} value={option.bytes === null ? '' : String(option.bytes)}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <select
+        className="select"
+        aria-label="Sort by"
+        value={filters.sort}
+        onChange={(event) => actions.setSort(event.target.value as LibrarySort)}
+      >
+        {(Object.keys(SORT_LABELS) as LibrarySort[]).map((sort) => (
+          <option key={sort} value={sort}>
+            {SORT_LABELS[sort]}
+          </option>
+        ))}
+      </select>
+      <button className="btn btn-small" onClick={actions.toggleDirection}>
+        {directionLabel(filters.sort, filters.direction)}
+      </button>
+      {filtersActive(filters) && (
+        <button className="btn btn-small" onClick={actions.clearFilters}>
+          Clear
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** "Showing 25 of 1,284" and, while there is more, a button to load the next page. */
+function ListFoot({
+  page,
+  onMore
+}: {
+  page: LibraryFilePage
+  onMore: () => void
+}): React.JSX.Element | null {
+  if (page.total === 0) return null
+  return (
+    <div className="list-foot">
+      <span className="muted">
+        Showing {page.rows.length.toLocaleString()} of {page.total.toLocaleString()}
+      </span>
+      {page.rows.length < page.total && (
+        <button className="btn btn-small" onClick={onMore}>
+          Show more
+        </button>
       )}
     </div>
   )
@@ -299,34 +433,52 @@ function Cleanup({
           {cleanup.folders.length === 0 ? (
             <p className="muted">Nothing indexed yet.</p>
           ) : (
-            <ul className="files">
-              {cleanup.folders.map((folder) => (
-                <li className="file-row" key={folder.folder}>
-                  <FolderIcon size={16} />
-                  <span className="file-name" title={folder.folder}>
-                    {shortenPath(folder.folder)}
-                  </span>
-                  <span className="muted file-folder">{formatCount(folder.files)}</span>
-                  <span className="muted">{formatBytes(folder.bytes)}</span>
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="files">
+                {cleanup.folders.map((folder) => (
+                  <li className="file-row" key={folder.folder}>
+                    <FolderIcon size={16} />
+                    <span className="file-name" title={folder.folder}>
+                      {shortenPath(folder.folder)}
+                    </span>
+                    <span className="muted file-folder">{formatCount(folder.files)}</span>
+                    <span className="muted">{formatBytes(folder.bytes)}</span>
+                  </li>
+                ))}
+              </ul>
+              {cleanup.folders.length >= cleanup.folderLimit && (
+                <div className="list-foot">
+                  <button className="btn btn-small" onClick={actions.showMoreFolders}>
+                    Show more folders
+                  </button>
+                </div>
+              )}
+            </>
           )}
 
           <h3 className="sub-title">Possible duplicates</h3>
           {cleanup.duplicates.length === 0 ? (
             <p className="muted">No files share a name and size.</p>
           ) : (
-            <ul className="dupes">
-              {cleanup.duplicates.map((group) => (
-                <DuplicateGroupRow
-                  key={duplicateKey(group.name, group.size)}
-                  group={group}
-                  cleanup={cleanup}
-                  actions={actions}
-                />
-              ))}
-            </ul>
+            <>
+              <ul className="dupes">
+                {cleanup.duplicates.map((group) => (
+                  <DuplicateGroupRow
+                    key={duplicateKey(group.name, group.size)}
+                    group={group}
+                    cleanup={cleanup}
+                    actions={actions}
+                  />
+                ))}
+              </ul>
+              {cleanup.duplicates.length >= cleanup.duplicateLimit && (
+                <div className="list-foot">
+                  <button className="btn btn-small" onClick={actions.showMoreDuplicates}>
+                    Show more duplicates
+                  </button>
+                </div>
+              )}
+            </>
           )}
 
           <h3 className="sub-title">Not touched in {Math.round(STALE_DAYS / 30)} months</h3>

@@ -2,12 +2,13 @@
  * The stats and favorites contract, shared like `shuffler.ts` and `library.ts`. The renderer
  * imports only types; main and preload use the channel names.
  */
-import type { LibraryFile } from './library'
+import type { LibraryFile, LibrarySort } from './library'
 
 export const STATS_CHANNELS = {
   getView: 'stats:get-view',
   addFavorite: 'stats:add-favorite',
   removeFavorite: 'stats:remove-favorite',
+  neverPlayed: 'stats:never-played',
   /** Main → renderer: a new `StatsView`. */
   view: 'stats:view'
 } as const
@@ -55,5 +56,7 @@ export interface StatsApi {
   /** Stars a file the app already knows, from the index or play history. */
   addFavorite(path: string): Promise<StatsView>
   removeFavorite(path: string): Promise<StatsView>
+  /** More of the never-played list, in a chosen order. */
+  neverPlayed(limit: number, sort: LibrarySort): Promise<LibraryFile[]>
   onView(listener: (view: StatsView) => void): () => void
 }

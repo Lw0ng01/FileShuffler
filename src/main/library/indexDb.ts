@@ -124,6 +124,41 @@ export interface FavoriteRow {
   addedAt: number
 }
 
+export type FileSort = 'size' | 'modified' | 'name'
+
+/** A filtered, sorted page of indexed files. Every field is optional. */
+export interface FileQuery {
+  /** Part of the file name. */
+  term?: string
+  categories?: readonly Category[]
+  drives?: readonly string[]
+  minSize?: number
+  maxSize?: number
+  sort?: FileSort
+  direction?: 'asc' | 'desc'
+  offset?: number
+  limit?: number
+}
+
+export interface FilePage {
+  rows: FileRow[]
+  /** Every file matching the filters, not just this page. */
+  total: number
+}
+
+/**
+ * The only columns a query can sort by. Sorting is chosen from this table, never from text the
+ * renderer sends, so a query can't carry SQL of its own.
+ */
+const SORT_COLUMNS: Record<FileSort, string> = {
+  size: 'size',
+  modified: 'modified_ms',
+  name: 'name collate nocase'
+}
+
+/** Rows one query may return. Enough for "show more" without loading a whole library at once. */
+const MAX_PAGE = 500
+
 type Row = Record<string, unknown>
 
 function text(value: unknown): string {
@@ -319,6 +354,56 @@ export class IndexDb {
       .map((row) => toFileRow(row as Row))
   }
 
+  /**
+   * Files matching every given filter, sorted and paged, with the total that match. Filters are
+   * bound as parameters and the sort comes from `SORT_COLUMNS`, so nothing from the query is ever
+   * spliced into the SQL text.
+   */
+  queryFiles(query: FileQuery = {}): FilePage {
+    const where: string[] = []
+    const params: (string | number)[] = []
+
+    const term = query.term?.trim() ?? ''
+    if (term.length > 0) {
+      where.push(`name like ? escape '\\'`)
+      params.push(likePattern(term))
+    }
+    if (query.categories !== undefined && query.categories.length > 0) {
+      where.push(`category in (${query.categories.map(() => '?').join(', ')})`)
+      params.push(...query.categories)
+    }
+    if (query.drives !== undefined && query.drives.length > 0) {
+      where.push(`drive in (${query.drives.map(() => '?').join(', ')})`)
+      params.push(...query.drives)
+    }
+    if (query.minSize !== undefined) {
+      where.push('size >= ?')
+      params.push(Math.max(0, Math.trunc(query.minSize)))
+    }
+    if (query.maxSize !== undefined) {
+      where.push('size <= ?')
+      params.push(Math.max(0, Math.trunc(query.maxSize)))
+    }
+
+    const clause = where.length > 0 ? `where ${where.join(' and ')}` : ''
+    const column = SORT_COLUMNS[query.sort ?? 'modified']
+    const direction = query.direction === 'asc' ? 'asc' : 'desc'
+    const limit = Math.min(MAX_PAGE, Math.max(1, Math.trunc(query.limit ?? 50)))
+    const offset = Math.max(0, Math.trunc(query.offset ?? 0))
+
+    const totalRow = this.db
+      .prepare(`select count(*) as total from files ${clause}`)
+      .get(...params) as Row | undefined
+    const rows = this.db
+      .prepare(
+        `select * from files ${clause} order by ${column} ${direction}, path limit ? offset ?`
+      )
+      .all(...params, limit, offset)
+      .map((row) => toFileRow(row as Row))
+
+    return { rows, total: count(totalRow?.['total']) }
+  }
+
   /** Name search. SQLite's LIKE ignores case for ASCII; other alphabets match exactly. */
   search(term: string, limit = 50): FileRow[] {
     if (term.trim().length === 0) return []
@@ -418,13 +503,22 @@ export class IndexDb {
     return this.playedFiles('last_played desc, path', limit)
   }
 
-  /** Indexed videos with no play on record, newest first. */
-  neverPlayed(limit = 20): FileRow[] {
+  /**
+   * Indexed videos with no play on record. Newest first by default; biggest first or A to Z on
+   * request, with the direction that makes sense for each.
+   */
+  neverPlayed(limit = 20, sort: FileSort = 'modified'): FileRow[] {
+    const order =
+      sort === 'size'
+        ? 'f.size desc'
+        : sort === 'name'
+          ? 'f.name collate nocase asc'
+          : 'f.modified_ms desc'
     return this.db
       .prepare(
         `select * from files f
          where f.category = 'video' and not exists (select 1 from plays p where p.path = f.path)
-         order by f.modified_ms desc, f.path limit ?`
+         order by ${order}, f.path limit ?`
       )
       .all(Math.max(1, Math.trunc(limit)))
       .map((row) => toFileRow(row as Row))

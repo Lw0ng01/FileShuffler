@@ -3,6 +3,8 @@ import type {
   LibraryDrive,
   LibraryDuplicateGroup,
   LibraryFile,
+  LibraryFilePage,
+  LibraryFileQuery,
   LibraryFolder,
   LibraryView,
   ScanProgressView
@@ -147,6 +149,10 @@ export class IndexerService {
 
   search(term: string, limit?: number): LibraryFile[] {
     return this.deps.db.search(term, limit)
+  }
+
+  query(query: LibraryFileQuery): LibraryFilePage {
+    return this.deps.db.queryFiles(query)
   }
 
   biggestFolders(limit?: number): LibraryFolder[] {

@@ -20,6 +20,7 @@ export const LIBRARY_CHANNELS = {
   duplicates: 'library:duplicates',
   notTouched: 'library:not-touched',
   checkDuplicate: 'library:check-duplicate',
+  query: 'library:query',
   /** Main → renderer: a new `LibraryView`. */
   view: 'library:view'
 } as const
@@ -85,6 +86,27 @@ export interface LibraryDigest {
   digest: string | null
 }
 
+export type LibrarySort = 'size' | 'modified' | 'name'
+
+/** Filters, sort and page for browsing the index. Every field is optional. */
+export interface LibraryFileQuery {
+  term?: string
+  categories?: LibraryCategory[]
+  drives?: string[]
+  minSize?: number
+  maxSize?: number
+  sort?: LibrarySort
+  direction?: 'asc' | 'desc'
+  offset?: number
+  limit?: number
+}
+
+export interface LibraryFilePage {
+  rows: LibraryFile[]
+  /** Every file matching the filters, so the UI can say "showing 50 of 1,284". */
+  total: number
+}
+
 export interface ScanProgressView {
   folders: number
   files: number
@@ -142,5 +164,7 @@ export interface LibraryApi {
   notTouched(days?: number, limit?: number): Promise<LibraryFile[]>
   /** Reads a group's files and fingerprints each, to confirm they really are copies. */
   checkDuplicate(name: string, size: number): Promise<LibraryDigest[]>
+  /** Filtered, sorted, paged browsing of the whole index. */
+  query(query: LibraryFileQuery): Promise<LibraryFilePage>
   onView(listener: (view: LibraryView) => void): () => void
 }

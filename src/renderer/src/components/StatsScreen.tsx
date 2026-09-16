@@ -1,11 +1,19 @@
+import type { LibrarySort } from '../../../shared/library'
 import type { StatsView } from '../../../shared/stats'
 import { formatBytes, formatCount, formatWhen, shortenPath } from '../format'
 import type { LibraryActions } from '../hooks/useLibrary'
-import type { StatsActions } from '../hooks/useStats'
+import type { NeverPlayedList, StatsActions } from '../hooks/useStats'
+
+const NEVER_PLAYED_SORTS: { sort: LibrarySort; label: string }[] = [
+  { sort: 'modified', label: 'Newest first' },
+  { sort: 'size', label: 'Largest first' },
+  { sort: 'name', label: 'A to Z' }
+]
 
 interface Props {
   view: StatsView | null
   favorites: ReadonlySet<string>
+  neverPlayed: NeverPlayedList
   error: string | null
   actions: StatsActions
   /** Open and Show come from the library, which checks the path is one the app knows. */
@@ -25,6 +33,7 @@ interface RowProps {
 export function StatsScreen({
   view,
   favorites,
+  neverPlayed,
   error,
   actions,
   fileActions
@@ -135,24 +144,48 @@ export function StatsScreen({
       </div>
 
       <section className="dash-section" aria-label="Never played">
-        <h2 className="section-title">Never played</h2>
-        {view.neverPlayed.length === 0 ? (
+        <div className="section-head">
+          <h2 className="section-title">Never played</h2>
+          <select
+            className="select"
+            aria-label="Sort never played"
+            value={neverPlayed.sort}
+            onChange={(event) => actions.setNeverPlayedSort(event.target.value as LibrarySort)}
+          >
+            {NEVER_PLAYED_SORTS.map((option) => (
+              <option key={option.sort} value={option.sort}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        {neverPlayed.rows.length === 0 ? (
           <p className="muted">
             Every indexed video has played at least once, or nothing is indexed yet.
           </p>
         ) : (
-          <ul className="files">
-            {view.neverPlayed.map((file) => (
-              <StatRow
-                key={file.path}
-                path={file.path}
-                name={file.name}
-                folder={file.folder}
-                detail={formatBytes(file.size)}
-                {...row}
-              />
-            ))}
-          </ul>
+          <>
+            <ul className="files">
+              {neverPlayed.rows.map((file) => (
+                <StatRow
+                  key={file.path}
+                  path={file.path}
+                  name={file.name}
+                  folder={file.folder}
+                  detail={formatBytes(file.size)}
+                  {...row}
+                />
+              ))}
+            </ul>
+            {neverPlayed.hasMore && (
+              <div className="list-foot">
+                <span className="muted">Showing {neverPlayed.rows.length.toLocaleString()}</span>
+                <button className="btn btn-small" onClick={actions.showMoreNeverPlayed}>
+                  Show more
+                </button>
+              </div>
+            )}
+          </>
         )}
       </section>
     </div>
