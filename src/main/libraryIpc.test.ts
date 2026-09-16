@@ -30,7 +30,9 @@ function setup(trusted = true): { ipc: FakeIpc; backend: LibraryBackend; unregis
   const ipc = new FakeIpc()
   const backend = {
     getView: vi.fn(),
+    refreshDriveSpace: vi.fn(async () => {}),
     addRoot: vi.fn(),
+    chooseRoot: vi.fn(),
     removeRoot: vi.fn(),
     scanAll: vi.fn(),
     cancelScan: vi.fn(),
@@ -43,10 +45,12 @@ function setup(trusted = true): { ipc: FakeIpc; backend: LibraryBackend; unregis
 }
 
 describe('registerLibraryIpc', () => {
-  it('forwards each command to the indexer', () => {
+  it('forwards each command to the indexer', async () => {
     const { ipc, backend } = setup()
-    ipc.invoke(LIBRARY_CHANNELS.getView)
+    // getView refreshes drive capacity first, so its handler is async and has to be awaited.
+    await ipc.invoke(LIBRARY_CHANNELS.getView)
     ipc.invoke(LIBRARY_CHANNELS.addRoot, 'D:\\Videos')
+    ipc.invoke(LIBRARY_CHANNELS.chooseRoot)
     ipc.invoke(LIBRARY_CHANNELS.removeRoot, 'D:\\Videos')
     ipc.invoke(LIBRARY_CHANNELS.scan)
     ipc.invoke(LIBRARY_CHANNELS.cancelScan)
@@ -54,8 +58,10 @@ describe('registerLibraryIpc', () => {
     ipc.invoke(LIBRARY_CHANNELS.recent)
     ipc.invoke(LIBRARY_CHANNELS.search, 'beach', 5)
 
+    expect(backend.refreshDriveSpace).toHaveBeenCalledTimes(1)
     expect(backend.getView).toHaveBeenCalledTimes(1)
     expect(backend.addRoot).toHaveBeenCalledWith('D:\\Videos')
+    expect(backend.chooseRoot).toHaveBeenCalledTimes(1)
     expect(backend.removeRoot).toHaveBeenCalledWith('D:\\Videos')
     expect(backend.scanAll).toHaveBeenCalledTimes(1)
     expect(backend.cancelScan).toHaveBeenCalledTimes(1)

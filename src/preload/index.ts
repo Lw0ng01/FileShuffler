@@ -27,6 +27,7 @@ const shuffler: ShufflerApi = {
 const library: LibraryApi = {
   getView: () => ipcRenderer.invoke(LIBRARY_CHANNELS.getView),
   addRoot: (path) => ipcRenderer.invoke(LIBRARY_CHANNELS.addRoot, path),
+  chooseRoot: () => ipcRenderer.invoke(LIBRARY_CHANNELS.chooseRoot),
   removeRoot: (path) => ipcRenderer.invoke(LIBRARY_CHANNELS.removeRoot, path),
   scan: () => ipcRenderer.invoke(LIBRARY_CHANNELS.scan),
   cancelScan: () => ipcRenderer.invoke(LIBRARY_CHANNELS.cancelScan),

@@ -7,6 +7,7 @@
 export const LIBRARY_CHANNELS = {
   getView: 'library:get-view',
   addRoot: 'library:add-root',
+  chooseRoot: 'library:choose-root',
   removeRoot: 'library:remove-root',
   scan: 'library:scan',
   cancelScan: 'library:cancel-scan',
@@ -36,8 +37,12 @@ export interface LibraryTotal {
 
 export interface LibraryDrive {
   drive: string
+  /** Files indexed on this drive, and their total size. */
   files: number
   bytes: number
+  /** Capacity from the filesystem, or null when it couldn't be read (an unplugged drive). */
+  total: number | null
+  free: number | null
 }
 
 export interface LibraryFile {
@@ -85,6 +90,8 @@ export interface LibraryApi {
   getView(): Promise<LibraryView>
   /** Adds a folder to index. Ignored if it is already there. */
   addRoot(path: string): Promise<LibraryView>
+  /** Opens the folder picker and indexes what was chosen. Unchanged if cancelled. */
+  chooseRoot(): Promise<LibraryView>
   /** Forgets a folder and everything indexed under it. */
   removeRoot(path: string): Promise<LibraryView>
   /** Indexes every root. Resolves when the scan finishes or is cancelled. */

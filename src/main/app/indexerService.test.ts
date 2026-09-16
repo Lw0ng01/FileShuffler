@@ -51,6 +51,61 @@ function setup(deps: Partial<IndexerServiceDeps> = {}): {
   return { service, db, views }
 }
 
+describe('IndexerService drives and folder picking', () => {
+  it('indexes the folder the picker returns', async () => {
+    const pickFolder = vi.fn(async () => 'D:\\Videos')
+    const { service } = setup({ pickFolder })
+
+    await service.chooseRoot()
+    expect(service.getView().roots.map((root) => root.path)).toEqual(['D:\\Videos'])
+  })
+
+  it('changes nothing when the picker is cancelled', async () => {
+    const pickFolder = vi.fn(async () => null)
+    const { service } = setup({ pickFolder })
+
+    await service.chooseRoot()
+    expect(pickFolder).toHaveBeenCalledTimes(1)
+    expect(service.getView().roots).toEqual([])
+  })
+
+  it('shows each drive’s size and free space alongside what was indexed', async () => {
+    const scan = fakeScan({
+      'D:\\Videos': [scanFile('D:\\Videos\\a.mp4', 'D:\\Videos', { size: 8 })]
+    })
+    const { service } = setup({
+      scan,
+      driveSpace: async () => ({ total: 1000, free: 400 })
+    })
+    service.addRoot('D:\\Videos')
+    await service.scanAll()
+
+    expect(service.getView().drives).toEqual([
+      { drive: 'D:', files: 1, bytes: 8, total: 1000, free: 400 }
+    ])
+  })
+
+  it('lists a drive that has a root but nothing indexed yet', async () => {
+    const { service } = setup({ driveSpace: async () => ({ total: 500, free: 100 }) })
+    service.addRoot('E:\\Photos')
+    await service.refreshDriveSpace()
+
+    expect(service.getView().drives).toEqual([
+      { drive: 'E:', files: 0, bytes: 0, total: 500, free: 100 }
+    ])
+  })
+
+  it('leaves capacity empty when a drive cannot be read, rather than failing', async () => {
+    const { service } = setup({ driveSpace: async () => null })
+    service.addRoot('Z:\\Unplugged')
+    await service.refreshDriveSpace()
+
+    expect(service.getView().drives).toEqual([
+      { drive: 'Z:', files: 0, bytes: 0, total: null, free: null }
+    ])
+  })
+})
+
 describe('IndexerService', () => {
   it('starts empty and offers the default folders only when nothing is indexed', () => {
     const { service, db } = setup({ defaultRoots: () => ['D:\\Videos', 'D:\\Pictures'] })

@@ -470,6 +470,166 @@ kbd {
   margin-left: auto;
 }
 
+/* Dashboard */
+
+.dash-section {
+  margin-top: 22px;
+}
+
+.two-col {
+  display: grid;
+  gap: 22px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.drive-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.drive-card {
+  gap: 8px;
+  padding: 14px 16px;
+}
+
+.drive-line {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.meter {
+  position: relative;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.meter-used,
+.meter-indexed {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+}
+
+.meter-used {
+  background: var(--border-strong);
+}
+
+/* Drawn over the used bar: how much of the drive this app has catalogued. */
+.meter-indexed {
+  background: var(--accent);
+}
+
+.split {
+  display: flex;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.split-part.video,
+.legend-dot.video {
+  background: var(--accent);
+}
+
+.split-part.photo,
+.legend-dot.photo {
+  background: var(--success);
+}
+
+.split-part.audio,
+.legend-dot.audio {
+  background: var(--warning);
+}
+
+.split-part.document,
+.legend-dot.document {
+  background: var(--faint);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin: 10px 0 0;
+  padding: 0;
+  font-size: 13px;
+  list-style: none;
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.legend-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+}
+
+.roots,
+.files {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.root-row,
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 2px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.root-path,
+.file-name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.root-row .muted,
+.file-folder {
+  overflow: hidden;
+  margin-left: auto;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-folder {
+  max-width: 45%;
+}
+
+.file-row .muted:last-child {
+  margin-left: 0;
+}
+
+.search {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--raised);
+  color: var(--text);
+  font: inherit;
+}
+
+.search:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 /* Undo toasts */
 
 .toasts {
