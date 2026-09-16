@@ -62,6 +62,27 @@ describe('IndexDb', () => {
     expect(db.largest(5)[0]).toMatchObject({ path: 'D:\\Media\\a.mp4', size: 900 })
   })
 
+  it('keeps an unchanged file through a rescan and updates one whose date changed', () => {
+    const first = db.startScan()
+    db.putFiles(first, [
+      file('D:\\Media\\same.mp4', { size: 100, modifiedMs: 1 }),
+      file('D:\\Media\\touched.mp4', { size: 100, modifiedMs: 1 })
+    ])
+    db.finishRoot('D:\\Media', first)
+
+    const second = db.startScan()
+    db.putFiles(second, [
+      file('D:\\Media\\same.mp4', { size: 100, modifiedMs: 1 }),
+      file('D:\\Media\\touched.mp4', { size: 100, modifiedMs: 5 })
+    ])
+    // Neither file may be swept: the unchanged one was still marked as seen by this scan.
+    expect(db.finishRoot('D:\\Media', second)).toEqual({ removed: 0 })
+
+    const byName = new Map(db.recent(10).map((row) => [row.name, row]))
+    expect(byName.get('same.mp4')?.modifiedMs).toBe(1)
+    expect(byName.get('touched.mp4')?.modifiedMs).toBe(5)
+  })
+
   it('forgets files a rescan no longer finds, leaving other roots alone', () => {
     db.addRoot('E:\\Photos')
     const first = db.startScan()

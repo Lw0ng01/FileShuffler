@@ -22,8 +22,11 @@ session starts without earlier chats or local memory. This section, the rest of 
   and Delete with a 5-second undo before trashing. See §2, §3, §4 and §6 (Implementation notes).
 - The Windows desktop is set up: Node 24.21, npm 11.19, Git 2.55 and mpv 0.41 from winget
   (§5 Existing setup notes). `npm ci`, typecheck and Electron 44.3.0 work.
-- `npm test` runs 253 unit tests. Seven more run against a real mpv when `MPV_PATH` is set. All
-  260 pass on Windows.
+- `npm test` runs 258 unit tests. Seven more run against a real mpv when `MPV_PATH` is set. All
+  265 pass on Windows.
+- Features are frozen for v1. The agreed order from here is packaging (done, apart from a
+  clean-machine test), measure and harden (in progress), a small refactor, then the front end
+  (§7 working order).
 - Checked on Windows with disposable clips (§2 How delete is implemented, §4 Implementation):
   - mpv's named pipe, loads, end of file, key bindings and unload-until-idle (the real-mpv tests).
   - `shell.trashItem` sent clips to the Recycle Bin on the internal NTFS drive and on an external
@@ -144,6 +147,12 @@ wrong. Error messages, the first run and the installer all have to stand on thei
 5. **Skip system locations:** `C:\Windows`, `Program Files*`, `ProgramData`, `AppData`,
    `$Recycle.Bin`, `System Volume Information`, `/System`, `/Library`, `~/Library`,
    `/Applications`, hidden/dot folders, `node_modules`, `.git`.
+   - Program installs are skipped **on any drive**, not just the system drive: `Program Files`,
+     `Program Files (x86)`, `WindowsApps`, `steamapps`. So are developer tool folders:
+     `site-packages`, `__pycache__`, and any folder containing `pyvenv.cfg` (a Python virtual
+     environment). Measured reasons in §5 Measurements.
+   - Game folders with arbitrary names (for example `Riot Games`) can't be recognised by name; see
+     §9 on a folder-exclusion setting.
 6. **Don't follow symlinks or junctions.** Windows AppData junctions can cause infinite loops.
 7. **Fully local.** No network calls, no telemetry. Thumbnail and index caches stay on the machine
    and can be cleared from settings. (Talking to a local player over its local control channel is
@@ -516,6 +525,50 @@ Persist per-folder progress separately from the UI and recover safely from inval
 - Keep short design notes explaining the chosen tradeoffs, including the native-player prototype.
   Architecture is demonstrated through behavior, tests, and measured results, not folder count.
 
+### Measurements (2026-09-16, measure and harden)
+
+Run in plain Node against the real scanner and index store. Speed transfers to the app; memory does
+not (the benchmarks hold their test data), so a packaged-app memory baseline is still to do.
+
+**Real drives, read-only scans** (Lucas's PC; totals only were recorded):
+- External drive F: 10 folders, 1,928 files (847 GB) in 0.9 s.
+- Second drive D: 6,306 folders in 1.4 s, about 4,400 folders a second. **99% of those folders were
+  program and game installs** (`Program Files (x86)`, `Program Files`, two game folders): adding D:
+  would have indexed about 20,000 game and program files (66 GB) as personal media.
+- User profile: 9,197 folders in 1.8 s. **82% were Python libraries** inside 24 virtual environments
+  under Documents.
+- Scanning is not the bottleneck; what gets scanned was. Both findings changed the skip rules (§2.5).
+
+**Synthetic libraries** (realistic names, duplicates, folders and sizes), before → after the changes:
+
+| | 250,000 before | 250,000 after | 1,000,000 before | 1,000,000 after |
+|---|---|---|---|---|
+| First full index | 37.4 s | 14.9 s | 213 s | 125 s |
+| Rescan, 1% gone | 28.4 s | 1.9 s | 146 s | 8.6 s |
+| Duplicate candidates | 1,391 ms | 36 ms | 4,419 ms | 176 ms |
+| Name search, page 3 | 103 ms | 45 ms | 380 ms | 259 ms |
+| Totals by category + drive | 229 ms | 126 ms, cached | 812 ms | 927 ms, cached |
+| Biggest folders | 158 ms | 172 ms | 614 ms | 930 ms |
+| Database size | 79 MB | 88 MB | 306 MB | 349 MB |
+
+What changed, each chosen by comparing variants on the same 250,000-file library:
+- A 64 MB SQLite page cache, in-memory temporary tables, and scanner batches of 2,000 instead of
+  500: first index 30 s → 12 s, rescan 19 s → 10 s.
+- A `(name, size)` index for duplicates, plus an upsert that rewrites a file only when it changed
+  and otherwise just marks it seen. Indexes alone made rescans *slower* (four indexes: 33 s),
+  because rewriting every column rewrites every index entry; leaving unchanged rows alone took the
+  rescan to 2 s. A `folder` index for biggest folders didn't help and was left out.
+- **Totals are cached.** Views are built every 200 ms during a scan, and recomputing category and
+  drive totals took about 120 ms of each 200 ms on 250,000 files, on the main process. They are now
+  recomputed only when the index changes.
+
+**Still to address:**
+- The database runs synchronously on Electron's main process, so a slow query freezes the window.
+  At a million files, totals after a change and the biggest-folders list each take about a second.
+  Moving database work to a worker thread belongs to the refactor step (§7 working order).
+- Not yet measured: the packaged app's startup time and memory, a delete on a removable USB stick
+  or network share, and a clean machine.
+
 References for implementation and review:
 - [Electron performance](https://www.electronjs.org/docs/latest/tutorial/performance)
 - [Electron security](https://www.electronjs.org/docs/latest/tutorial/security)
@@ -706,7 +759,9 @@ The front end comes last, as the least complex part. Two things that order depen
 **Where that leaves things** *(agreed 2026-09-16)*: features are frozen for v1. Next, in order:
 1. **Packaging spike** — installer, mpv, licensing, data folder, clean-machine test (§7 Phase 6).
 2. **Measure and harden** — a full-drive scan, a packaged-build performance baseline, deletes on a
-   USB stick or network share, and error paths on a machine that isn't Lucas's.
+   USB stick or network share, and error paths on a machine that isn't Lucas's. *Scan and index
+   measured and improved (§5 Measurements); the packaged-app baseline, the USB and network delete
+   tests, and the clean machine remain.*
 3. **A small refactor** where the code actually strains (`src/main/index.ts`, the dashboard screen,
    duplicated IPC test fakes). Not a rewrite.
 4. **Front end** — structure first (Cleanup as its own tab, starring from the dashboard, a
@@ -908,6 +963,10 @@ machines, not Lucas's.
    bundles mpv~~: no, decided 2026-09-16.
 5. A custom built-in player instead of mpv's window: Chromium video (custom look, fewer formats, no
    GPL duty) versus embedded libmpv (mpv's formats, GPL question returns). Decide with a prototype.
+6. A "folders to exclude" setting. Name-based rules catch program installs and Python environments,
+   but not game folders with arbitrary names (on Lucas's D:, `Riot Games` and another game made up
+   a real share of what a whole-drive scan walked). A new setting, so it waits for Lucas during the
+   feature freeze.
 
 ## 10. Change Log
 
@@ -1151,3 +1210,18 @@ machines, not Lucas's.
     folders. The spike showed both used `file-shuffler`. Lucas chose to keep them apart, so they are
     now pinned to `FileShuffler` and `FileShuffler Dev`, and the first development run copies the
     old folder's data across once, leaving the original as a backup.
+- **2026-09-16:** Measure and harden, part one: scanning and the index.
+  - **Real drives:** scanning is fast (about 4,400 folders a second), but on Lucas's D: 99% of the
+    folders walked were program and game installs, and 82% of his profile's were Python libraries
+    in 24 virtual environments. Program installs are now skipped on any drive, and so are
+    `site-packages`, `__pycache__` and folders holding `pyvenv.cfg` (§2.5).
+  - **Synthetic libraries at 250,000 and 1,000,000 files** exposed the real bottleneck: database
+    writes and queries on the main process. Changes were chosen by comparing variants on the same
+    data, not guessed: a larger SQLite cache and scanner batches, a `(name, size)` index, an upsert
+    that leaves unchanged files alone, and totals cached until the index changes. At 250,000 files a
+    rescan went from 28 s to 1.9 s and the duplicate check from 1.4 s to 36 ms (§5 Measurements).
+  - A tempting option was rejected by measurement: four indexes made queries fast but a rescan 33 s,
+    slower than before. So was a `folder` index, which didn't speed up biggest folders.
+  - Still open: database work on the main process (about 1 s freezes at a million files, for the
+    refactor step), a packaged-app memory and startup baseline, USB and network delete tests, the
+    clean machine, and whether to add a folder-exclusion setting for games (§9).

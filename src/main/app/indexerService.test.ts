@@ -371,6 +371,27 @@ describe('IndexerService', () => {
     expect(service.isScanning()).toBe(false)
   })
 
+  it('reuses totals between views, recomputing them only when the index changes', async () => {
+    const scan = fakeScan({
+      'D:\\Videos': [scanFile('D:\\Videos\\a.mp4', 'D:\\Videos', { size: 10 })]
+    })
+    const { service, db } = setup({ scan })
+    const byCategory = vi.spyOn(db, 'totalsByCategory')
+    service.addRoot('D:\\Videos')
+
+    for (let i = 0; i < 5; i++) service.getView()
+    expect(byCategory).toHaveBeenCalledTimes(1)
+
+    await service.scanAll()
+    expect(service.getView()).toMatchObject({ files: 1, bytes: 10 })
+    const afterScan = byCategory.mock.calls.length
+    for (let i = 0; i < 5; i++) service.getView()
+    expect(byCategory).toHaveBeenCalledTimes(afterScan)
+
+    service.removeRoot('D:\\Videos')
+    expect(service.getView()).toMatchObject({ files: 0, bytes: 0 })
+  })
+
   it('runs one scan at a time', async () => {
     let started = 0
     const scan = vi.fn(async (options: ScanOptions): Promise<ScanSummary> => {

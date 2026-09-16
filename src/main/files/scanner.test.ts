@@ -78,6 +78,25 @@ describe('scanRoots', () => {
     expect(files.map((entry) => entry.name)).toEqual(['keep.mp4'])
   })
 
+  it('skips a Python virtual environment, found by its pyvenv.cfg, and everything inside it', async () => {
+    await file(join(root, 'project', 'demo.mp4'))
+    await file(join(root, 'project', 'env', 'pyvenv.cfg'))
+    await file(join(root, 'project', 'env', 'sample.mp4'))
+    await file(join(root, 'project', 'env', 'Lib', 'package', 'test-clip.mp4'))
+
+    const { files } = await collect([root])
+    expect(files.map((entry) => entry.name)).toEqual(['demo.mp4'])
+  })
+
+  it('skips program folders on any drive by name', async () => {
+    await file(join(root, 'Program Files', 'App', 'intro.mp4'))
+    await file(join(root, 'Games', 'steamapps', 'common', 'trailer.mp4'))
+    await file(join(root, 'Videos', 'mine.mp4'))
+
+    const { files } = await collect([root])
+    expect(files.map((entry) => entry.name)).toEqual(['mine.mp4'])
+  })
+
   it('never follows links or junctions', async () => {
     await file(join(root, 'real', 'clip.mp4'))
     await mkdir(join(root, 'target'))
