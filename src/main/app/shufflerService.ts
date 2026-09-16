@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import type { ShufflerStatus, ShufflerView } from '../../shared/shuffler'
+import type { ShufflerStatus, ShufflerView, UndoResult } from '../../shared/shuffler'
 import { ShuffleSession, type RandomSource } from '../domain/shuffle'
 import type { FileIdentity } from '../files/fileIdentity'
 import type { PlaybackAdapter } from '../playback/types'
@@ -112,8 +112,8 @@ export class ShufflerService {
     this.coordinator.deleteCurrent()
   }
 
-  async undoDelete(id: string): Promise<void> {
-    this.coordinator?.undoDelete(id)
+  async undoDelete(id: string): Promise<UndoResult> {
+    return this.coordinator?.undoDelete(id) ?? 'unknown'
   }
 
   /** Closes the player and cancels deletes still in their undo window (PROJECT.md §2.3). */

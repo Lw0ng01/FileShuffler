@@ -1,3 +1,4 @@
+import type { UndoResult } from '../../shared/shuffler'
 import type { ShuffleSession, ShuffleStats } from '../domain/shuffle'
 import { sameFile, type FileIdentity } from '../files/fileIdentity'
 import type { PlaybackAdapter, PlaybackEvent } from '../playback/types'
@@ -172,14 +173,20 @@ export class ShuffleCoordinator {
     else this.next()
   }
 
-  /** Cancels a delete that is still in its undo window. The file becomes playable again. */
-  undoDelete(id: string): void {
+  /**
+   * Cancels a delete that is still in its undo window, making the file playable again, and says
+   * what happened so the UI can confirm it. Once the trash step has begun it can't be stopped
+   * (PROJECT.md §2.3), and an unknown name was already trashed or kept.
+   */
+  undoDelete(id: string): UndoResult {
     const entry = this.deletes.get(id)
-    if (entry === undefined || entry.trashing) return
+    if (entry === undefined) return 'unknown'
+    if (entry.trashing) return 'trashing'
     clearTimeout(entry.timer)
     this.deletes.delete(id)
     this.session.cancelDelete(id)
     this.emit()
+    return 'restored'
   }
 
   /**

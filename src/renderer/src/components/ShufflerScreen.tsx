@@ -8,6 +8,8 @@ interface Props {
   view: ShufflerView
   actions: ShufflerActions
   actionError: string | null
+  /** Short confirmation of what an action did, for example an Undo. Clears itself. */
+  actionNotice: string | null
 }
 
 const isMac = navigator.userAgent.includes('Mac')
@@ -19,7 +21,12 @@ function shortenPath(path: string): string {
   return parts.length <= 3 ? path : `…${separator}${parts.slice(-2).join(separator)}`
 }
 
-export function ShufflerScreen({ view, actions, actionError }: Props): React.JSX.Element {
+export function ShufflerScreen({
+  view,
+  actions,
+  actionError,
+  actionNotice
+}: Props): React.JSX.Element {
   useShortcuts(view, actions)
   const hasSession = view.status !== 'no-folder'
   const hasVideos = view.total > 0
@@ -61,6 +68,12 @@ export function ShufflerScreen({ view, actions, actionError }: Props): React.JSX
       {error !== null && (
         <div className="banner banner-error" role="alert">
           {error}
+        </div>
+      )}
+
+      {actionNotice !== null && (
+        <div className="banner banner-notice" role="status">
+          {actionNotice}
         </div>
       )}
 
@@ -117,7 +130,10 @@ export function ShufflerScreen({ view, actions, actionError }: Props): React.JSX
   )
 }
 
-function StatusCard({ view, actions }: Omit<Props, 'actionError'>): React.JSX.Element {
+function StatusCard({
+  view,
+  actions
+}: Omit<Props, 'actionError' | 'actionNotice'>): React.JSX.Element {
   switch (view.status) {
     case 'no-folder':
       return (

@@ -44,6 +44,15 @@ export interface ShufflerView {
   playerKeys: { next: string; back: string; delete: string }
 }
 
+/**
+ * What an Undo did:
+ * - `restored`: the file is back in the shuffle and will not be trashed
+ * - `trashing`: the undo window had ended and the trash step had begun, which can't be stopped
+ * - `unknown`: that name was no longer waiting to be deleted (already trashed, or kept because
+ *   something went wrong, in which case `lastError` explains it)
+ */
+export type UndoResult = 'restored' | 'trashing' | 'unknown'
+
 /** What the preload bridge exposes to the renderer as `window.api.shuffler`. */
 export interface ShufflerApi {
   getView(): Promise<ShufflerView>
@@ -54,7 +63,8 @@ export interface ShufflerApi {
   next(): Promise<void>
   back(): Promise<void>
   deleteCurrent(): Promise<void>
-  undoDelete(id: string): Promise<void>
+  /** Cancels a pending delete and reports what happened. */
+  undoDelete(id: string): Promise<UndoResult>
   /** Subscribes to view updates and returns an unsubscribe function. */
   onView(listener: (view: ShufflerView) => void): () => void
 }

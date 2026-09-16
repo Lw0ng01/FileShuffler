@@ -456,6 +456,12 @@ kbd {
   color: var(--text);
 }
 
+.banner-notice {
+  border: 1px solid transparent;
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
 /* Undo toasts */
 
 .toasts {

@@ -22,7 +22,7 @@ session starts without earlier chats or local memory. This section, the rest of 
   and Delete with a 5-second undo before trashing. See §2, §3, §4 and §6 (Implementation notes).
 - The Windows desktop is set up: Node 24.21, npm 11.19, Git 2.55 and mpv 0.41 from winget
   (§5 Existing setup notes). `npm ci`, typecheck and Electron 44.3.0 work.
-- `npm test` runs 101 unit tests. Six more run against a real mpv when `MPV_PATH` is set. All 107
+- `npm test` runs 103 unit tests. Six more run against a real mpv when `MPV_PATH` is set. All 109
   pass on Windows.
 - Checked on Windows with disposable clips (§2 How delete is implemented, §4 Implementation):
   - mpv's named pipe, loads, end of file, key bindings and unload-until-idle (the real-mpv tests).
@@ -30,7 +30,10 @@ session starts without earlier chats or local memory. This section, the rest of 
     exFAT drive. mpv doesn't lock a file it is playing.
   - Fixed: an unplugged drive looked like a deleted file, because Windows reports both as `ENOENT`.
 - Lucas ran the app on Windows (`npm run dev` from Command Prompt). Shuffling a small folder
-  worked, and a delete from the app landed in the Recycle Bin (external exFAT drive).
+  worked, and a delete from the app landed in the Recycle Bin (external exFAT drive). Undo, the
+  keys inside the mpv window, and a folder of about 1400 videos on that drive all worked too.
+- Undo now shows a short note saying what it did, because the toast used to just vanish
+  (§6 Implementation). The shuffle was also checked at 1400 videos (§3 Implementation).
 - The old Python shuffler was reviewed. It confirms §3's guess about why it felt bad.
 - Public repo: https://github.com/Lw0ng01/FileShuffler.
 - Commits use GitHub's private email. In a new clone, run
@@ -38,14 +41,14 @@ session starts without earlier chats or local memory. This section, the rest of 
   commit personal emails or local paths.
 
 **Next steps, in order**
-1. Finish the Windows click-through with `npm run dev`: a larger folder, `>`/`<`/`DEL` inside the
-   mpv window, and Undo. Choosing a small folder, shuffling, and a delete that lands in the Recycle
-   Bin already work.
-2. Try a delete where recycling isn't supported: a removable USB stick or a network share. It must
-   fail with an error and keep the file, never delete permanently. No such drive was at hand yet.
-3. Package for Windows: bundle mpv in `resources/mpv/` (see `findMpv.ts`), run
+1. Try a delete where recycling isn't supported: a removable USB stick or a network share. It must
+   fail with an error and keep the file, never delete permanently. Lucas's external drive doesn't
+   count: Windows treats it as a local disk and it has a Recycle Bin.
+2. Package for Windows: bundle mpv in `resources/mpv/` (see `findMpv.ts`), run
    `npm run build:win`, and test the installer on a machine without development tools.
-4. Record a first performance baseline and agree budgets (§5).
+3. Record a first performance baseline and agree budgets (§5).
+4. Consider remembering shuffle progress between launches (Phase 2). At 1400 videos a cycle is
+   long, so starting fresh on every launch undoes the coverage the shuffle is built around.
 
 **How it was tested without real videos**
 - mpv can generate test clips, for example
@@ -58,8 +61,8 @@ session starts without earlier chats or local memory. This section, the rest of 
 - On Windows a second throwaway Electron script (also not committed) played a copied clip in mpv
   over a named pipe (`--vo=null --ao=null`), tried a rename and `shell.trashItem` while it played,
   and trashed a clip on the external drive. Both clips were then found in the Recycle Bin.
-- Not yet exercised on Windows: Undo, keys inside the mpv window, a large folder, and drives that
-  can't recycle.
+- Not yet exercised on Windows: drives that can't recycle (a removable USB stick or a network
+  share).
 
 **Open decisions and known quirks**
 - Where mpv comes from in the packaged app: bundled or installed.
@@ -230,7 +233,18 @@ pure TypeScript: items are opaque string IDs, and randomness is injected.
   A mutation check confirmed the tests fail for a disabled seam rule and for Next that doesn't
   replay history. A sort-based shuffle is also rejected, but because it doesn't make exactly one
   random choice per step (the scripted source runs out), not because the test measures its bias.
-- **Not yet:** persisting progress between launches (Phase 2).
+- **Checked at Lucas's folder size** (2026-09-15, throwaway simulation of this engine with 1400
+  items and `Math.random`, not committed; 18 of 18 checks passed):
+  - 5 full cycles played all 1400 videos exactly once each, with no back-to-back repeat in 7000
+    plays and no overlap between a cycle's last 10 and the next cycle's first 10.
+  - Over 2000 cycle changes the closest two plays of one video were 11 apart. Per cycle change
+    about 0.8 / 3.5 / 14 videos return within 50 / 100 / 200 plays. Lucas reviewed these numbers
+    and decided to keep K as it is rather than widen the seam for large folders (2026-09-15).
+  - Every video was equally likely to play first and to land anywhere in the cycle, and play order
+    had no link to alphabetical (folder) order, so numbered episodes don't drift into sequence.
+  - Back/Next replay, the 500-entry history limit, and delete/undo mid-cycle all behaved.
+- **Not yet:** persisting progress between launches (Phase 2). With a folder this size that is
+  felt: closing the app starts a fresh cycle, so already-watched videos can return early.
 
 ### Possible upgrades (later)
 
@@ -479,8 +493,8 @@ Build the shuffler first, inside an app shell with a sidebar, so the dashboard s
     now playing (name and cycle progress), finished, or player closed (Reopen player).
   - **Controls:** Back / Next / Delete appear only once something has played, so the ready card's
     Start shuffle is the single main action.
-  - **Feedback:** an undo toast with a live countdown per pending delete, an error banner, key
-    reminders, and a recently played list.
+  - **Feedback:** an undo toast with a live countdown per pending delete, an error banner, a short
+    note confirming what an Undo did (it clears itself), key reminders, and a recently played list.
   - **In-app keys** (only while the window has focus, never global): → / ← next and back, Delete or
     ⌘/Ctrl+Backspace to delete, ⌘/Ctrl+Z to undo the latest delete.
   - Dark theme with a light variant that follows the system setting. System fonts only, so there
@@ -495,6 +509,8 @@ Build the shuffler first, inside an app shell with a sidebar, so the dashboard s
   command (`src/shared/shuffler.ts`).
   - `src/main/ipc.ts` rejects any caller other than the app window's top-level frame.
   - It checks arguments at runtime. The renderer never sends paths; Undo accepts only a name string.
+  - `undoDelete` answers `restored`, `trashing` or `unknown`, so the screen can confirm what
+    happened instead of the toast just vanishing.
 - **Finding mpv** (`findMpv.ts`), in order: `FILESHUFFLER_MPV`, `resources/mpv/` in a packaged app,
   common macOS install paths (apps opened from Finder don't get the shell PATH), then `mpv` on the
   PATH.
@@ -507,8 +523,9 @@ Build the shuffler first, inside an app shell with a sidebar, so the dashboard s
   - The → key worked.
   - The test folder was untouched, and mpv closed when the app quit.
 - **Run on Windows** by Lucas (2026-09-15, `npm run dev` from Command Prompt): shuffling a small
-  folder worked, and a delete from the app landed in the Recycle Bin (external exFAT drive).
-- **Not yet:** keyboard use inside the mpv window, Undo on Windows, and a larger folder.
+  folder worked, and a delete from the app landed in the Recycle Bin (external exFAT drive). A
+  later pass covered Undo, the keys inside the mpv window, and a folder of about 1400 videos.
+- **Not yet:** a delete from the UI on a drive that can't recycle (§2.2).
 
 Dashboard (later): row of drive cards (used/free), space-by-category bar, largest/recent file
 lists and an integrated player. Final video placement follows the embedding prototype; layout
@@ -731,3 +748,14 @@ is not designed in detail yet.
   - `npm run dev` had failed in PowerShell: the window predated the Node install, and Windows'
     default execution policy blocks `npm.ps1`. Noted in §5 and `CLAUDE.md`.
   - Not yet: Undo, keys inside the mpv window, a larger folder, and drives that can't recycle.
+- **2026-09-15:** Shuffle checked at 1400 videos, and Undo now says what it did.
+  - Lucas tested further on Windows: Undo, the keys inside the mpv window, and a folder of about
+    1400 videos on the external drive all worked. Only drives that can't recycle remain untested.
+  - A throwaway simulation drove the real engine with 1400 items and `Math.random`; 18 of 18 checks
+    passed (§3 Implementation). Lucas reviewed how soon a video can return at a cycle change and
+    kept the seam rule as it is.
+  - Lucas asked for a visible confirmation of Undo, because the toast simply disappeared.
+    `undoDelete` now returns `restored`, `trashing` or `unknown` through the coordinator, service,
+    IPC and preload, and the screen shows a short note that clears itself.
+  - An undo really can be too late: once the trash step starts it cannot be cancelled, so that case
+    says so rather than implying the file came back.
