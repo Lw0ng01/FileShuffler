@@ -5,6 +5,9 @@ Read `PROJECT.md` first. It holds the vision, safety rules (§2), shuffle design
 - Add a Change Log entry there for any major change or decision.
 - This file covers *how to work in the code*. Link to PROJECT.md instead of restating it here.
 
+This is headed for a public download other people install (PROJECT.md §1), so "works on Lucas's
+machine" isn't the bar: assume no mpv, unfamiliar drives, and nobody to ask when something breaks.
+
 Lucas wants a working shuffler first, then a dashboard with a custom built-in native player.
 Efficiency and good architecture matter too. Explain why non-obvious choices fit. Don't promise
 low memory use or migrate stacks for prestige: measurements and the embedded-player prototype
@@ -50,6 +53,8 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
   `C:\Program Files\MPV Player` or set `FILESHUFFLER_MPV`.
 - Windows PowerShell blocks `npm.ps1` under the default execution policy. Use Command Prompt or
   `npm.cmd` (PROJECT.md §5).
+- `npm run dev` and an installed build use different app-data folders (`file-shuffler` vs
+  `FileShuffler`), so saved cycle progress doesn't carry between them.
 
 ## Code rules
 
