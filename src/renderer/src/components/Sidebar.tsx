@@ -1,6 +1,6 @@
 import { DashboardIcon, SettingsIcon, ShuffleIcon, StatsIcon } from './Icons'
 
-export type Page = 'shuffle' | 'dashboard' | 'stats'
+export type Page = 'shuffle' | 'dashboard' | 'stats' | 'settings'
 
 interface Props {
   page: Page
@@ -40,10 +40,13 @@ export function Sidebar({ page, onNavigate }: Props): React.JSX.Element {
         <StatsIcon />
         Stats
       </button>
-      <button className="nav-item" disabled title="Planned for a later phase">
+      <button
+        className="nav-item"
+        aria-current={page === 'settings' ? 'page' : undefined}
+        onClick={() => onNavigate('settings')}
+      >
         <SettingsIcon />
         Settings
-        <span className="soon">Soon</span>
       </button>
     </nav>
   )

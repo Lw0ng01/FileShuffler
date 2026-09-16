@@ -4,21 +4,26 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { LIBRARY_CHANNELS } from '../shared/library'
 import { CHANNELS } from '../shared/shuffler'
+import { SETTINGS_CHANNELS } from '../shared/settings'
 import { STATS_CHANNELS } from '../shared/stats'
 import { IndexerService } from './app/indexerService'
+import { SettingsService } from './app/settingsService'
 import { ShufflerService } from './app/shufflerService'
 import { StatsService } from './app/statsService'
 import { IndexDb } from './library/indexDb'
 import { registerLibraryIpc } from './libraryIpc'
+import { registerSettingsIpc } from './settingsIpc'
 import { registerStatsIpc } from './statsIpc'
 import { readDriveSpace } from './files/driveSpace'
 import { fileDigest } from './files/fileDigest'
 import { readFileIdentity } from './files/fileIdentity'
 import { ProgressStore } from './files/progressStore'
+import { SettingsStore } from './files/settingsStore'
 import { listVideoFiles } from './files/videoFolder'
 import { registerShufflerIpc } from './ipc'
-import { findMpv } from './playback/mpv/findMpv'
+import { locateMpv, type MpvLocation } from './playback/mpv/findMpv'
 import { KEY_LABELS, launchMpv } from './playback/mpv/mpvPlayer'
+import { probeMpv } from './playback/mpv/probeMpv'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -33,6 +38,20 @@ stats.onView((view) => {
   }
 })
 
+// Settings and shuffle progress are separate small files, so clearing data never costs settings.
+const settingsStore = new SettingsStore(join(app.getPath('userData'), 'settings.json'))
+const progress = new ProgressStore(join(app.getPath('userData'), 'progress.json'))
+
+/** Where to find mpv, given what (if anything) was chosen in Settings (PROJECT.md §4). */
+function mpvLocation(chosen: string | null): MpvLocation {
+  return locateMpv({
+    env: process.env,
+    platform: process.platform,
+    resourcesPath: app.isPackaged ? process.resourcesPath : null,
+    chosen
+  })
+}
+
 const shuffler = new ShufflerService({
   pickFolder: async () => {
     const options: Electron.OpenDialogOptions = {
@@ -46,20 +65,15 @@ const shuffler = new ShufflerService({
     return result.canceled ? null : (result.filePaths[0] ?? null)
   },
   listVideos: listVideoFiles,
-  launchPlayer: () =>
-    launchMpv({
-      mpvPath: findMpv({
-        env: process.env,
-        platform: process.platform,
-        resourcesPath: app.isPackaged ? process.resourcesPath : null
-      })
-    }),
+  // Read at every launch, so a new choice in Settings applies to the next shuffle without a restart.
+  launchPlayer: async () =>
+    launchMpv({ mpvPath: mpvLocation((await settingsStore.get()).mpvPath).path }),
   // Rejects instead of deleting permanently when the item can't be recycled (PROJECT.md §2).
   trash: (path) => shell.trashItem(path),
   identify: readFileIdentity,
   playerKeys: KEY_LABELS,
   // Stays in the app's own data folder, never with the user's files (PROJECT.md §2.8).
-  progress: new ProgressStore(join(app.getPath('userData'), 'progress.json')),
+  progress,
   plays: {
     opened: (path, name, folder) => {
       indexDb.recordOpened(path, name, folder)
@@ -114,6 +128,50 @@ const library = new IndexerService({
 library.onView((view) => {
   if (mainWindow !== null && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(LIBRARY_CHANNELS.view, view)
+  }
+})
+
+const settings = new SettingsService({
+  store: settingsStore,
+  locate: mpvLocation,
+  probe: probeMpv,
+  // The system's own picker, so the page can never name a program for the app to run.
+  pickProgram: async () => {
+    const options: Electron.OpenDialogOptions = {
+      title: 'Choose the mpv program',
+      buttonLabel: 'Use this mpv',
+      properties: ['openFile'],
+      ...(process.platform === 'win32'
+        ? { filters: [{ name: 'Programs', extensions: ['exe'] }] }
+        : {})
+    }
+    const result = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, options)
+      : await dialog.showOpenDialog(options)
+    return result.canceled ? null : (result.filePaths[0] ?? null)
+  },
+  clear: {
+    plays: () => {
+      indexDb.clearPlays()
+      stats.notifyChanged()
+    },
+    favorites: () => {
+      indexDb.clearFavorites()
+      stats.notifyChanged()
+    },
+    progress: () => progress.clearAll(),
+    index: () => {
+      indexDb.clearIndex()
+      library.notifyChanged()
+      stats.notifyChanged()
+    }
+  },
+  isScanning: () => library.isScanning()
+})
+
+settings.onView((view) => {
+  if (mainWindow !== null && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(SETTINGS_CHANNELS.view, view)
   }
 })
 
@@ -186,6 +244,8 @@ app.whenReady().then(() => {
   registerShufflerIpc(ipcMain, shuffler, isTrustedSender)
   registerLibraryIpc(ipcMain, library, isTrustedSender)
   registerStatsIpc(ipcMain, stats, isTrustedSender)
+  registerSettingsIpc(ipcMain, settings, isTrustedSender)
+  void settings.load()
   library.addDefaultRoots()
   createWindow()
   // Reopens last time's folder where its cycle left off; the view updates when it's ready.

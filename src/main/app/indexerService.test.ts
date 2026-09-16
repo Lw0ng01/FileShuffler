@@ -356,6 +356,21 @@ describe('IndexerService', () => {
     })
   })
 
+  it('rescans a single folder, leaving the others alone', async () => {
+    const scan = fakeScan({
+      'D:\\Videos': [scanFile('D:\\Videos\\a.mp4', 'D:\\Videos')],
+      'D:\\Pictures': [scanFile('D:\\Pictures\\b.jpg', 'D:\\Pictures', { category: 'photo' })]
+    })
+    const { service } = setup({ scan })
+    service.addRoot('D:\\Videos')
+    service.addRoot('D:\\Pictures')
+
+    await service.scanRoot('D:\\Pictures')
+    expect(scan).toHaveBeenCalledTimes(1)
+    expect(scan.mock.calls[0]?.[0].roots).toEqual(['D:\\Pictures'])
+    expect(service.isScanning()).toBe(false)
+  })
+
   it('runs one scan at a time', async () => {
     let started = 0
     const scan = vi.fn(async (options: ScanOptions): Promise<ScanSummary> => {

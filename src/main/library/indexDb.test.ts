@@ -346,6 +346,30 @@ describe('IndexDb', () => {
     ])
   })
 
+  it('clears plays, favorites or indexed files without touching the others', () => {
+    const scan = db.startScan()
+    db.putFiles(scan, [file('D:\\Media\\a.mp4', { size: 5 })])
+    db.finishRoot('D:\\Media', scan)
+    db.recordOpened('D:\\Media\\a.mp4', 'a.mp4', 'D:\\Media', 1)
+    db.addFavorite('D:\\Media\\a.mp4', 'a.mp4', 'D:\\Media', 1)
+
+    db.clearPlays()
+    expect(db.playTotals().plays).toBe(0)
+    expect(db.favorites()).toHaveLength(1)
+    expect(db.fileCount()).toBe(1)
+
+    db.clearFavorites()
+    expect(db.favorites()).toEqual([])
+    expect(db.fileCount()).toBe(1)
+
+    db.clearIndex()
+    expect(db.fileCount()).toBe(0)
+    // The folder list stays, so a scan can rebuild what was cleared.
+    expect(db.roots()).toEqual([
+      expect.objectContaining({ path: 'D:\\Media', files: 0, bytes: 0, lastScanAt: null })
+    ])
+  })
+
   it('knows whether a path is in the index', () => {
     const scan = db.startScan()
     db.putFiles(scan, [file('D:\\Media\\a.mp4')])

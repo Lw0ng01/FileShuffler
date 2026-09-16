@@ -22,8 +22,8 @@ session starts without earlier chats or local memory. This section, the rest of 
   and Delete with a 5-second undo before trashing. See §2, §3, §4 and §6 (Implementation notes).
 - The Windows desktop is set up: Node 24.21, npm 11.19, Git 2.55 and mpv 0.41 from winget
   (§5 Existing setup notes). `npm ci`, typecheck and Electron 44.3.0 work.
-- `npm test` runs 220 unit tests. Six more run against a real mpv when `MPV_PATH` is set. All 226
-  pass on Windows.
+- `npm test` runs 248 unit tests. Seven more run against a real mpv when `MPV_PATH` is set. All
+  255 pass on Windows.
 - Checked on Windows with disposable clips (§2 How delete is implemented, §4 Implementation):
   - mpv's named pipe, loads, end of file, key bindings and unload-until-idle (the real-mpv tests).
   - `shell.trashItem` sent clips to the Recycle Bin on the internal NTFS drive and on an external
@@ -42,7 +42,9 @@ session starts without earlier chats or local memory. This section, the rest of 
 - A Stats tab shows what the shuffler has played: totals, most played, recently played, never
   played, and a starred favorites list (§6 Stats). Favorites don't affect the shuffle.
 - Browsing: search can be narrowed by category, drive and size and sorted by size, date or name,
-  and long lists have Show more (§6 Dashboard). A settings screen is the next branch.
+  and long lists have Show more (§6 Dashboard).
+- A Settings tab manages indexed folders, lets you choose and test mpv, and clears play history,
+  favorites, shuffle progress or the index (§6 Settings).
 - Front-end feedback waiting for the design pass: Cleanup should be its own tab rather than a
   section at the bottom of the dashboard, which took scrolling to find (Lucas, 2026-09-16).
 - The old Python shuffler was reviewed. It confirms §3's guess about why it felt bad.
@@ -79,7 +81,8 @@ session starts without earlier chats or local memory. This section, the rest of 
 - Where mpv comes from in the packaged app: bundled or installed.
 - A video restored with Undo doesn't reappear in "Recently played" (cosmetic).
 - npm 11 runs install scripts only for packages approved in `allowScripts` (§5).
-- winget's mpv isn't added to the PATH on its own (§5 Existing setup notes).
+- winget's mpv isn't added to the PATH on its own (§5 Existing setup notes). Choosing it in
+  Settings avoids the PATH entirely.
 - In PowerShell, `npm run dev` fails by default; use Command Prompt or `npm.cmd run dev` (§5).
 - Saved cycle progress lives in the app's data folder (`progress.json`). Deleting it only means
   cycles start fresh.
@@ -657,6 +660,32 @@ The sidebar has a Stats tab *(Lucas chose a tab over another dashboard section, 
   so every tab says them the same way.
 - **Never played** can be sorted (newest, largest, A to Z) and extended with Show more. Once
   re-sorted, the list refreshes itself after each play so it stays accurate.
+
+### Settings
+
+The sidebar's Settings tab is live *(Lucas picked its three sections, 2026-09-16)*.
+
+- **Indexed folders** moved here from the dashboard, which now links to them with "Manage
+  folders": add, remove, rescan one folder, or scan them all.
+- **Player:** shows the mpv a shuffle will start and where it came from. `locateMpv` prefers the
+  `FILESHUFFLER_MPV` environment variable (for development), then a choice made here, then a
+  bundled copy, a standard install location, and finally the PATH.
+  - **Choose mpv…** opens the system's file picker and runs `mpv --version` (`probeMpv`) *before*
+    saving anything. A program that isn't a working mpv is refused with the reason, so a wrong
+    pick fails here rather than as a shuffle that won't start.
+  - The check starts the program without a shell, with arguments as a list, and stops it after
+    5 seconds. It only ever runs a program chosen through the system dialog in main; the page can
+    never name a program for the app to run.
+  - The player launch reads the choice every time, so it applies to the next shuffle without a
+    restart. The "mpv wasn't found" message now points to Settings.
+- **Privacy:** clear play history, favorites, saved shuffle progress, or the index, each behind a
+  confirm step. Each clears only its own data and never touches the user's files. Clearing the
+  index keeps the folder list, so a scan rebuilds it, and it is refused while a scan is writing.
+- Settings live in their own `settings.json` (`SettingsStore`), apart from the index and shuffle
+  progress, so clearing data can never clear settings. Both JSON files now share one crash-safe
+  write (`atomicJson.ts`).
+- **Not yet:** shuffle options (undo length, reopening the last folder), which Lucas left out for
+  now.
 - **Not yet:** starring from the dashboard's lists, total watch time (mpv would need to report each
   video's duration), and a way to clear play history.
 
@@ -758,7 +787,7 @@ The front end comes last, as the least complex part. Two things that order depen
 - [x] Breakdown by category
 - [x] Largest files, recently changed, search
 - [x] Open a file, or show it in the file manager, from any dashboard list (indexed paths only)
-- [ ] Settings screen for the indexed folders (they are chosen on the dashboard for now)
+- [x] Settings screen: indexed folders, choosing and testing mpv, and clearing data (§6 Settings)
 - [x] Paging for long lists (Show more), search filters and sorting (§6 Dashboard)
 - [ ] Thumbnails, and virtualized lists if a library outgrows Show more
 - [ ] "Shuffle this" from a folder in the dashboard
@@ -779,7 +808,8 @@ dashboard in Phases 3–4. Shuffling photos and music was offered and left out f
 - [x] **Stats**: most played, recently played, never played, finished versus skipped (§6 Stats).
       Total hours are still to do: they need each video's duration from mpv
 - [x] **Favorites** as a starred list. Lucas chose no shuffle weighting (2026-09-16)
-- [ ] Clearing play history, and starring from the dashboard
+- [x] Clearing play history (and favorites, progress or the index) from Settings
+- [ ] Starring from the dashboard
 - [ ] Thumbnail gallery for photos/videos
 - [ ] Other external players (IINA, generic) only if needed
 
@@ -803,7 +833,8 @@ machines, not Lucas's.
 - [ ] **Decide the app-data folder name** so a development run and an installed build agree, before
       anyone has cycles worth keeping (§3 Implementation)
 - [ ] **First run on a clean machine:** no mpv, no PATH entry, no development tools. The app must
-      explain what's missing rather than fail silently.
+      explain what's missing rather than fail silently. Choosing mpv in Settings now covers the
+      no-PATH case; a guided first run that points there is still to do.
 - [ ] GitHub Releases: attach the installer, decide how versions are numbered, and keep notes on
       what changed
 
@@ -1051,3 +1082,17 @@ machines, not Lucas's.
   - Found by testing: name order is case-insensitive, and a space sorts before a dot, so
     "Beach photo.jpg" comes before "beach.mp4". The code was right and the test's expectation was
     not.
+- **2026-09-16:** Browsing polish, part two: the Settings tab.
+  - Lucas chose three sections: indexed folders, choosing mpv, and clearing data. Shuffle options
+    (undo length, reopening the last folder) were offered and left out.
+  - Indexed folders moved from the dashboard to Settings, with a rescan for a single folder. The
+    dashboard keeps Scan now and gains a "Manage folders" link.
+  - **Choosing mpv** is aimed at people downloading the app, who can't be expected to edit a PATH:
+    pick the program, and it is tested with `mpv --version` before being saved, so a wrong choice
+    is caught with a reason. It runs without a shell, times out, and only ever runs a program
+    chosen through the system dialog. The Settings page shows where the mpv in use came from.
+  - **Clearing data** covers play history, favorites, shuffle progress and the index, each
+    separately and each behind a confirm. This settles the privacy gap flagged when play history
+    arrived: viewing history is personal and can now be erased.
+  - Settings get their own file, so clearing data can't clear them, and the two JSON stores share
+    one crash-safe write helper.

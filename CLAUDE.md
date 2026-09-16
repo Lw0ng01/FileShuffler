@@ -40,14 +40,17 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
   - `src/main/libraryIpc.ts`: library commands, with the same sender and argument checks as `ipc.ts`
   - `src/main/app/statsService.ts` and `src/main/statsIpc.ts`: play stats and favorites, read from
     the same database. Play history is recorded through the coordinator's `PlayHistory`
+  - `src/main/app/settingsService.ts` and `src/main/settingsIpc.ts`: the Settings tab. Settings are
+    stored in `files/settingsStore.ts`; mpv is located by `playback/mpv/findMpv.ts` (`locateMpv`)
+    and checked by `playback/mpv/probeMpv.ts` before a choice is saved
   - `src/main/app/shufflerService.ts`: one folder session (shuffle, coordinator, player lifecycle)
   - `src/main/ipc.ts`: renderer commands, with sender and argument checks
 - `src/preload/`: the only bridge to the UI. Expose narrow, typed functions; keep `index.d.ts` in sync
 - `src/renderer/`: React UI, presentation only (`components/`, one hook per area in `hooks/`, and
-  shared display formatting in `format.ts`). The sidebar switches between Shuffle, Dashboard and
-  Stats
-- `src/shared/shuffler.ts`, `src/shared/library.ts` and `src/shared/stats.ts`: the view types, API
-  types and channel names shared by all three
+  shared display formatting in `format.ts`). The sidebar switches between Shuffle, Dashboard,
+  Stats and Settings
+- `src/shared/shuffler.ts`, `library.ts`, `stats.ts` and `settings.ts`: the view types, API types
+  and channel names shared by all three
 
 ## Toolchain gotchas
 
@@ -101,7 +104,7 @@ npm install
 npm run dev         # run app with hot reload
 npm test            # vitest (unit tests)
 MPV_PATH=/path/to/mpv npm test   # also run the real-mpv integration tests
-FILESHUFFLER_MPV=/path/to/mpv npm run dev   # use a specific mpv when it isn't installed normally
+FILESHUFFLER_MPV=/path/to/mpv npm run dev   # force a specific mpv; beats the choice in Settings
 npm run typecheck
 npm run lint
 npm run build       # typecheck + production build into out/

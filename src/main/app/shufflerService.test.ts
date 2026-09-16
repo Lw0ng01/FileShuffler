@@ -231,7 +231,7 @@ describe('ShufflerService', () => {
     await service.play()
     expect(service.getView()).toMatchObject({
       status: 'ready',
-      lastError: "mpv wasn't found. Install mpv, or set FILESHUFFLER_MPV to the mpv program's path."
+      lastError: "mpv wasn't found. Choose it in Settings, or install mpv from mpv.io."
     })
 
     await service.play()

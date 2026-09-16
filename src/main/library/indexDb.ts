@@ -609,6 +609,32 @@ export class IndexDb {
       })
   }
 
+  /** Forgets every recorded play (§6 Settings). Favorites and the index stay. */
+  clearPlays(): void {
+    this.db.exec('delete from plays')
+  }
+
+  /** Forgets every favorite. Play history and the index stay. */
+  clearFavorites(): void {
+    this.db.exec('delete from favorites')
+  }
+
+  /**
+   * Forgets every indexed file but keeps the folder list, so one scan rebuilds it. Each folder's
+   * totals and last-scanned time reset too, because they described the files just removed.
+   */
+  clearIndex(): void {
+    this.db.exec('begin')
+    try {
+      this.db.exec('delete from files')
+      this.db.exec('update roots set files = 0, bytes = 0, last_scan_at = null')
+      this.db.exec('commit')
+    } catch (error) {
+      this.db.exec('rollback')
+      throw error
+    }
+  }
+
   /** Whether this exact path is in the index. Guards opening a file the app never catalogued. */
   hasFile(path: string): boolean {
     return this.db.prepare('select 1 from files where path = ?').get(path) !== undefined

@@ -84,6 +84,18 @@ describe('ProgressStore', () => {
     expect(await reopened.read('/three')).not.toBeNull()
   })
 
+  it('forgets every folder at once', async () => {
+    const store = new ProgressStore(file)
+    await store.save('/one', snapshot(1))
+    await store.save('/two', snapshot(2))
+    await store.clearAll()
+
+    const reopened = new ProgressStore(file)
+    expect(await reopened.read('/one')).toBeNull()
+    expect(await reopened.read('/two')).toBeNull()
+    expect(await reopened.lastFolder()).toBeNull()
+  })
+
   it('forgets a folder on request', async () => {
     const store = new ProgressStore(file)
     await store.save('/videos', snapshot(1))

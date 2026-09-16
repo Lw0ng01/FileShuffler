@@ -10,6 +10,7 @@ export const LIBRARY_CHANNELS = {
   chooseRoot: 'library:choose-root',
   removeRoot: 'library:remove-root',
   scan: 'library:scan',
+  scanRoot: 'library:scan-root',
   cancelScan: 'library:cancel-scan',
   largest: 'library:largest',
   recent: 'library:recent',
@@ -148,6 +149,8 @@ export interface LibraryApi {
   removeRoot(path: string): Promise<LibraryView>
   /** Indexes every root. Resolves when the scan finishes or is cancelled. */
   scan(): Promise<void>
+  /** Indexes one folder again. */
+  scanRoot(path: string): Promise<void>
   cancelScan(): Promise<void>
   largest(limit?: number): Promise<LibraryFile[]>
   recent(limit?: number): Promise<LibraryFile[]>
