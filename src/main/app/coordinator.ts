@@ -28,6 +28,17 @@ export interface CoordinatorState {
   pendingDeletes: PendingDelete[]
 }
 
+/**
+ * Told what really played, for stats (PROJECT.md §7 Phase 5). Receives session item IDs; the owner
+ * maps them to paths.
+ */
+export interface PlayHistory {
+  /** The player confirmed this file opened. */
+  opened(id: string): void
+  /** This file played to its end, rather than being skipped. */
+  finished(id: string): void
+}
+
 export interface CoordinatorOptions {
   session: ShuffleSession
   player: PlaybackAdapter
@@ -39,6 +50,7 @@ export interface CoordinatorOptions {
   identify: (path: string) => Promise<FileIdentity | null>
   /** How long a delete can be undone before the file is trashed. */
   undoWindowMs?: number
+  history?: PlayHistory
 }
 
 const DEFAULT_UNDO_WINDOW_MS = 5000
@@ -75,6 +87,7 @@ export class ShuffleCoordinator {
   private readonly trash: (path: string) => Promise<void>
   private readonly identify: (path: string) => Promise<FileIdentity | null>
   private readonly undoWindowMs: number
+  private readonly history: PlayHistory | undefined
   private readonly listeners = new Set<(state: CoordinatorState) => void>()
   private readonly deletes = new Map<string, DeleteInProgress>()
   private stopListening: () => void
@@ -90,6 +103,7 @@ export class ShuffleCoordinator {
     this.trash = options.trash
     this.identify = options.identify
     this.undoWindowMs = options.undoWindowMs ?? DEFAULT_UNDO_WINDOW_MS
+    this.history = options.history
     this.stopListening = this.player.onEvent((event) => this.handle(event))
   }
 
@@ -237,12 +251,14 @@ export class ShuffleCoordinator {
       case 'loaded':
         if (event.token !== this.activeToken || this.current === null) return
         this.session.markOpened(this.current)
+        this.record('opened', this.current)
         this.status = 'playing'
         this.lastError = null
         this.emit()
         return
       case 'ended':
         if (event.token !== this.activeToken) return
+        if (this.current !== null) this.record('finished', this.current)
         this.next()
         return
       case 'failed':
@@ -335,6 +351,15 @@ export class ShuffleCoordinator {
     this.session.cancelDelete(entry.id)
     this.lastError = reason
     this.emit()
+  }
+
+  /** Stats are a convenience: a history that fails must never interrupt playback. */
+  private record(kind: keyof PlayHistory, id: string): void {
+    try {
+      this.history?.[kind](id)
+    } catch {
+      // Deliberately ignored, for the reason above.
+    }
   }
 
   private emit(): void {

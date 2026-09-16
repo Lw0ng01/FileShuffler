@@ -11,6 +11,7 @@ import {
   type CleanupLists,
   type LibraryActions
 } from '../hooks/useLibrary'
+import { formatBytes, formatCount, formatWhen, shortenPath } from '../format'
 import { DashboardIcon, FolderIcon, TrashIcon } from './Icons'
 
 interface Props {
@@ -32,36 +33,6 @@ const CATEGORY_LABELS: Record<LibraryCategory, string> = {
 }
 
 const CATEGORY_ORDER: LibraryCategory[] = ['video', 'photo', 'audio', 'document']
-
-/** Sizes people recognise: 1.2 GB rather than 1288490189. */
-function formatBytes(bytes: number): string {
-  if (bytes <= 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
-  const power = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)))
-  const value = bytes / 1024 ** power
-  return `${value >= 100 || power === 0 ? Math.round(value) : value.toFixed(1)} ${units[power]}`
-}
-
-function formatCount(files: number): string {
-  return `${files.toLocaleString()} ${files === 1 ? 'file' : 'files'}`
-}
-
-function formatWhen(time: number | null): string {
-  if (time === null) return 'never scanned'
-  const minutes = Math.round((Date.now() - time) / 60_000)
-  if (minutes < 1) return 'just now'
-  if (minutes < 60) return `${minutes} min ago`
-  const hours = Math.round(minutes / 60)
-  if (hours < 24) return `${hours} h ago`
-  return new Date(time).toLocaleDateString()
-}
-
-/** Shortens a long path for display; the full one stays in the tooltip. */
-function shortenPath(path: string): string {
-  const separator = path.includes('\\') ? '\\' : '/'
-  const parts = path.split(/[\\/]/).filter(Boolean)
-  return parts.length <= 3 ? path : `…${separator}${parts.slice(-2).join(separator)}`
-}
 
 export function DashboardScreen({
   view,
@@ -144,7 +115,7 @@ export function DashboardScreen({
                   </span>
                   <span className="muted">
                     {formatCount(root.files)} · {formatBytes(root.bytes)} ·{' '}
-                    {formatWhen(root.lastScanAt)}
+                    {formatWhen(root.lastScanAt, 'never scanned')}
                   </span>
                   <button
                     className="btn btn-small"

@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { LIBRARY_CHANNELS, type LibraryApi, type LibraryView } from '../shared/library'
 import { CHANNELS, type ShufflerApi, type ShufflerView } from '../shared/shuffler'
+import { STATS_CHANNELS, type StatsApi, type StatsView } from '../shared/stats'
 
 // The only surface the renderer can reach (PROJECT.md §5). Each function maps to one fixed
 // channel; ipcRenderer itself, arbitrary channels, paths and shell access are never exposed.
@@ -49,4 +50,17 @@ const library: LibraryApi = {
   }
 }
 
-contextBridge.exposeInMainWorld('api', { shuffler, library })
+const stats: StatsApi = {
+  getView: () => ipcRenderer.invoke(STATS_CHANNELS.getView),
+  addFavorite: (path) => ipcRenderer.invoke(STATS_CHANNELS.addFavorite, path),
+  removeFavorite: (path) => ipcRenderer.invoke(STATS_CHANNELS.removeFavorite, path),
+  onView: (listener) => {
+    const handler = (_event: IpcRendererEvent, view: StatsView): void => listener(view)
+    ipcRenderer.on(STATS_CHANNELS.view, handler)
+    return () => {
+      ipcRenderer.removeListener(STATS_CHANNELS.view, handler)
+    }
+  }
+}
+
+contextBridge.exposeInMainWorld('api', { shuffler, library, stats })

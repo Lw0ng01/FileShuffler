@@ -4,7 +4,7 @@ import { ShuffleSession, type RandomSource, type ShuffleSnapshot } from '../doma
 import type { FileIdentity } from '../files/fileIdentity'
 import type { ProgressSource } from '../files/progressStore'
 import type { PlaybackAdapter } from '../playback/types'
-import { ShuffleCoordinator, type CoordinatorState } from './coordinator'
+import { ShuffleCoordinator, type CoordinatorState, type PlayHistory } from './coordinator'
 
 export interface ShufflerServiceDeps {
   /** Shows the folder picker. Resolves null when cancelled. */
@@ -17,8 +17,16 @@ export interface ShufflerServiceDeps {
   playerKeys: ShufflerView['playerKeys']
   /** Remembers where each folder's cycle got to, so closing the app doesn't restart it. */
   progress?: ProgressSource
+  /** Records what really played, for stats. */
+  plays?: PlayRecorder
   random?: RandomSource
   undoWindowMs?: number
+}
+
+/** Where play history is kept. Receives full paths, unlike the coordinator. */
+export interface PlayRecorder {
+  opened(path: string, name: string, folder: string): void
+  finished(path: string): void
 }
 
 const RECENT_LIMIT = 6
@@ -182,6 +190,16 @@ export class ShufflerService {
     this.listeners.clear()
   }
 
+  /** Turns the coordinator's file names into full paths for the play history. */
+  private playHistory(folder: string): PlayHistory | undefined {
+    const plays = this.deps.plays
+    if (plays === undefined) return undefined
+    return {
+      opened: (id) => plays.opened(join(folder, id), id, folder),
+      finished: (id) => plays.finished(join(folder, id))
+    }
+  }
+
   private async readProgress(folder: string): Promise<ShuffleSnapshot | null> {
     try {
       return (await this.deps.progress?.read(folder)) ?? null
@@ -284,7 +302,8 @@ export class ShufflerService {
         resolvePath: (id) => join(folder, id),
         trash: this.deps.trash,
         identify: this.deps.identify,
-        undoWindowMs: this.deps.undoWindowMs
+        undoWindowMs: this.deps.undoWindowMs,
+        history: this.playHistory(folder)
       })
       this.coordinator.onState((state) => this.handleState(state))
     } else {

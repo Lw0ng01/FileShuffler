@@ -22,7 +22,7 @@ session starts without earlier chats or local memory. This section, the rest of 
   and Delete with a 5-second undo before trashing. See §2, §3, §4 and §6 (Implementation notes).
 - The Windows desktop is set up: Node 24.21, npm 11.19, Git 2.55 and mpv 0.41 from winget
   (§5 Existing setup notes). `npm ci`, typecheck and Electron 44.3.0 work.
-- `npm test` runs 189 unit tests. Six more run against a real mpv when `MPV_PATH` is set. All 195
+- `npm test` runs 210 unit tests. Six more run against a real mpv when `MPV_PATH` is set. All 216
   pass on Windows.
 - Checked on Windows with disposable clips (§2 How delete is implemented, §4 Implementation):
   - mpv's named pipe, loads, end of file, key bindings and unload-until-idle (the real-mpv tests).
@@ -39,6 +39,10 @@ session starts without earlier chats or local memory. This section, the rest of 
 - The dashboard exists: pick folders to index, scan them, and see space by category, drive cards
   with free space, the largest and most recently changed files, and search (§6 Dashboard, §7
   Phase 3 and Phase 4). The indexer behind it is in §7 Phase 3 Implementation.
+- A Stats tab shows what the shuffler has played: totals, most played, recently played, never
+  played, and a starred favorites list (§6 Stats). Favorites don't affect the shuffle.
+- Front-end feedback waiting for the design pass: Cleanup should be its own tab rather than a
+  section at the bottom of the dashboard, which took scrolling to find (Lucas, 2026-09-16).
 - The old Python shuffler was reviewed. It confirms §3's guess about why it felt bad.
 - Public repo: https://github.com/Lw0ng01/FileShuffler.
 - Commits use GitHub's private email. In a new clone, run
@@ -616,6 +620,32 @@ folders to index are chosen on the dashboard itself.
 - **Not yet:** "Shuffle this" from a folder, a settings screen, thumbnails, and the integrated
   player (its placement still follows the embedding prototype, §4).
 
+### Stats (Phase 5)
+
+The sidebar has a Stats tab *(Lucas chose a tab over another dashboard section, 2026-09-16)*.
+
+- **Play history:** the coordinator tells a `PlayHistory` when mpv *confirms* a file opened, and
+  when a file plays to its end. A load that never opened isn't a play, and pressing Next isn't a
+  finish. Late events from a replaced load are ignored, as everywhere in the coordinator, and a
+  history that fails can never interrupt playback.
+  - `ShufflerService` turns file names into full paths. Plays go into the index's SQLite database
+    (`plays` table) in the app's data folder, so "never played" is simply indexed videos with no
+    play on record.
+  - A finish marks only a file's **latest** play, so replaying something and skipping it can't turn
+    an earlier skip into a finish.
+- **Stats tab** (`StatsScreen.tsx`, `useStats.ts`, `StatsService`, `statsIpc.ts`): plays, finished
+  and skipped, how many different files, and since when; then favorites, most played, recently
+  played, and indexed videos that have never played. Every row has a star, Open and Show.
+- **Favorites** *(Lucas, 2026-09-16)*: a starred list with **no effect on the shuffle**, which stays
+  purely random. Only a file the app already knows — indexed, or in play history — can be starred,
+  so the renderer can't plant arbitrary paths in the database.
+- Open and Show now accept a file known only from play history too, because a shuffle folder isn't
+  necessarily indexed. It is still a path the app itself recorded.
+- Display formatting (sizes, counts, relative times, short paths) moved to `src/renderer/src/format.ts`
+  so every tab says them the same way.
+- **Not yet:** starring from the dashboard's lists, total watch time (mpv would need to report each
+  video's duration), and a way to clear play history.
+
 ## 7. Roadmap
 
 **Working order** *(Lucas, 2026-09-15)*: features first, while the shape of the app is still
@@ -731,8 +761,10 @@ dashboard in Phases 3–4. Shuffling photos and music was offered and left out f
 - [ ] Narrow the stale list to Downloads specifically, and let the user choose the age
 - [ ] Decide whether the dashboard ever deletes. It doesn't today: Open and Show only. Doing it
       properly means the shuffler's undo window and identity recheck (§2.3), not a quick delete
-- [ ] **Stats**: most played, never watched, total hours of video
-- [ ] **Favorites / weighting** without breaking cycle coverage (§3 Possible upgrades)
+- [x] **Stats**: most played, recently played, never played, finished versus skipped (§6 Stats).
+      Total hours are still to do: they need each video's duration from mpv
+- [x] **Favorites** as a starred list. Lucas chose no shuffle weighting (2026-09-16)
+- [ ] Clearing play history, and starring from the dashboard
 - [ ] Thumbnail gallery for photos/videos
 - [ ] Other external players (IINA, generic) only if needed
 
@@ -981,3 +1013,13 @@ machines, not Lucas's.
     unchanged since a date, and an exact name-and-size lookup.
   - Fingerprint reads are one file at a time, and an unreadable file reports no fingerprint rather
     than failing the group.
+- **2026-09-16:** Play history, a Stats tab, and favorites (Phase 5, the second direction).
+  - Lucas tried the cleanup tools: they work, but Cleanup should be its own tab, because it took
+    scrolling to find. Noted for the front-end pass rather than done now (§7 working order).
+  - Decided by Lucas: favorites are a starred list with no effect on the shuffle, and stats get
+    their own tab instead of another dashboard section.
+  - The shuffler now records plays. An open counts once mpv confirms it, a finish only when the
+    file reaches its end, and a recording failure can't stop playback (§6 Stats).
+  - Plays and favorites share the index's SQLite database, so stats can combine the two.
+  - New `StatsService`, stats IPC with the usual sender and argument checks, and the Stats tab.
+    Display formatting moved to a shared `format.ts`.

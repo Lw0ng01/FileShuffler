@@ -34,6 +34,22 @@ const SCHEMA = `
   create index if not exists files_category on files(category);
   create index if not exists files_size on files(size desc);
   create index if not exists files_modified on files(modified_ms desc);
+  create table if not exists plays (
+    id integer primary key autoincrement,
+    path text not null,
+    name text not null,
+    folder text not null,
+    opened_at integer not null,
+    ended_at integer
+  );
+  create index if not exists plays_path on plays(path);
+  create index if not exists plays_opened on plays(opened_at desc);
+  create table if not exists favorites (
+    path text primary key,
+    name text not null,
+    folder text not null,
+    added_at integer not null
+  );
 `
 
 export interface RootRow {
@@ -79,6 +95,33 @@ export interface DuplicateGroup {
   files: FileRow[]
   /** What deleting all but one copy would free. */
   wastedBytes: number
+}
+
+export interface PlayedFile {
+  path: string
+  name: string
+  folder: string
+  /** Times the player confirmed it opened. */
+  plays: number
+  /** Of those, how many reached the end rather than being skipped. */
+  finished: number
+  lastPlayedAt: number
+}
+
+export interface PlayTotals {
+  plays: number
+  finished: number
+  /** Different files played. */
+  files: number
+  /** When history starts, or null if nothing has played yet. */
+  since: number | null
+}
+
+export interface FavoriteRow {
+  path: string
+  name: string
+  folder: string
+  addedAt: number
 }
 
 type Row = Record<string, unknown>
@@ -344,6 +387,132 @@ export class IndexDb {
       .prepare('select * from files where modified_ms < ? order by size desc, path limit ?')
       .all(Math.trunc(before), Math.max(1, Math.trunc(limit)))
       .map((row) => toFileRow(row as Row))
+  }
+
+  /** A play the player confirmed opened (PROJECT.md §7 Phase 5 stats). */
+  recordOpened(path: string, name: string, folder: string, at: number = Date.now()): void {
+    this.db
+      .prepare('insert into plays (path, name, folder, opened_at) values (?, ?, ?, ?)')
+      .run(path, name, folder, Math.trunc(at))
+  }
+
+  /**
+   * Marks a file's latest play as finished. Only the latest: replaying something and skipping it
+   * must not turn an earlier skip into a finish.
+   */
+  recordFinished(path: string, at: number = Date.now()): void {
+    this.db
+      .prepare(
+        `update plays set ended_at = ?
+         where id = (select id from plays where path = ? order by opened_at desc, id desc limit 1)
+           and ended_at is null`
+      )
+      .run(Math.trunc(at), path)
+  }
+
+  mostPlayed(limit = 20): PlayedFile[] {
+    return this.playedFiles('plays desc, last_played desc, path', limit)
+  }
+
+  recentlyPlayed(limit = 20): PlayedFile[] {
+    return this.playedFiles('last_played desc, path', limit)
+  }
+
+  /** Indexed videos with no play on record, newest first. */
+  neverPlayed(limit = 20): FileRow[] {
+    return this.db
+      .prepare(
+        `select * from files f
+         where f.category = 'video' and not exists (select 1 from plays p where p.path = f.path)
+         order by f.modified_ms desc, f.path limit ?`
+      )
+      .all(Math.max(1, Math.trunc(limit)))
+      .map((row) => toFileRow(row as Row))
+  }
+
+  playTotals(): PlayTotals {
+    const row = this.db
+      .prepare(
+        `select count(*) as plays, coalesce(sum(ended_at is not null), 0) as finished,
+                count(distinct path) as files, min(opened_at) as since
+         from plays`
+      )
+      .get() as Row | undefined
+    const since = row?.['since']
+    return {
+      plays: count(row?.['plays']),
+      finished: count(row?.['finished']),
+      files: count(row?.['files']),
+      since: since === null || since === undefined ? null : count(since)
+    }
+  }
+
+  /**
+   * Name and folder for a path the app knows, from the index or play history, or null. Shuffle
+   * folders aren't necessarily indexed, so play history counts as knowing a file too.
+   */
+  describeFile(path: string): { name: string; folder: string } | null {
+    const row = this.db
+      .prepare(
+        `select name, folder from files where path = ?
+         union all
+         select name, folder from plays where path = ?
+         limit 1`
+      )
+      .get(path, path) as Row | undefined
+    return row === undefined ? null : { name: text(row['name']), folder: text(row['folder']) }
+  }
+
+  hasPlayed(path: string): boolean {
+    return this.db.prepare('select 1 from plays where path = ? limit 1').get(path) !== undefined
+  }
+
+  /** Stars a file. Starring it again keeps the original date. */
+  addFavorite(path: string, name: string, folder: string, at: number = Date.now()): void {
+    this.db
+      .prepare('insert or ignore into favorites (path, name, folder, added_at) values (?, ?, ?, ?)')
+      .run(path, name, folder, Math.trunc(at))
+  }
+
+  removeFavorite(path: string): void {
+    this.db.prepare('delete from favorites where path = ?').run(path)
+  }
+
+  favorites(limit = 200): FavoriteRow[] {
+    return this.db
+      .prepare('select * from favorites order by added_at desc, path limit ?')
+      .all(Math.max(1, Math.trunc(limit)))
+      .map((row) => {
+        const entry = row as Row
+        return {
+          path: text(entry['path']),
+          name: text(entry['name']),
+          folder: text(entry['folder']),
+          addedAt: count(entry['added_at'])
+        }
+      })
+  }
+
+  /** `order` is one of the fixed clauses above, never text from the renderer. */
+  private playedFiles(order: string, limit: number): PlayedFile[] {
+    return this.db
+      .prepare(
+        `select path, max(name) as name, max(folder) as folder, count(*) as plays,
+                coalesce(sum(ended_at is not null), 0) as finished, max(opened_at) as last_played
+         from plays group by path order by ${order} limit ?`
+      )
+      .all(Math.max(1, Math.trunc(limit)))
+      .map((row) => {
+        const entry = row as Row
+        return {
+          path: text(entry['path']),
+          name: text(entry['name']),
+          folder: text(entry['folder']),
+          plays: count(entry['plays']),
+          finished: count(entry['finished']),
+          lastPlayedAt: count(entry['last_played'])
+        }
+      })
   }
 
   /** Whether this exact path is in the index. Guards opening a file the app never catalogued. */

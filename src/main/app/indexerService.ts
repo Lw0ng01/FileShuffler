@@ -210,7 +210,9 @@ export class IndexerService {
   }
 
   private known(path: string): boolean {
-    if (this.deps.db.hasFile(path)) return true
+    // Play history counts too: a shuffle folder isn't necessarily indexed, and the Stats tab lists
+    // what played. Either way it is a path the app itself recorded, never one the renderer made up.
+    if (this.deps.db.hasFile(path) || this.deps.db.hasPlayed(path)) return true
     // Usually the file was deleted or moved since the last scan, rather than anything sinister.
     this.error = `${path} is not in the index. Scan again if it has moved or changed.`
     this.emit()
