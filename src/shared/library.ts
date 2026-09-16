@@ -16,6 +16,10 @@ export const LIBRARY_CHANNELS = {
   search: 'library:search',
   openFile: 'library:open-file',
   showInFolder: 'library:show-in-folder',
+  biggestFolders: 'library:biggest-folders',
+  duplicates: 'library:duplicates',
+  notTouched: 'library:not-touched',
+  checkDuplicate: 'library:check-duplicate',
   /** Main → renderer: a new `LibraryView`. */
   view: 'library:view'
 } as const
@@ -55,6 +59,30 @@ export interface LibraryFile {
   category: LibraryCategory
   size: number
   modifiedMs: number
+}
+
+export interface LibraryFolder {
+  folder: string
+  drive: string
+  files: number
+  bytes: number
+}
+
+export interface LibraryDuplicateGroup {
+  name: string
+  size: number
+  /** What deleting all but one copy would free. */
+  wastedBytes: number
+  files: LibraryFile[]
+}
+
+/**
+ * One file's fingerprint from a duplicate check. Files sharing a fingerprint are the same size and
+ * identical at both ends; null means the file couldn't be read.
+ */
+export interface LibraryDigest {
+  path: string
+  digest: string | null
 }
 
 export interface ScanProgressView {
@@ -106,5 +134,13 @@ export interface LibraryApi {
   openFile(path: string): Promise<void>
   /** Shows an indexed file in the system's file manager. */
   showInFolder(path: string): Promise<void>
+  /** Folders holding the most indexed data. */
+  biggestFolders(limit?: number): Promise<LibraryFolder[]>
+  /** Files that share a name and size: possible copies, not confirmed ones. */
+  duplicates(limit?: number): Promise<LibraryDuplicateGroup[]>
+  /** Big files nothing has changed in at least `days`. */
+  notTouched(days?: number, limit?: number): Promise<LibraryFile[]>
+  /** Reads a group's files and fingerprints each, to confirm they really are copies. */
+  checkDuplicate(name: string, size: number): Promise<LibraryDigest[]>
   onView(listener: (view: LibraryView) => void): () => void
 }

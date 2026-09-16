@@ -1,4 +1,12 @@
-import type { LibraryDrive, LibraryFile, LibraryView, ScanProgressView } from '../../shared/library'
+import type {
+  LibraryDigest,
+  LibraryDrive,
+  LibraryDuplicateGroup,
+  LibraryFile,
+  LibraryFolder,
+  LibraryView,
+  ScanProgressView
+} from '../../shared/library'
 import type { DriveSpace } from '../files/driveSpace'
 import type { ScanOptions, ScanSummary } from '../files/scanner'
 import { driveOf, scanRoots } from '../files/scanner'
@@ -18,6 +26,8 @@ export interface IndexerServiceDeps {
   openPath?: (path: string) => Promise<string>
   /** Shows a file in the system's file manager. */
   revealPath?: (path: string) => Promise<void>
+  /** Fingerprints a file, for confirming duplicates. Null when it can't be read. */
+  digest?: (path: string) => Promise<string | null>
   now?: () => number
 }
 
@@ -137,6 +147,41 @@ export class IndexerService {
 
   search(term: string, limit?: number): LibraryFile[] {
     return this.deps.db.search(term, limit)
+  }
+
+  biggestFolders(limit?: number): LibraryFolder[] {
+    return this.deps.db.biggestFolders(limit)
+  }
+
+  /** Files that share a name and size. Possible copies: only `checkDuplicate` confirms them. */
+  duplicates(limit?: number): LibraryDuplicateGroup[] {
+    return this.deps.db.duplicateCandidates(limit)
+  }
+
+  /** Files nothing has changed in at least this many days, biggest first. */
+  notTouched(days = 180, limit?: number): LibraryFile[] {
+    const now = (this.deps.now ?? Date.now)()
+    const safeDays = Number.isFinite(days) ? Math.max(1, days) : 180
+    return this.deps.db.notTouchedSince(now - safeDays * 24 * 60 * 60 * 1000, limit)
+  }
+
+  /**
+   * Reads each file in a group and fingerprints it, so "same name and size" can become "these
+   * really are copies" (`fileDigest`). Files are read one at a time to keep the disk free for
+   * whatever else is happening, and an unreadable file comes back with a null fingerprint rather
+   * than failing the whole check.
+   */
+  async checkDuplicate(name: string, size: number): Promise<LibraryDigest[]> {
+    const files = this.deps.db.filesNamed(name, size)
+    const digest = this.deps.digest
+    const checked: LibraryDigest[] = []
+    for (const file of files) {
+      checked.push({
+        path: file.path,
+        digest: digest === undefined ? null : await digest(file.path)
+      })
+    }
+    return checked
   }
 
   /**

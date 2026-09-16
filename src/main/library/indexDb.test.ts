@@ -100,6 +100,68 @@ describe('IndexDb', () => {
     expect(root?.lastScanAt).toBeGreaterThan(0)
   })
 
+  it('ranks folders by how much they hold', () => {
+    const scan = db.startScan()
+    db.putFiles(scan, [
+      file('D:\\Media\\films\\big.mp4', { size: 900 }),
+      file('D:\\Media\\films\\also.mp4', { size: 50 }),
+      file('D:\\Media\\clips\\small.mp4', { size: 10 })
+    ])
+
+    expect(db.biggestFolders(5)).toEqual([
+      { folder: 'D:\\Media\\films', drive: 'D:', files: 2, bytes: 950 },
+      { folder: 'D:\\Media\\clips', drive: 'D:', files: 1, bytes: 10 }
+    ])
+  })
+
+  it('groups files that share a name and size, worst waste first', () => {
+    const scan = db.startScan()
+    db.putFiles(scan, [
+      file('D:\\Media\\a\\holiday.mp4', { size: 100 }),
+      file('D:\\Media\\b\\holiday.mp4', { size: 100 }),
+      file('D:\\Media\\c\\holiday.mp4', { size: 100 }),
+      file('D:\\Media\\a\\song.mp3', { size: 500, category: 'audio' }),
+      file('D:\\Media\\b\\song.mp3', { size: 500, category: 'audio' }),
+      file('D:\\Media\\a\\unique.mp4', { size: 700 }),
+      // Same name but a different size, so not a candidate.
+      file('D:\\Media\\b\\unique.mp4', { size: 701 })
+    ])
+
+    const groups = db.duplicateCandidates(10)
+    expect(groups.map((group) => [group.name, group.files.length, group.wastedBytes])).toEqual([
+      ['song.mp3', 2, 500],
+      ['holiday.mp4', 3, 200]
+    ])
+    expect(groups[1]?.files.map((row) => row.path)).toEqual([
+      'D:\\Media\\a\\holiday.mp4',
+      'D:\\Media\\b\\holiday.mp4',
+      'D:\\Media\\c\\holiday.mp4'
+    ])
+  })
+
+  it('ignores empty files when looking for duplicates', () => {
+    const scan = db.startScan()
+    db.putFiles(scan, [
+      file('D:\\Media\\a\\empty.mp4', { size: 0 }),
+      file('D:\\Media\\b\\empty.mp4', { size: 0 })
+    ])
+    expect(db.duplicateCandidates(10)).toEqual([])
+  })
+
+  it('lists big files nothing has changed in a long time', () => {
+    const scan = db.startScan()
+    db.putFiles(scan, [
+      file('D:\\Media\\old-big.mp4', { size: 900, modifiedMs: 1_000 }),
+      file('D:\\Media\\old-small.mp4', { size: 5, modifiedMs: 1_000 }),
+      file('D:\\Media\\new.mp4', { size: 950, modifiedMs: 9_000 })
+    ])
+
+    expect(db.notTouchedSince(5_000, 10).map((row) => row.name)).toEqual([
+      'old-big.mp4',
+      'old-small.mp4'
+    ])
+  })
+
   it('knows whether a path is in the index', () => {
     const scan = db.startScan()
     db.putFiles(scan, [file('D:\\Media\\a.mp4')])

@@ -9,6 +9,7 @@ import { ShufflerService } from './app/shufflerService'
 import { IndexDb } from './library/indexDb'
 import { registerLibraryIpc } from './libraryIpc'
 import { readDriveSpace } from './files/driveSpace'
+import { fileDigest } from './files/fileDigest'
 import { readFileIdentity } from './files/fileIdentity'
 import { ProgressStore } from './files/progressStore'
 import { listVideoFiles } from './files/videoFolder'
@@ -75,6 +76,7 @@ const library = new IndexerService({
   revealPath: async (path) => {
     shell.showItemInFolder(path)
   },
+  digest: fileDigest,
   // Offered on a first run. Electron throws for a folder this system doesn't define, so each one
   // is asked for separately and a missing one is simply left out.
   defaultRoots: () =>

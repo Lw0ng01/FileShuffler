@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { LibraryFile, LibraryView } from '../../../shared/library'
+import type {
+  LibraryDigest,
+  LibraryDuplicateGroup,
+  LibraryFile,
+  LibraryFolder,
+  LibraryView
+} from '../../../shared/library'
 
 export interface LibraryActions {
   chooseRoot: () => void
@@ -9,7 +15,28 @@ export interface LibraryActions {
   setTerm: (term: string) => void
   openFile: (path: string) => void
   showInFolder: (path: string) => void
+  loadCleanup: () => void
+  checkDuplicate: (name: string, size: number) => void
 }
+
+export interface CleanupLists {
+  /** False until the lists have been asked for: they cost queries, so nothing loads uninvited. */
+  loaded: boolean
+  folders: LibraryFolder[]
+  duplicates: LibraryDuplicateGroup[]
+  stale: LibraryFile[]
+  /** Fingerprints per checked group, keyed by `duplicateKey`. */
+  checked: Record<string, LibraryDigest[]>
+  checking: string | null
+}
+
+/** One key per duplicate group, since a name alone isn't unique. */
+export function duplicateKey(name: string, size: number): string {
+  return `${size}:${name}`
+}
+
+/** How old "not touched in a long time" means. */
+export const STALE_DAYS = 180
 
 /** Rows shown in the largest and recently changed lists. */
 const LIST_LIMIT = 8
@@ -35,6 +62,7 @@ export function useLibrary(): {
   results: LibraryFile[] | null
   term: string
   error: string | null
+  cleanup: CleanupLists
   actions: LibraryActions
 } {
   const [view, setView] = useState<LibraryView | null>(null)
@@ -43,6 +71,14 @@ export function useLibrary(): {
   const [results, setResults] = useState<LibraryFile[] | null>(null)
   const [term, setTerm] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [cleanup, setCleanup] = useState<CleanupLists>({
+    loaded: false,
+    folders: [],
+    duplicates: [],
+    stale: [],
+    checked: {},
+    checking: null
+  })
   /** What the lists were built from, so they refresh only when the index actually changed. */
   const listsFor = useRef<number | null>(null)
 
@@ -126,9 +162,36 @@ export function useLibrary(): {
       cancelScan: () => run(() => api.cancelScan()),
       setTerm: changeTerm,
       openFile: (path) => run(() => api.openFile(path)),
-      showInFolder: (path) => run(() => api.showInFolder(path))
+      showInFolder: (path) => run(() => api.showInFolder(path)),
+      loadCleanup: () =>
+        run(async () => {
+          const [folders, duplicates, stale] = await Promise.all([
+            api.biggestFolders(10),
+            api.duplicates(15),
+            api.notTouched(STALE_DAYS, 10)
+          ])
+          // Fingerprints belong to the groups they were taken from, so they start again here.
+          setCleanup({ loaded: true, folders, duplicates, stale, checked: {}, checking: null })
+        }),
+      checkDuplicate: (name, size) => {
+        const key = duplicateKey(name, size)
+        setCleanup((current) => ({ ...current, checking: key }))
+        run(async () => {
+          try {
+            const digests = await api.checkDuplicate(name, size)
+            setCleanup((current) => ({
+              ...current,
+              checked: { ...current.checked, [key]: digests },
+              checking: null
+            }))
+          } catch (caught) {
+            setCleanup((current) => ({ ...current, checking: null }))
+            throw caught
+          }
+        })
+      }
     }
   }, [changeTerm])
 
-  return { view, largest, recent, results, term, error, actions }
+  return { view, largest, recent, results, term, error, cleanup, actions }
 }

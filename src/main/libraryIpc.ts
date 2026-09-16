@@ -16,6 +16,10 @@ export type LibraryBackend = Pick<
   | 'search'
   | 'openFile'
   | 'showInFolder'
+  | 'biggestFolders'
+  | 'duplicates'
+  | 'notTouched'
+  | 'checkDuplicate'
   | 'refreshDriveSpace'
 >
 
@@ -39,6 +43,21 @@ function asLimit(value: unknown): number | undefined {
     throw new Error('Expected a positive row limit')
   }
   return Math.min(Math.trunc(value), MAX_LIMIT)
+}
+
+function asDays(value: unknown): number | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 1) {
+    throw new Error('Expected a number of days')
+  }
+  return Math.min(Math.trunc(value), 36_500)
+}
+
+function asSize(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new Error('Expected a file size')
+  }
+  return Math.trunc(value)
 }
 
 function asTerm(value: unknown): string {
@@ -84,6 +103,14 @@ export function registerLibraryIpc(
   // The path is checked against the index in the service before anything is opened.
   handle(LIBRARY_CHANNELS.openFile, ([path]) => backend.openFile(asPath(path)))
   handle(LIBRARY_CHANNELS.showInFolder, ([path]) => backend.showInFolder(asPath(path)))
+  handle(LIBRARY_CHANNELS.biggestFolders, ([limit]) => backend.biggestFolders(asLimit(limit)))
+  handle(LIBRARY_CHANNELS.duplicates, ([limit]) => backend.duplicates(asLimit(limit)))
+  handle(LIBRARY_CHANNELS.notTouched, ([days, limit]) =>
+    backend.notTouched(asDays(days), asLimit(limit))
+  )
+  handle(LIBRARY_CHANNELS.checkDuplicate, ([name, size]) =>
+    backend.checkDuplicate(asPath(name), asSize(size))
+  )
 
   return () => {
     for (const channel of channels) ipc.removeHandler(channel)

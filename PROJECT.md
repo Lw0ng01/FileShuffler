@@ -22,7 +22,7 @@ session starts without earlier chats or local memory. This section, the rest of 
   and Delete with a 5-second undo before trashing. See §2, §3, §4 and §6 (Implementation notes).
 - The Windows desktop is set up: Node 24.21, npm 11.19, Git 2.55 and mpv 0.41 from winget
   (§5 Existing setup notes). `npm ci`, typecheck and Electron 44.3.0 work.
-- `npm test` runs 173 unit tests. Six more run against a real mpv when `MPV_PATH` is set. All 179
+- `npm test` runs 189 unit tests. Six more run against a real mpv when `MPV_PATH` is set. All 195
   pass on Windows.
 - Checked on Windows with disposable clips (§2 How delete is implemented, §4 Implementation):
   - mpv's named pipe, loads, end of file, key bindings and unload-until-idle (the real-mpv tests).
@@ -598,6 +598,16 @@ folders to index are chosen on the dashboard itself.
     name, and the main process opens it **only if that exact path is in the index**, so a bug or
     injected script can't make the app launch something arbitrary (§5). Opening goes through the
     OS, never a shell command. A path that has moved since the last scan says so.
+  - **Cleanup** *(Lucas picked this first, 2026-09-16)*, loaded only when asked because it costs
+    extra queries: the folders holding the most, files that share a name and size, and big files
+    nothing has changed in six months. Nothing is deleted from here.
+    - Lookalikes are **not** claimed to be copies. Each group has a **Check** that reads the files
+      and fingerprints them (`src/main/files/fileDigest.ts`: size plus 64 KiB from each end), then
+      says either "identical at the start and end, so these look like real copies" or "not copies:
+      N different versions". A full byte-for-byte hash of a film library would take minutes, and
+      the wording never pretends otherwise.
+    - Files that can't be read come back with no fingerprint and are counted separately, rather
+      than quietly failing the group.
 - **Hook** (`hooks/useLibrary.ts`): the view plus the lists, which come from separate queries.
   Lists refresh when the indexed file count changes rather than on every view, and typing is
   debounced so each keystroke isn't a query.
@@ -716,8 +726,11 @@ The front end comes last, as the least complex part. Two things that order depen
 Lucas chose these as the directions that make this more than a video shuffler, alongside the
 dashboard in Phases 3–4. Shuffling photos and music was offered and left out for now.
 
-- [ ] **Cleanup tools**, all view-only, with moving to the Recycle Bin as the only action (§2):
-      duplicate finder, "old Downloads" suggestions, biggest space wasters
+- [x] **Cleanup tools**, view-only (§6 Dashboard): biggest folders, possible duplicates with a
+      fingerprint check, and files not touched in six months
+- [ ] Narrow the stale list to Downloads specifically, and let the user choose the age
+- [ ] Decide whether the dashboard ever deletes. It doesn't today: Open and Show only. Doing it
+      properly means the shuffler's undo window and identity recheck (§2.3), not a quick delete
 - [ ] **Stats**: most played, never watched, total hours of video
 - [ ] **Favorites / weighting** without breaking cycle coverage (§3 Possible upgrades)
 - [ ] Thumbnail gallery for photos/videos
@@ -956,3 +969,15 @@ machines, not Lucas's.
   - Lucas also set the order for what follows: cleanup tools first (duplicate finder, old
     Downloads, biggest folders), then stats and favorites, then search and browsing polish.
     Automatic scanning was offered and left out for now, so scans stay deliberate.
+- **2026-09-16:** Cleanup tools on the dashboard (Phase 5, the first of the three directions).
+  - Three lists, loaded only when asked: biggest folders, possible duplicates, and files not
+    touched in six months (§6 Dashboard). All view-only.
+  - **Duplicates are a suggestion, not a claim.** The index can only see that files share a name
+    and size, so each group has a Check that reads the files and fingerprints them
+    (`fileDigest.ts`: size plus 64 KiB from each end). The verdict says what was actually
+    compared, because a full hash of a video library would take minutes, and a wrong "these are
+    copies" could cost someone their files.
+  - New store queries: biggest folders, duplicate candidates ranked by wasted space, files
+    unchanged since a date, and an exact name-and-size lookup.
+  - Fingerprint reads are one file at a time, and an unreadable file reports no fingerprint rather
+    than failing the group.

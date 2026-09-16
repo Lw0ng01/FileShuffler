@@ -24,6 +24,7 @@ function App(): React.JSX.Element {
             results={library.results}
             term={library.term}
             error={library.error}
+            cleanup={library.cleanup}
             actions={library.actions}
           />
         ) : view === null ? (

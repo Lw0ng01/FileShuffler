@@ -36,6 +36,10 @@ const library: LibraryApi = {
   search: (term, limit) => ipcRenderer.invoke(LIBRARY_CHANNELS.search, term, limit),
   openFile: (path) => ipcRenderer.invoke(LIBRARY_CHANNELS.openFile, path),
   showInFolder: (path) => ipcRenderer.invoke(LIBRARY_CHANNELS.showInFolder, path),
+  biggestFolders: (limit) => ipcRenderer.invoke(LIBRARY_CHANNELS.biggestFolders, limit),
+  duplicates: (limit) => ipcRenderer.invoke(LIBRARY_CHANNELS.duplicates, limit),
+  notTouched: (days, limit) => ipcRenderer.invoke(LIBRARY_CHANNELS.notTouched, days, limit),
+  checkDuplicate: (name, size) => ipcRenderer.invoke(LIBRARY_CHANNELS.checkDuplicate, name, size),
   onView: (listener) => {
     const handler = (_event: IpcRendererEvent, view: LibraryView): void => listener(view)
     ipcRenderer.on(LIBRARY_CHANNELS.view, handler)
