@@ -81,10 +81,25 @@ const SKIPPED_NAMES: ReadonlySet<string> = new Set([
   '$windows.~bt',
   '$windows.~ws',
   '.git',
+  '__pycache__',
   'appdata',
   'node_modules',
-  'system volume information'
+  // Program installs on any drive, not just the system drive: measured on Lucas's second drive,
+  // 99% of the folders a scan walked were programs and games (PROJECT.md §7 measure and harden).
+  'program files',
+  'program files (x86)',
+  'site-packages',
+  'steamapps',
+  'system volume information',
+  'windowsapps'
 ])
+
+/**
+ * A folder holding one of these files is a tool's working folder, not somewhere people keep
+ * media, so neither it nor anything inside is scanned. `pyvenv.cfg` marks a Python virtual
+ * environment: 24 of them made up 82% of the folders under Lucas's Documents.
+ */
+export const SKIP_MARKER_FILES: ReadonlySet<string> = new Set(['pyvenv.cfg'])
 
 export interface SkipRules {
   /** Absolute paths that are never indexed, along with everything inside them. */

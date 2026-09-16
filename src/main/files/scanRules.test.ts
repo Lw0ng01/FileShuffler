@@ -68,6 +68,20 @@ describe('shouldSkipFolder', () => {
     ).toBe(true)
   })
 
+  it('skips program installs and developer tool folders on any drive, not just C:', () => {
+    for (const path of [
+      'D:\\Program Files',
+      // The rule judges a folder by its own name; the scanner never goes inside a skipped one.
+      'D:\\Program Files (x86)',
+      'E:\\SteamLibrary\\steamapps',
+      'D:\\WindowsApps',
+      'C:\\Users\\someone\\Documents\\project\\venv\\Lib\\site-packages',
+      'C:\\Users\\someone\\Documents\\project\\__pycache__'
+    ]) {
+      expect(shouldSkipFolder(path, path.split('\\').pop() as string, windows)).toBe(true)
+    }
+  })
+
   it('allows ordinary personal folders', () => {
     expect(shouldSkipFolder('D:\\Videos\\Clips', 'Clips', windows)).toBe(false)
     expect(shouldSkipFolder('C:\\Users\\someone\\Pictures', 'Pictures', windows)).toBe(false)

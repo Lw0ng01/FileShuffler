@@ -12,7 +12,7 @@ import type {
 import type { DriveSpace } from '../files/driveSpace'
 import type { ScanOptions, ScanSummary } from '../files/scanner'
 import { driveOf, scanRoots } from '../files/scanner'
-import type { IndexDb } from '../library/indexDb'
+import type { CategoryTotal, DriveTotal, IndexDb } from '../library/indexDb'
 
 export interface IndexerServiceDeps {
   db: IndexDb
@@ -61,6 +61,13 @@ export class IndexerService {
   private disposed = false
   /** Capacity per drive, refreshed after scans rather than read on every view. */
   private readonly space = new Map<string, DriveSpace>()
+  /**
+   * Category and drive totals, kept until the index changes. They are summed across every indexed
+   * file, and views are built every 200 ms during a scan: recomputing them each time took about
+   * 120 ms of every 200 on a 250,000-file library, on the main process (PROJECT.md §7 measure and
+   * harden). Null means "recompute on next use".
+   */
+  private cachedTotals: { categories: CategoryTotal[]; drives: DriveTotal[] } | null = null
 
   constructor(deps: IndexerServiceDeps) {
     this.deps = deps
@@ -76,7 +83,7 @@ export class IndexerService {
 
   getView(): LibraryView {
     const roots = this.deps.db.roots()
-    const totals = this.deps.db.totalsByCategory()
+    const totals = this.totals().categories
     return {
       status: this.scanning === null ? 'idle' : 'scanning',
       roots: roots.map((root) => ({
@@ -120,6 +127,7 @@ export class IndexerService {
 
   removeRoot(path: string): LibraryView {
     this.deps.db.removeRoot(path)
+    this.invalidateTotals()
     this.emit()
     return this.getView()
   }
@@ -241,6 +249,7 @@ export class IndexerService {
 
   /** Something outside the service changed the index, for example clearing it from Settings. */
   notifyChanged(): void {
+    this.invalidateTotals()
     this.emit()
   }
 
@@ -311,8 +320,12 @@ export class IndexerService {
         break
       }
       removed += this.deps.db.finishRoot(root.path, scanId).removed
+      // Each finished folder shows up in the totals straight away, not only when all are done.
+      this.invalidateTotals()
     }
 
+    // A cancelled or failed pass may still have written files, so the totals are stale either way.
+    this.invalidateTotals()
     await this.refreshDriveSpace()
     this.lastScan = { finishedAt: now(), files, removed, errors, cancelled }
     if (errors > 0 && this.error === null) {
@@ -322,7 +335,7 @@ export class IndexerService {
 
   /** Indexed drives, plus any drive holding a root that has nothing indexed yet. */
   private drives(): LibraryDrive[] {
-    const totals = this.deps.db.totalsByDrive()
+    const totals = this.totals().drives
     const known = new Map<string, LibraryDrive>()
     for (const total of totals) {
       const space = this.space.get(total.drive)
@@ -345,6 +358,19 @@ export class IndexerService {
       })
     }
     return [...known.values()].sort((a, b) => b.bytes - a.bytes || a.drive.localeCompare(b.drive))
+  }
+
+  private totals(): { categories: CategoryTotal[]; drives: DriveTotal[] } {
+    this.cachedTotals ??= {
+      categories: this.deps.db.totalsByCategory(),
+      drives: this.deps.db.totalsByDrive()
+    }
+    return this.cachedTotals
+  }
+
+  /** The index changed, so the next view recomputes its totals. */
+  private invalidateTotals(): void {
+    this.cachedTotals = null
   }
 
   private reportProgress(progress: ScanProgressView): void {

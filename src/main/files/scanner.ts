@@ -4,6 +4,7 @@ import { isAbsolute, join, parse } from 'node:path'
 import {
   categoryOf,
   shouldSkipFolder,
+  SKIP_MARKER_FILES,
   systemSkipRules,
   type Category,
   type SkipRules
@@ -86,7 +87,9 @@ function message(error: unknown): string {
  */
 export async function scanRoots(options: ScanOptions): Promise<ScanSummary> {
   const rules = options.rules ?? systemSkipRules()
-  const batchSize = Math.max(1, options.batchSize ?? 500)
+  // 2,000 rather than 500: fewer, larger transactions were measurably faster to index (PROJECT.md
+  // §7 measure and harden), and each batch is still a small, bounded amount of memory.
+  const batchSize = Math.max(1, options.batchSize ?? 2000)
   const concurrency = Math.max(1, options.concurrency ?? 4)
   const maxDepth = Math.max(0, options.maxDepth ?? 24)
   const summary: ScanSummary = { folders: 0, files: 0, bytes: 0, errors: [], cancelled: false }
@@ -131,6 +134,9 @@ export async function scanRoots(options: ScanOptions): Promise<ScanSummary> {
       return
     }
     summary.folders += 1
+
+    // A virtual environment or similar tool folder: nothing here is personal media.
+    if (entries.some((entry) => entry.isFile() && SKIP_MARKER_FILES.has(entry.name))) return
 
     const found: ScanFile[] = []
     for (const entry of entries) {
