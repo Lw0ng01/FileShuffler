@@ -162,6 +162,91 @@ describe('IndexDb', () => {
     ])
   })
 
+  it('records plays and finishes, and ranks what played most', () => {
+    expect(db.playTotals()).toEqual({ plays: 0, finished: 0, files: 0, since: null })
+
+    db.recordOpened('D:\\Media\\a.mp4', 'a.mp4', 'D:\\Media', 1_000)
+    db.recordFinished('D:\\Media\\a.mp4', 2_000)
+    db.recordOpened('D:\\Media\\a.mp4', 'a.mp4', 'D:\\Media', 3_000)
+    db.recordOpened('D:\\Media\\b.mp4', 'b.mp4', 'D:\\Media', 4_000)
+    db.recordFinished('D:\\Media\\b.mp4', 5_000)
+
+    expect(db.mostPlayed(10)).toEqual([
+      {
+        path: 'D:\\Media\\a.mp4',
+        name: 'a.mp4',
+        folder: 'D:\\Media',
+        plays: 2,
+        finished: 1,
+        lastPlayedAt: 3_000
+      },
+      {
+        path: 'D:\\Media\\b.mp4',
+        name: 'b.mp4',
+        folder: 'D:\\Media',
+        plays: 1,
+        finished: 1,
+        lastPlayedAt: 4_000
+      }
+    ])
+    expect(db.recentlyPlayed(10).map((row) => row.name)).toEqual(['b.mp4', 'a.mp4'])
+    expect(db.playTotals()).toEqual({ plays: 3, finished: 2, files: 2, since: 1_000 })
+  })
+
+  it('finishes only the latest play, so a later skip stays a skip', () => {
+    db.recordOpened('D:\\Media\\a.mp4', 'a.mp4', 'D:\\Media', 1_000)
+    db.recordOpened('D:\\Media\\a.mp4', 'a.mp4', 'D:\\Media', 2_000)
+    db.recordFinished('D:\\Media\\a.mp4', 3_000)
+    // A second end event must not reach back and finish the earlier, skipped play.
+    db.recordFinished('D:\\Media\\a.mp4', 4_000)
+
+    expect(db.playTotals()).toMatchObject({ plays: 2, finished: 1 })
+  })
+
+  it('lists indexed videos that have never been played', () => {
+    const scan = db.startScan()
+    db.putFiles(scan, [
+      file('D:\\Media\\seen.mp4', { modifiedMs: 1 }),
+      file('D:\\Media\\unseen.mp4', { modifiedMs: 2 }),
+      file('D:\\Media\\photo.jpg', { category: 'photo' })
+    ])
+    db.recordOpened('D:\\Media\\seen.mp4', 'seen.mp4', 'D:\\Media', 10)
+
+    expect(db.neverPlayed(10).map((row) => row.name)).toEqual(['unseen.mp4'])
+    expect(db.hasPlayed('D:\\Media\\seen.mp4')).toBe(true)
+    expect(db.hasPlayed('D:\\Media\\unseen.mp4')).toBe(false)
+  })
+
+  it('describes a file known from the index or from play history, and nothing else', () => {
+    const scan = db.startScan()
+    db.putFiles(scan, [file('D:\\Media\\indexed.mp4')])
+    db.recordOpened('E:\\Shows\\played.mkv', 'played.mkv', 'E:\\Shows', 1)
+
+    expect(db.describeFile('D:\\Media\\indexed.mp4')).toEqual({
+      name: 'indexed.mp4',
+      folder: 'D:\\Media'
+    })
+    expect(db.describeFile('E:\\Shows\\played.mkv')).toEqual({
+      name: 'played.mkv',
+      folder: 'E:\\Shows'
+    })
+    expect(db.describeFile('C:\\Windows\\notepad.exe')).toBeNull()
+  })
+
+  it('keeps favorites once each, newest first', () => {
+    db.addFavorite('D:\\Media\\a.mp4', 'a.mp4', 'D:\\Media', 1)
+    db.addFavorite('D:\\Media\\b.mp4', 'b.mp4', 'D:\\Media', 2)
+    db.addFavorite('D:\\Media\\a.mp4', 'a.mp4', 'D:\\Media', 3)
+
+    expect(db.favorites(10).map((row) => [row.name, row.addedAt])).toEqual([
+      ['b.mp4', 2],
+      ['a.mp4', 1]
+    ])
+
+    db.removeFavorite('D:\\Media\\b.mp4')
+    expect(db.favorites(10).map((row) => row.path)).toEqual(['D:\\Media\\a.mp4'])
+  })
+
   it('knows whether a path is in the index', () => {
     const scan = db.startScan()
     db.putFiles(scan, [file('D:\\Media\\a.mp4')])

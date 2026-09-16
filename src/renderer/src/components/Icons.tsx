@@ -102,3 +102,14 @@ export function PlayIcon(props: IconProps): React.JSX.Element {
     </Svg>
   )
 }
+
+export function StatsIcon(props: IconProps): React.JSX.Element {
+  return (
+    <Svg {...props}>
+      <path d="M3 20h18" />
+      <path d="M6 20v-8" />
+      <path d="M11 20V5" />
+      <path d="M16 20v-5" />
+    </Svg>
+  )
+}

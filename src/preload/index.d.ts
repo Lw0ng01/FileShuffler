@@ -1,5 +1,6 @@
 import type { LibraryApi } from '../shared/library'
 import type { ShufflerApi } from '../shared/shuffler'
+import type { StatsApi } from '../shared/stats'
 
 declare global {
   interface Window {
@@ -7,6 +8,7 @@ declare global {
     api: {
       shuffler: ShufflerApi
       library: LibraryApi
+      stats: StatsApi
     }
   }
 }

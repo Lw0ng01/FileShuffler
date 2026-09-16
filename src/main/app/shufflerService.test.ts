@@ -5,7 +5,7 @@ import type { ShuffleSnapshot } from '../domain/shuffle'
 import type { ProgressSource } from '../files/progressStore'
 import { FakePlayer } from '../playback/fakePlayer'
 import type { PlaybackAdapter } from '../playback/types'
-import { ShufflerService, type ShufflerServiceDeps } from './shufflerService'
+import { ShufflerService, type PlayRecorder, type ShufflerServiceDeps } from './shufflerService'
 
 interface Options {
   /** What the folder picker returns; null means cancelled. */
@@ -13,6 +13,7 @@ interface Options {
   videos?: string[] | Error
   launchPlayer?: ShufflerServiceDeps['launchPlayer']
   progress?: ProgressSource
+  plays?: PlayRecorder
 }
 
 function setup(options: Options = {}): {
@@ -43,6 +44,7 @@ function setup(options: Options = {}): {
     random: () => 0
   }
   if (options.progress !== undefined) deps.progress = options.progress
+  if (options.plays !== undefined) deps.plays = options.plays
   const service = new ShufflerService(deps)
   const views: ShufflerView[] = []
   service.onView((view) => views.push(view))
@@ -77,6 +79,31 @@ class FakeProgress implements ProgressSource {
     return this.last
   }
 }
+
+describe('ShufflerService play history', () => {
+  it('records plays with full paths', async () => {
+    const openedPaths: string[] = []
+    const finishedPaths: string[] = []
+    const plays: PlayRecorder = {
+      opened: (path, name, folder) => {
+        openedPaths.push(`${path}|${name}|${folder}`)
+      },
+      finished: (path) => {
+        finishedPaths.push(path)
+      }
+    }
+    const { service, players } = setup({ plays })
+    await service.chooseFolder()
+    await service.play()
+    opened(players[0])
+    const name = service.getView().current as string
+    players[0]?.emit({ type: 'ended', token: players[0].lastToken })
+
+    expect(openedPaths).toEqual([`${join('/videos', name)}|${name}|/videos`])
+    expect(finishedPaths).toEqual([join('/videos', name)])
+    await service.dispose()
+  })
+})
 
 describe('ShufflerService saved progress', () => {
   it('remembers where a folder’s cycle got to and continues it next time', async () => {

@@ -4,10 +4,13 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { LIBRARY_CHANNELS } from '../shared/library'
 import { CHANNELS } from '../shared/shuffler'
+import { STATS_CHANNELS } from '../shared/stats'
 import { IndexerService } from './app/indexerService'
 import { ShufflerService } from './app/shufflerService'
+import { StatsService } from './app/statsService'
 import { IndexDb } from './library/indexDb'
 import { registerLibraryIpc } from './libraryIpc'
+import { registerStatsIpc } from './statsIpc'
 import { readDriveSpace } from './files/driveSpace'
 import { fileDigest } from './files/fileDigest'
 import { readFileIdentity } from './files/fileIdentity'
@@ -18,6 +21,17 @@ import { findMpv } from './playback/mpv/findMpv'
 import { KEY_LABELS, launchMpv } from './playback/mpv/mpvPlayer'
 
 let mainWindow: BrowserWindow | null = null
+
+// The index and play history live beside the shuffler's progress, in the app's own data folder
+// (PROJECT.md §2.8). Created first because both the shuffler and the library use it.
+const indexDb = new IndexDb(join(app.getPath('userData'), 'index.db'))
+const stats = new StatsService({ db: indexDb })
+
+stats.onView((view) => {
+  if (mainWindow !== null && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(STATS_CHANNELS.view, view)
+  }
+})
 
 const shuffler = new ShufflerService({
   pickFolder: async () => {
@@ -45,7 +59,17 @@ const shuffler = new ShufflerService({
   identify: readFileIdentity,
   playerKeys: KEY_LABELS,
   // Stays in the app's own data folder, never with the user's files (PROJECT.md §2.8).
-  progress: new ProgressStore(join(app.getPath('userData'), 'progress.json'))
+  progress: new ProgressStore(join(app.getPath('userData'), 'progress.json')),
+  plays: {
+    opened: (path, name, folder) => {
+      indexDb.recordOpened(path, name, folder)
+      stats.notifyChanged()
+    },
+    finished: (path) => {
+      indexDb.recordFinished(path)
+      stats.notifyChanged()
+    }
+  }
 })
 
 shuffler.onView((view) => {
@@ -54,8 +78,6 @@ shuffler.onView((view) => {
   }
 })
 
-// The index lives beside the shuffler's progress, in the app's own data folder (PROJECT.md §2.8).
-const indexDb = new IndexDb(join(app.getPath('userData'), 'index.db'))
 const library = new IndexerService({
   db: indexDb,
   pickFolder: async () => {
@@ -163,6 +185,7 @@ app.whenReady().then(() => {
 
   registerShufflerIpc(ipcMain, shuffler, isTrustedSender)
   registerLibraryIpc(ipcMain, library, isTrustedSender)
+  registerStatsIpc(ipcMain, stats, isTrustedSender)
   library.addDefaultRoots()
   createWindow()
   // Reopens last time's folder where its cycle left off; the view updates when it's ready.

@@ -1,0 +1,77 @@
+import type { IpcMainInvokeEvent } from 'electron'
+import { describe, expect, it, vi } from 'vitest'
+import { STATS_CHANNELS } from '../shared/stats'
+import type { IpcRegistry } from './ipc'
+import { registerStatsIpc, type StatsBackend } from './statsIpc'
+
+/** Stands in for Electron's ipcMain, keeping the handlers so a test can call them. */
+class FakeIpc implements IpcRegistry {
+  readonly handlers = new Map<string, (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown>()
+
+  handle(
+    channel: string,
+    listener: (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown
+  ): void {
+    this.handlers.set(channel, listener)
+  }
+
+  removeHandler(channel: string): void {
+    this.handlers.delete(channel)
+  }
+
+  invoke(channel: string, ...args: unknown[]): unknown {
+    const handler = this.handlers.get(channel)
+    if (handler === undefined) throw new Error(`no handler for ${channel}`)
+    return handler({} as IpcMainInvokeEvent, ...args)
+  }
+}
+
+function setup(trusted = true): { ipc: FakeIpc; backend: StatsBackend; unregister: () => void } {
+  const ipc = new FakeIpc()
+  const backend = {
+    getView: vi.fn(),
+    addFavorite: vi.fn(),
+    removeFavorite: vi.fn()
+  } as unknown as StatsBackend
+  const unregister = registerStatsIpc(ipc, backend, () => trusted)
+  return { ipc, backend, unregister }
+}
+
+describe('registerStatsIpc', () => {
+  it('forwards each command', () => {
+    const { ipc, backend } = setup()
+    ipc.invoke(STATS_CHANNELS.getView)
+    ipc.invoke(STATS_CHANNELS.addFavorite, 'D:\\Media\\a.mp4')
+    ipc.invoke(STATS_CHANNELS.removeFavorite, 'D:\\Media\\a.mp4')
+
+    expect(backend.getView).toHaveBeenCalledTimes(1)
+    expect(backend.addFavorite).toHaveBeenCalledWith('D:\\Media\\a.mp4')
+    expect(backend.removeFavorite).toHaveBeenCalledWith('D:\\Media\\a.mp4')
+  })
+
+  it('rejects a favorite that is not a path', () => {
+    const { ipc, backend } = setup()
+    for (const bad of [undefined, 42, '', 'x'.repeat(4097), { path: 'D:\\a.mp4' }]) {
+      expect(() => ipc.invoke(STATS_CHANNELS.addFavorite, bad)).toThrow('Expected a file path')
+      expect(() => ipc.invoke(STATS_CHANNELS.removeFavorite, bad)).toThrow('Expected a file path')
+    }
+    expect(backend.addFavorite).not.toHaveBeenCalled()
+    expect(backend.removeFavorite).not.toHaveBeenCalled()
+  })
+
+  it('rejects every request from an untrusted sender', () => {
+    const { ipc, backend } = setup(false)
+    expect(() => ipc.invoke(STATS_CHANNELS.getView)).toThrow('untrusted sender')
+    expect(backend.getView).not.toHaveBeenCalled()
+  })
+
+  it('removes all of its handlers', () => {
+    const { ipc, unregister } = setup()
+    const commands = Object.values(STATS_CHANNELS).filter(
+      (channel) => channel !== STATS_CHANNELS.view
+    )
+    expect(ipc.handlers.size).toBe(commands.length)
+    unregister()
+    expect(ipc.handlers.size).toBe(0)
+  })
+})

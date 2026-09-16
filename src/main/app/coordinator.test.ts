@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import { ShuffleSession } from '../domain/shuffle'
 import type { FileIdentity } from '../files/fileIdentity'
 import { FakePlayer } from '../playback/fakePlayer'
-import { ShuffleCoordinator, type CoordinatorState } from './coordinator'
+import { ShuffleCoordinator, type CoordinatorState, type PlayHistory } from './coordinator'
 
 interface Setup {
   player: FakePlayer
@@ -16,7 +16,7 @@ function identity(ino: number): FileIdentity {
   return { isFile: true, dev: 1n, ino: BigInt(ino), size: 1000n, mtimeNs: 1n }
 }
 
-function setup(items: string[]): Setup {
+function setup(items: string[], history?: PlayHistory): Setup {
   const player = new FakePlayer()
   const files = new Map(items.map((id, index) => [`/videos/${id}`, identity(index + 1)]))
   const trash = vi.fn(async (path: string) => {
@@ -27,7 +27,8 @@ function setup(items: string[]): Setup {
     player,
     resolvePath: (id) => `/videos/${id}`,
     trash,
-    identify: async (path) => files.get(path) ?? null
+    identify: async (path) => files.get(path) ?? null,
+    history
   })
   return { player, coordinator, files, trash }
 }
@@ -201,6 +202,73 @@ describe('ShuffleCoordinator', () => {
     player.emit({ type: 'ended', token: 1 })
     expect(player.loads).toHaveLength(1)
     expect(seen).toHaveLength(2)
+  })
+})
+
+describe('ShuffleCoordinator play history', () => {
+  function recorder(): PlayHistory & { events: string[] } {
+    const events: string[] = []
+    return {
+      events,
+      opened: (id) => {
+        events.push(`opened ${id}`)
+      },
+      finished: (id) => {
+        events.push(`finished ${id}`)
+      }
+    }
+  }
+
+  it('records a play only once the player confirms it, and a finish when it ends', () => {
+    const history = recorder()
+    const { player, coordinator } = setup(['a.mkv', 'b.mkv'], history)
+    coordinator.next()
+    const first = coordinator.getState().current
+    expect(history.events).toEqual([])
+
+    player.emit({ type: 'loaded', token: 1 })
+    player.emit({ type: 'ended', token: 1 })
+    expect(history.events).toEqual([`opened ${first}`, `finished ${first}`])
+  })
+
+  it('does not count a skip as a finish', () => {
+    const history = recorder()
+    const { player, coordinator } = setup(['a.mkv', 'b.mkv'], history)
+    coordinator.next()
+    const first = coordinator.getState().current
+    player.emit({ type: 'loaded', token: 1 })
+    coordinator.next()
+
+    expect(history.events).toEqual([`opened ${first}`])
+  })
+
+  it('ignores late events from a load that was replaced', () => {
+    const history = recorder()
+    const { player, coordinator } = setup(['a.mkv', 'b.mkv', 'c.mkv'], history)
+    coordinator.next()
+    coordinator.next()
+    player.emit({ type: 'loaded', token: 1 })
+    player.emit({ type: 'ended', token: 1 })
+
+    expect(history.events).toEqual([])
+  })
+
+  it('keeps playing when recording fails', () => {
+    const history: PlayHistory = {
+      opened: () => {
+        throw new Error('disk full')
+      },
+      finished: () => {
+        throw new Error('disk full')
+      }
+    }
+    const { player, coordinator } = setup(['a.mkv', 'b.mkv'], history)
+    coordinator.next()
+    player.emit({ type: 'loaded', token: 1 })
+    expect(coordinator.getState().status).toBe('playing')
+
+    player.emit({ type: 'ended', token: 1 })
+    expect(player.loads).toHaveLength(2)
   })
 })
 

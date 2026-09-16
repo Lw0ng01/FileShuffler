@@ -146,6 +146,15 @@ describe('IndexerService opening files', () => {
     expect(service.getView().lastError).toBeNull()
   })
 
+  it('also opens a file known only from play history', async () => {
+    const openPath = vi.fn(async () => '')
+    const { service, db } = setup({ openPath })
+    db.recordOpened('E:\\Shows\\ep1.mkv', 'ep1.mkv', 'E:\\Shows', 1)
+
+    await service.openFile('E:\\Shows\\ep1.mkv')
+    expect(openPath).toHaveBeenCalledWith('E:\\Shows\\ep1.mkv')
+  })
+
   it('refuses a path that is not in the index', async () => {
     const openPath = vi.fn(async () => '')
     const service = await withIndexedFile({ openPath })
