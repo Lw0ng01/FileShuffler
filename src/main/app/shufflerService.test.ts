@@ -177,7 +177,7 @@ describe('ShufflerService', () => {
       lastError: 'Undo or wait for the pending delete before changing folders.'
     })
 
-    await service.undoDelete(doomed)
+    expect(await service.undoDelete(doomed)).toBe('restored')
     await service.chooseFolder()
     expect(deps.pickFolder).toHaveBeenCalledTimes(2)
     await service.dispose()

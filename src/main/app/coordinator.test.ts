@@ -258,7 +258,7 @@ describe('ShuffleCoordinator deletes', () => {
     s.coordinator.deleteCurrent()
     openNext(s)
 
-    s.coordinator.undoDelete(doomed)
+    expect(s.coordinator.undoDelete(doomed)).toBe('restored')
     expect(s.coordinator.getState()).toMatchObject({ pendingDeletes: [], stats: { total: 3 } })
 
     await vi.advanceTimersByTimeAsync(10000)
@@ -267,6 +267,36 @@ describe('ShuffleCoordinator deletes', () => {
 
     s.coordinator.back()
     expect(s.coordinator.getState().current).toBe(doomed)
+  })
+
+  it('reports that an undo came too late once the trash step has begun', async () => {
+    const s = setup(['a.mkv', 'b.mkv', 'c.mkv'])
+    // Trashing never finishes here, so the delete stays in the one state undo cannot cancel.
+    s.trash.mockImplementationOnce(() => new Promise<void>(() => {}))
+    const doomed = playFirst(s)
+    s.coordinator.deleteCurrent()
+    openNext(s)
+
+    await vi.advanceTimersByTimeAsync(5000)
+    await settle()
+    expect(s.trash).toHaveBeenCalledTimes(1)
+
+    expect(s.coordinator.undoDelete(doomed)).toBe('trashing')
+    expect(s.coordinator.getState()).toMatchObject({ pendingDeletes: [], stats: { total: 2 } })
+  })
+
+  it('reports an unknown name, for example a delete that already finished', async () => {
+    const s = setup(['a.mkv', 'b.mkv', 'c.mkv'])
+    const doomed = playFirst(s)
+    s.coordinator.deleteCurrent()
+    openNext(s)
+
+    await vi.advanceTimersByTimeAsync(5000)
+    await settle()
+    expect(s.trash).toHaveBeenCalledTimes(1)
+
+    expect(s.coordinator.undoDelete(doomed)).toBe('unknown')
+    expect(s.coordinator.undoDelete('never-deleted.mkv')).toBe('unknown')
   })
 
   it('never trashes a file that changed during the undo window', async () => {
