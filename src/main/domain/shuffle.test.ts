@@ -152,6 +152,69 @@ describe('ShuffleSession', () => {
     expect(session.stats().total).toBe(2)
   })
 
+  it('continues a saved cycle instead of starting over', () => {
+    const items = names(6)
+    const first = new ShuffleSession(items, { random: seeded(3) })
+    const played = [first.next() as string, first.next() as string]
+    first.markOpened(played[0] as string)
+
+    const resumed = new ShuffleSession(items, { random: seeded(9), restore: first.snapshot() })
+    expect(resumed.stats()).toMatchObject({ cycle: 1, total: 6, opened: 1, remaining: 4 })
+
+    const rest = Array.from({ length: 4 }, () => resumed.next() as string)
+    expect(sorted([...played, ...rest])).toEqual(sorted(items))
+  })
+
+  it('reconciles a saved cycle with a folder that changed while the app was closed', () => {
+    const first = new ShuffleSession(names(5), { random: seeded(4) })
+    first.next()
+    const saved = first.snapshot()
+
+    // video-1.mkv was deleted elsewhere, and new.mkv appeared.
+    const items = [...names(5).filter((id) => id !== 'video-1.mkv'), 'new.mkv']
+    const resumed = new ShuffleSession(items, { random: seeded(5), restore: saved })
+    expect(resumed.stats().total).toBe(5)
+
+    const rest: string[] = []
+    for (;;) {
+      const id = resumed.next() as string
+      if (resumed.stats().cycle > 1) break
+      rest.push(id)
+    }
+    expect(rest).not.toContain('video-1.mkv')
+    expect(rest).toContain('new.mkv')
+    expect(new Set(rest).size).toBe(rest.length)
+  })
+
+  it('ignores saved names that no longer exist in the folder', () => {
+    const session = new ShuffleSession(names(3), {
+      random: seeded(6),
+      restore: { cycle: 4, bag: ['gone-1.mkv'], cycleDraws: ['gone-2.mkv'], opened: ['gone-2.mkv'] }
+    })
+    expect(session.stats()).toMatchObject({ cycle: 4, total: 3, opened: 0, remaining: 3 })
+    expect(sorted(Array.from({ length: 3 }, () => session.next() as string))).toEqual(
+      sorted(names(3))
+    )
+  })
+
+  it('restarts the cycle on request, without replaying what just played', () => {
+    const items = names(12)
+    const session = new ShuffleSession(items, { random: seeded(8) })
+    const played = Array.from({ length: 6 }, () => session.next() as string)
+    session.markOpened(played[0] as string)
+
+    expect(session.restartCycle()).toBe(true)
+    expect(session.stats()).toMatchObject({ cycle: 2, opened: 0, remaining: 12 })
+
+    const after = Array.from({ length: 12 }, () => session.next() as string)
+    expect(sorted(after)).toEqual(sorted(items))
+    expect(after[0]).not.toBe(played[played.length - 1])
+  })
+
+  it('refuses to restart a cycle when there is nothing to play', () => {
+    expect(new ShuffleSession([], { random: seeded(1) }).restartCycle()).toBe(false)
+  })
+
   it('replays history with Back and Next without consuming the cycle', () => {
     const session = new ShuffleSession(names(5), { random: seeded(7) })
     const a = session.next()

@@ -8,6 +8,7 @@ export interface ShufflerActions {
   back: () => void
   deleteCurrent: () => void
   undoDelete: (id: string) => void
+  restartCycle: () => void
 }
 
 /** How long a confirmation like "Restored clip.mkv" stays on screen. */
@@ -97,6 +98,11 @@ export function useShuffler(): {
       undoDelete: (id) =>
         run(async () => {
           showNotice(undoMessage(await api.undoDelete(id), id))
+        }),
+      restartCycle: () =>
+        run(async () => {
+          await api.restartCycle()
+          showNotice('Started a new cycle: every video can play again')
         })
     }
   }, [clearNoticeTimer, showNotice])

@@ -1,6 +1,8 @@
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ShufflerView } from '../../shared/shuffler'
+import type { ShuffleSnapshot } from '../domain/shuffle'
+import type { ProgressSource } from '../files/progressStore'
 import { FakePlayer } from '../playback/fakePlayer'
 import type { PlaybackAdapter } from '../playback/types'
 import { ShufflerService, type ShufflerServiceDeps } from './shufflerService'
@@ -10,6 +12,7 @@ interface Options {
   folder?: string | null
   videos?: string[] | Error
   launchPlayer?: ShufflerServiceDeps['launchPlayer']
+  progress?: ProgressSource
 }
 
 function setup(options: Options = {}): {
@@ -39,6 +42,7 @@ function setup(options: Options = {}): {
     playerKeys: { next: '>', back: '<', delete: 'Del' },
     random: () => 0
   }
+  if (options.progress !== undefined) deps.progress = options.progress
   const service = new ShufflerService(deps)
   const views: ShufflerView[] = []
   service.onView((view) => views.push(view))
@@ -53,6 +57,96 @@ function opened(player: FakePlayer | undefined): void {
 
 afterEach(() => {
   vi.useRealTimers()
+})
+
+/** Saved progress in memory, standing in for the JSON file on disk. */
+class FakeProgress implements ProgressSource {
+  readonly saved = new Map<string, ShuffleSnapshot>()
+  last: string | null = null
+
+  async read(folder: string): Promise<ShuffleSnapshot | null> {
+    return this.saved.get(folder) ?? null
+  }
+
+  async save(folder: string, snapshot: ShuffleSnapshot): Promise<void> {
+    this.saved.set(folder, snapshot)
+    this.last = folder
+  }
+
+  async lastFolder(): Promise<string | null> {
+    return this.last
+  }
+}
+
+describe('ShufflerService saved progress', () => {
+  it('remembers where a folder’s cycle got to and continues it next time', async () => {
+    const progress = new FakeProgress()
+    const first = setup({ progress })
+    await first.service.chooseFolder()
+    await first.service.play()
+    opened(first.players[0])
+    const played = first.service.getView().current as string
+    await first.service.next()
+    opened(first.players[0])
+    await first.service.dispose()
+
+    expect(progress.saved.get('/videos')?.cycleDraws).toContain(played)
+
+    const second = setup({ progress })
+    await second.service.chooseFolder()
+    expect(second.service.getView()).toMatchObject({ cycle: 1, total: 3, opened: 2 })
+    await second.service.dispose()
+  })
+
+  it('reopens the last folder at startup, ready to play', async () => {
+    const progress = new FakeProgress()
+    const first = setup({ progress })
+    await first.service.chooseFolder()
+    await first.service.dispose()
+
+    const second = setup({ progress })
+    await second.service.restoreLastSession()
+    expect(second.service.getView()).toMatchObject({
+      folder: '/videos',
+      status: 'ready',
+      total: 3
+    })
+    await second.service.dispose()
+  })
+
+  it('ignores a saved folder that can no longer be read, for example an unplugged drive', async () => {
+    const progress = new FakeProgress()
+    progress.last = '/gone'
+    const { service, deps } = setup({ progress, videos: new Error('ENOENT') })
+
+    await service.restoreLastSession()
+    expect(deps.listVideos).toHaveBeenCalledWith('/gone')
+    expect(service.getView()).toMatchObject({ status: 'no-folder', folder: null })
+  })
+
+  it('restarts the cycle on request and saves the new one', async () => {
+    const progress = new FakeProgress()
+    const { service, players } = setup({ progress })
+    await service.chooseFolder()
+    await service.play()
+    opened(players[0])
+    expect(service.getView()).toMatchObject({ cycle: 1, opened: 1 })
+
+    await service.restartCycle()
+    expect(service.getView()).toMatchObject({ cycle: 2, opened: 0, total: 3 })
+    expect(progress.saved.get('/videos')?.cycle).toBe(2)
+    await service.dispose()
+  })
+
+  it('works without a progress store at all', async () => {
+    const { service } = setup()
+    await service.restoreLastSession()
+    expect(service.getView().status).toBe('no-folder')
+    await service.chooseFolder()
+    await service.restartCycle()
+    expect(service.getView()).toMatchObject({ status: 'ready', total: 3 })
+    await service.dispose()
+  })
 })
 
 describe('ShufflerService', () => {

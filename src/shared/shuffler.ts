@@ -12,6 +12,7 @@ export const CHANNELS = {
   back: 'shuffler:back',
   deleteCurrent: 'shuffler:delete-current',
   undoDelete: 'shuffler:undo-delete',
+  restartCycle: 'shuffler:restart-cycle',
   /** Main → renderer: a new `ShufflerView`. */
   view: 'shuffler:view'
 } as const
@@ -65,6 +66,8 @@ export interface ShufflerApi {
   deleteCurrent(): Promise<void>
   /** Cancels a pending delete and reports what happened. */
   undoDelete(id: string): Promise<UndoResult>
+  /** Reshuffles now and starts a new cycle, discarding this cycle's progress. */
+  restartCycle(): Promise<void>
   /** Subscribes to view updates and returns an unsubscribe function. */
   onView(listener: (view: ShufflerView) => void): () => void
 }

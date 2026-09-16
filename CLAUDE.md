@@ -29,7 +29,8 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
   - `src/main/app/`: the coordinator that connects the shuffle session to a player
   - `src/main/playback/`: the player interface (`types.ts`) and the mpv adapter (`mpv/`,
     PROJECT.md §4)
-  - `src/main/files/`: read-only folder listing and file identity checks (PROJECT.md §2)
+  - `src/main/files/`: read-only folder listing and file identity checks (PROJECT.md §2), plus
+    saved cycle progress (`progressStore.ts`), which writes only inside the app's data folder
   - `src/main/app/shufflerService.ts`: one folder session (shuffle, coordinator, player lifecycle)
   - `src/main/ipc.ts`: renderer commands, with sender and argument checks
 - `src/preload/`: the only bridge to the UI. Expose narrow, typed functions; keep `index.d.ts` in sync

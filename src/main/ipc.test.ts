@@ -33,7 +33,8 @@ function setup(trusted = true): { ipc: FakeIpc; backend: ShufflerBackend; unregi
     next: vi.fn(),
     back: vi.fn(),
     deleteCurrent: vi.fn(),
-    undoDelete: vi.fn()
+    undoDelete: vi.fn(),
+    restartCycle: vi.fn()
   } as unknown as ShufflerBackend
   const unregister = registerShufflerIpc(ipc, backend, () => trusted)
   return { ipc, backend, unregister }
@@ -49,6 +50,7 @@ describe('registerShufflerIpc', () => {
     ipc.invoke(CHANNELS.back)
     ipc.invoke(CHANNELS.deleteCurrent)
     ipc.invoke(CHANNELS.undoDelete, 'clip.mkv')
+    ipc.invoke(CHANNELS.restartCycle)
 
     expect(backend.getView).toHaveBeenCalledTimes(1)
     expect(backend.chooseFolder).toHaveBeenCalledTimes(1)
@@ -57,6 +59,7 @@ describe('registerShufflerIpc', () => {
     expect(backend.back).toHaveBeenCalledTimes(1)
     expect(backend.deleteCurrent).toHaveBeenCalledTimes(1)
     expect(backend.undoDelete).toHaveBeenCalledWith('clip.mkv')
+    expect(backend.restartCycle).toHaveBeenCalledTimes(1)
   })
 
   it('ignores extra arguments instead of passing them on', () => {
@@ -85,7 +88,9 @@ describe('registerShufflerIpc', () => {
 
   it('removes all of its handlers', () => {
     const { ipc, unregister } = setup()
-    expect(ipc.handlers.size).toBe(7)
+    // One handler per channel, except `view`, which goes main → renderer.
+    const commands = Object.values(CHANNELS).filter((channel) => channel !== CHANNELS.view)
+    expect(ipc.handlers.size).toBe(commands.length)
     unregister()
     expect(ipc.handlers.size).toBe(0)
   })

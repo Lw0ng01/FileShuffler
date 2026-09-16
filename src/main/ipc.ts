@@ -13,7 +13,14 @@ export interface IpcRegistry {
 
 export type ShufflerBackend = Pick<
   ShufflerService,
-  'getView' | 'chooseFolder' | 'play' | 'next' | 'back' | 'deleteCurrent' | 'undoDelete'
+  | 'getView'
+  | 'chooseFolder'
+  | 'play'
+  | 'next'
+  | 'back'
+  | 'deleteCurrent'
+  | 'undoDelete'
+  | 'restartCycle'
 >
 
 /** Longest file name accepted from the renderer; real names are far shorter. */
@@ -51,6 +58,7 @@ export function registerShufflerIpc(
     }
     return backend.undoDelete(id)
   })
+  handle(CHANNELS.restartCycle, () => backend.restartCycle())
 
   return () => {
     for (const channel of channels) ipc.removeHandler(channel)

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { ShufflerView } from '../../../shared/shuffler'
 import { useNow } from '../hooks/useNow'
 import { useShortcuts } from '../hooks/useShortcuts'
@@ -195,7 +196,7 @@ function StatusCard({
             {view.status === 'loading' ? 'Opening' : 'Now playing'}
           </p>
           <p className="now-title">{view.current}</p>
-          <Progress view={view} />
+          <Progress view={view} onRestartCycle={actions.restartCycle} />
         </div>
       )
     case 'finished':
@@ -223,14 +224,22 @@ function StatusCard({
             <PlayIcon />
             Reopen player
           </button>
-          <Progress view={view} />
+          <Progress view={view} onRestartCycle={actions.restartCycle} />
         </div>
       )
   }
 }
 
-function Progress({ view }: { view: ShufflerView }): React.JSX.Element {
+function Progress({
+  view,
+  onRestartCycle
+}: {
+  view: ShufflerView
+  onRestartCycle: () => void
+}): React.JSX.Element {
   const percent = view.total === 0 ? 0 : Math.min(100, (view.opened / view.total) * 100)
+  // Restarting throws away this cycle's progress, so it asks first rather than acting on one click.
+  const [confirming, setConfirming] = useState(false)
   return (
     <div className="progress">
       <div
@@ -248,6 +257,31 @@ function Progress({ view }: { view: ShufflerView }): React.JSX.Element {
           Cycle {view.cycle} · {view.opened} of {view.total} opened
         </span>
         {view.failed > 0 && <span className="warning-text">{view.failed} skipped</span>}
+        {confirming ? (
+          <span className="restart">
+            <span className="muted">Start over, losing this cycle&rsquo;s progress?</span>
+            <button
+              className="btn btn-small"
+              onClick={() => {
+                setConfirming(false)
+                onRestartCycle()
+              }}
+            >
+              Restart
+            </button>
+            <button className="btn btn-small" onClick={() => setConfirming(false)}>
+              Keep going
+            </button>
+          </span>
+        ) : (
+          <button
+            className="btn btn-small"
+            onClick={() => setConfirming(true)}
+            title="Reshuffle every video and start a new cycle"
+          >
+            Restart cycle
+          </button>
+        )}
       </div>
     </div>
   )
