@@ -18,8 +18,9 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
 "Working with Lucas") are the handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #30 is on `main`. **PR #31 (the Windows
-   window chrome) is waiting for review** - it is the only branch outstanding.
+1. `git checkout main && git pull`. Everything through PR #30 is on `main`. One branch is waiting
+   for review: **`worktree-windows-chrome`**, the Windows window chrome. If it has been merged,
+   nothing else is outstanding.
 2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads its binary on first
    run), then `npm test`. Expect 305 passing, plus 7 more with `MPV_PATH` set to mpv's path.
    - **On Windows, use Command Prompt, not PowerShell**, or `npm.cmd run dev`: Windows' default
