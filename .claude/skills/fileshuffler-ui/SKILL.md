@@ -53,11 +53,35 @@ buttons and rows, `12px`/`14px`/`16px` for cards and panels, `999px` for pills a
 
 ## Motion
 
-**Recorded - what is in the code today.** There are only two transitions in 842 lines of CSS, so
-motion is effectively a blank page:
+**Recorded - the tokens.** Defined on `:root` in `styles.css`. Use them; never write a raw duration
+or easing into a rule.
 
-- `.btn` - `background 120ms ease, border-color 120ms ease`
-- `.progress-fill` - `width 300ms ease`
+- `--dur-fast` 140ms - hover, colour and press feedback
+- `--dur-base` 220ms - something entering the screen
+- `--dur-slow` 320ms - larger surfaces, such as a toast
+- `--spring` - a real spring with a small overshoot, written as `linear()` inside an `@supports`
+  test, with a `cubic-bezier` fallback. It has to be `@supports` rather than two declarations: a
+  custom property is not validated until it is used, so an unsupported `linear()` would make every
+  rule using the property invalid instead of falling back.
+- `--ease-out` - settles straight onto its value. For anywhere an overshoot would misread, such as
+  `.progress-fill`, where it would look like the bar passing 100%.
+
+**Recorded - where motion is used, and only there** *(Lucas, 2026-09-17: springs on the moments that
+matter, nothing anywhere else)*:
+
+- `.now-title` - the filename changing is what the Shuffle screen exists for
+- `.controls`, `.hints` - arriving once playback starts
+- `.banner` - errors and confirmations, which arrive unannounced
+- `.toast` - the undo window, the one moment with a deadline attached
+- `.btn:active` - press feedback, 60ms down and a spring back
+
+Everything else stays still on purpose, and nothing loops or pulses: a permanent animation is the
+kind you notice twice and resent by the twentieth time.
+
+**Recorded - how it is triggered.** Animations run on mount, so React mounting or remounting an
+element plays them and a changing `key` restarts them. That is why Next pressed twice quickly
+restarts the title cleanly instead of queueing, and it keeps timing state out of the renderer, which
+has no tests.
 
 **Recorded - rules that hold regardless of taste:**
 
@@ -65,8 +89,9 @@ motion is effectively a blank page:
   `height`, `top` or `left`, which force layout on every frame. `.progress-fill` animating `width`
   is an accepted exception: width *is* the meaning there, and it changes at most a few times a
   second.
-- **Every animation needs a `prefers-reduced-motion: reduce` escape.** There is currently **none**
-  anywhere in the app; add the media query alongside the first real animation rather than after.
+- **Every animation needs a `prefers-reduced-motion: reduce` escape.** There is now a blanket one at
+  the end of `styles.css` cutting every duration to 1ms. State still changes; it just arrives
+  instantly. Keep new animations inside that guarantee rather than opting out of it.
 - **Motion must not delay a result.** Never gate a state change behind an animation finishing. This
   matters most for the delete undo window, which is safety-critical: the countdown is real time, not
   an animation.
@@ -74,10 +99,10 @@ motion is effectively a blank page:
   animation must survive being restarted mid-flight without flashing or queueing.
 - Keep focus rings instant. Never transition an `outline`.
 
-**Open - values to agree with Lucas.** Proposed starting point, to confirm against a real screen:
-120ms for hover and colour feedback (already in use), 160-200ms for small things entering or
-leaving such as a toast, 240ms for larger surfaces; `ease-out` entering, `ease-in` leaving.
-Whether the app uses spring-style motion anywhere at all is also open.
+**Open - exit animations.** An element React unmounts leaves instantly, because nothing keeps it on
+screen long enough to animate out. Adding that needs a small presence hook, which would put timing
+state in the undo path - the one that gates file deletion - in a renderer with no tests. Decide
+after seeing the entrances running, and never at the cost of delaying the undo itself.
 
 ## Focus and keyboard (Recorded)
 
