@@ -1,6 +1,6 @@
 import { CleanupIcon, DashboardIcon, SettingsIcon, ShuffleIcon, StatsIcon } from './Icons'
 
-export type Page = 'shuffle' | 'dashboard' | 'cleanup' | 'stats' | 'settings'
+export type Page = 'dashboard' | 'shuffle' | 'cleanup' | 'stats' | 'settings'
 
 interface Props {
   page: Page
@@ -18,19 +18,19 @@ export function Sidebar({ page, onNavigate }: Props): React.JSX.Element {
       </div>
       <button
         className="nav-item"
-        aria-current={page === 'shuffle' ? 'page' : undefined}
-        onClick={() => onNavigate('shuffle')}
-      >
-        <ShuffleIcon />
-        Shuffle
-      </button>
-      <button
-        className="nav-item"
         aria-current={page === 'dashboard' ? 'page' : undefined}
         onClick={() => onNavigate('dashboard')}
       >
         <DashboardIcon />
         Dashboard
+      </button>
+      <button
+        className="nav-item"
+        aria-current={page === 'shuffle' ? 'page' : undefined}
+        onClick={() => onNavigate('shuffle')}
+      >
+        <ShuffleIcon />
+        Shuffle
       </button>
       <button
         className="nav-item"

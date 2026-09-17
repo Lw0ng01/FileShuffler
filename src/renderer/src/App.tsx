@@ -11,7 +11,9 @@ import { useShuffler } from './hooks/useShuffler'
 import { useStats } from './hooks/useStats'
 
 function App(): React.JSX.Element {
-  const [page, setPage] = useState<Page>('shuffle')
+  // The dashboard is the app's home: it says what the library holds, and a shuffle starts from a
+  // folder rather than from the app opening.
+  const [page, setPage] = useState<Page>('dashboard')
   const { view, actions, actionError, actionNotice } = useShuffler()
   // Every hook stays subscribed while the app is open, so switching screens shows current state
   // rather than reloading it. A shuffle keeps running while another screen is showing.

@@ -93,8 +93,11 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
     `testing/fakeIpc.ts`
 - `src/preload/`: the only bridge to the UI. Expose narrow, typed functions; keep `index.d.ts` in sync
 - `src/renderer/`: React UI, presentation only (`components/`, one hook per area in `hooks/`, and
-  shared display formatting in `format.ts`). The sidebar switches between Shuffle, Dashboard,
-  Cleanup, Stats and Settings. The dashboard's sections live in `components/dashboard/`
+  shared display formatting in `format.ts`). The sidebar switches between Dashboard, Shuffle,
+  Cleanup, Stats and Settings, and Dashboard is the tab the app opens on. The dashboard's sections
+  live in `components/dashboard/`
+  - `.screen` is the 760px reading width; add `wide` to it (Dashboard, Cleanup, Stats) for screens
+    built from lists and grids
   - Front-end conventions (tokens, the shape scale, motion, focus, adding a screen) live in the
     `fileshuffler-ui` skill, `.claude/skills/fileshuffler-ui/SKILL.md`. Read it before changing
     anything under `src/renderer/`, and move an entry from "Open" to "Recorded" once Lucas settles

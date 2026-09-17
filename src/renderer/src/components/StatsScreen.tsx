@@ -45,7 +45,7 @@ export function StatsScreen({
   const row = { favorites, actions, fileActions }
 
   return (
-    <div className="screen">
+    <div className="screen wide">
       <header className="screen-header">
         <h1>Stats</h1>
       </header>
