@@ -19,8 +19,8 @@ memory. This section, the rest of this doc and `CLAUDE.md` (including "Working w
 handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #24 is on `main`. One branch is waiting
-   for review: `worktree-theme-setting`, the Appearance setting logged below.
+1. `git checkout main && git pull`. Everything through PR #25 is on `main`. One branch is waiting
+   for review: `worktree-light-palette`, the lighter light mode logged below.
 2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads on first run), then
    `npm test`. Expect 301 passing, plus 7 more with `MPV_PATH` set to the machine's mpv.
 3. Then start the front end (Next steps below).
@@ -1506,3 +1506,17 @@ machines, not Lucas's.
     than on what it was checking. The folder is now created in `beforeEach`.
   - 301 unit tests, up from 292. Nine new: four on the service, two on IPC validation, three on the
     store, including the two backward-compatibility cases above.
+- **2026-09-17:** A lighter light mode. *Lucas: the themes work and look good, but light mode's
+  background was "almost opaque" and wanted to be a touch whiter.*
+  - He was right, and it was a wrong value rather than a matter of taste: `--bg` was `#ececf0`,
+    noticeably greyer than macOS's own grouped background. It is now `#f2f2f7`, the system value.
+  - **The catch, and why this was not a one-line change.** The cards have no border - they are told
+    apart from the background purely by being a lighter surface. Whitening the background shrinks
+    that step, so cards would have started dissolving into it. A new `--card-shadow` token carries
+    the separation instead: `none` in dark, where lightness already does the job, and barely-there
+    in light. Lift, not outline, which is how the system handles the same problem.
+  - Checked before changing the value: `--bg` is used in exactly one place (`body`), and the
+    `--raised` surfaces sit on white panels rather than on the background, so nothing else washed
+    out. The toast floats over the background but carries its own shadow already.
+  - No behaviour change, so no new tests: 301 unit tests, 308 with the real-mpv set, lint and
+    typecheck clean.

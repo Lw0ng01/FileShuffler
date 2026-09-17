@@ -42,7 +42,7 @@ literal colour will be wrong in one of the two themes.
 Surfaces `--bg`, `--panel`, `--raised`, `--sidebar`; fills `--selected`; lines `--border`,
 `--border-strong`; text `--text`, `--muted`, `--faint`; accent `--accent`, `--accent-hover`,
 `--accent-text`, `--accent-soft`; status `--danger`, `--danger-soft`, `--warning`, `--success`; plus
-`--shadow`.
+`--shadow` and `--card-shadow`.
 
 Any new colour is added to **both** blocks in the same commit.
 
@@ -59,6 +59,15 @@ spends the accent on decoration, and then it stops meaning "this is the thing to
 between rows in a list and down the sidebar edge - never wrapped around a card, button, chip, input
 or pill. Drawing a box around everything is what made this app read as a generic dashboard.
 `--selected` is the neutral fill for a control or a selected row.
+
+**When a surface alone is not enough, lift it - never outline it.** In light mode the background is
+close to white, so a white card has little contrast to rely on and no border to fall back on;
+`--card-shadow` carries that separation instead, and is `none` in dark, where lightness already does
+the job. Reach for a shadow before ever reaching back for a border, and keep it barely visible.
+
+Changing a surface token means checking what else sits on it. `--bg` is used only by `body`, but the
+`--raised` surfaces sit on white panels rather than on the background, so they are unaffected by a
+background change - that is the kind of thing to confirm before picking a new value, not after.
 
 ## Shape (Recorded)
 
