@@ -19,8 +19,8 @@ memory. This section, the rest of this doc and `CLAUDE.md` (including "Working w
 handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #22 is on `main`. One branch is waiting
-   for review: `worktree-ui-shuffle`, the Shuffle screen's motion logged below.
+1. `git checkout main && git pull`. Everything through PR #23 is on `main`. One branch is waiting
+   for review: `worktree-ui-overhaul`, the visual overhaul logged below.
 2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads on first run), then
    `npm test`. Expect 292 passing, plus 7 more with `MPV_PATH` set to the machine's mpv.
 3. Then start the front end (Next steps below).
@@ -1453,3 +1453,33 @@ machines, not Lucas's.
     has no tests. Worth it only if the entrances feel lopsided in use (skill, Motion "Open").
   - **Not yet seen running.** Springs are judged by feel, not by reading CSS: `npm run dev`, then
     Next, Back, and a delete with an undo.
+- **2026-09-17:** Visual overhaul, towards Apple's design language.
+  - Lucas's verdict on the motion pass was that it looked "pretty normal", and he opened the door to
+    a complete overhaul: clean, concise, Apple-like. He then chose the full Mac window treatment,
+    both palettes designed with equal care, and near-monochrome colour.
+  - **Why it read as generic**, which is what the work fixes: every element was wrapped in a 1px
+    border; labels were uppercase and letter-spaced, an enterprise-dashboard habit; the accent was
+    spent on decoration; the type scale was compressed, so boxes did the work type should do; and
+    the window was a default frame with a page inside it.
+  - **Chrome.** macOS now hides the title bar so the sidebar runs to the top edge, with a vibrant
+    sidebar behind it. That brings a drag region - the sidebar drags the window, so every control
+    inside it opts out with `no-drag`, or it would look fine and ignore clicks - and `.is-mac`
+    clearance for the traffic lights, set from the user agent since the renderer has no Node access.
+  - **Windows deliberately keeps its normal frame**, taking only the Mica material. A hidden title
+    bar there needs `titleBarOverlay` and reserved space for the window controls, none of which can
+    be checked from a Mac; shipping an undraggable window would be worse than a plain one.
+  - **A launch bug fixed on the way:** `backgroundColor` was hard-coded `#0e1014`, so a light-mode
+    user saw a dark flash at every launch. It now follows `nativeTheme`, and keeps following it
+    while running.
+  - **Colour.** Greys carry the interface; the accent appears on the single primary action, and
+    otherwise only as status or as chart data. The selected tab, the brand badge and the empty-state
+    icon all gave up their colour, because each one was spending the accent on decoration.
+  - **Borders.** Gone from cards, buttons, chips, inputs, pills and toasts. Hairlines survive in the
+    two places they mean something: between rows in a list, and down the sidebar edge.
+  - Labels are sentence case at normal tracking, `h1` is a 30px large title, and the spacing rhythm
+    widened, since space is the separator now that the outlines are gone.
+  - The palettes were rewritten as two deliberate designs rather than one inverted: dark puts
+    lighter surfaces on a dark ground, light puts white surfaces on a grouped grey one. The work was
+    cheap because the CSS was already fully tokenised - rewriting the tokens re-skinned every screen.
+  - **Not verified by eye.** A build proves it compiles, not that it looks right: `npm run dev`, and
+    check both themes, that the window still drags, and that the sidebar nav still clicks.
