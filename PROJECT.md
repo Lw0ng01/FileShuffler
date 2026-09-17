@@ -18,9 +18,9 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
 "Working with Lucas") are the handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #36 is on `main`. One branch is waiting
-   for review: **`worktree-theme-sync`**, which stopped the sidebar trailing the page on a theme
-   change. If it has been merged, nothing else is outstanding.
+1. `git checkout main && git pull`. Everything through PR #37 is on `main`. One branch is waiting
+   for review: **`worktree-theme-instant`**, which made the theme switch instant everywhere. If it
+   has been merged, nothing else is outstanding.
    - `worktree-sidebar-material` is a dead duplicate of the merged `worktree-sidebar-mica`, kept
      only because rewriting a pushed branch means a force-push. Delete it.
 2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads its binary on first
@@ -96,11 +96,13 @@ machine keeps its own index.
   Measurements, §10). Lucas confirmed the merged features work (2026-09-16).
 
 **Next steps, in order**
-1. **Confirm the translucent sidebar on macOS.** Done and verified on Windows (2026-09-17): the
-   materials that had never been visible now are, because `body` no longer paints over them. The
-   macOS side is the same two lines of CSS and the same already-clear `backgroundColor`, so vibrancy
-   should now show through the sidebar there too - but that has not been seen, only reasoned. Open
-   the app on the Mac and check the sidebar picks up what is behind the window.
+1. **On macOS: decide whether `vibrancy` comes out.** The translucent sidebar was tried and
+   reversed (2026-09-17, twice): it borrowed the OS's tint and the OS's animation with it, so the
+   sidebar trailed the page on every theme change. The sidebar is opaque now, which means
+   `vibrancy: 'sidebar'` on macOS has nothing left to show, exactly as `backgroundMaterial` had
+   nothing to show on Windows - and that one has been removed. Left in place only because it cannot
+   be seen from a Windows machine. Check how it looks on the Mac, then either remove it or say what
+   it is still earning.
 2. The front end (§7 working order). Landed on the Mac on 2026-09-17: motion on the Shuffle screen,
    the visual overhaul towards Apple's language, an Appearance setting (Automatic/Light/Dark), the
    Dashboard as the opening tab, and wider list screens.
@@ -1911,3 +1913,25 @@ machines, not Lucas's.
     slightly raised off `--bg` in both themes (41,42,45 against 28,28,30 in dark; 253 against 242 in
     light) instead of being whatever the desktop happened to tint it.
   - No new tests: CSS. 312 still pass.
+- **2026-09-17:** Made the theme switch instant, by giving up the window material.
+  - **The previous fix was not enough** *(Lucas, 2026-09-17)*: cutting the sidebar's transparency to
+    15% shrank the tail but left it visible. Reported twice, which is the answer - reducing a
+    symptom is not fixing it.
+  - **The two wants are the same decision.** Any transparency at all hands part of the sidebar's
+    colour to the OS, and the OS's timing comes with it: Windows re-tints Mica over ~225ms while the
+    page flips in one frame. A translucent sidebar and an instant theme switch cannot both be had,
+    and the switch is worth more.
+  - **So the sidebar is opaque** - `--panel`, the same surface as a card - and
+    `backgroundMaterial: 'mica'` is gone, because the page now paints everywhere and Mica could only
+    show where it does not. The window's `backgroundColor` goes back to following the theme, which
+    also restores the guarantee that nothing flashes the wrong colour before the first frame.
+  - **Measured across all three versions**, by sampling the window's own pixels through a switch:
+    fully transparent, the sidebar stepped through 32, 62, 103, 138, 180, 221, 243; at 85% it still
+    took five intermediate steps; opaque, **the sidebar and `.main` change in the same sample, with
+    no intermediate values at all.**
+  - Nothing visible was lost. At 85% the material contributed 15% of a colour that was already close
+    to it, so the window looks the same as it did before this - the sidebar is still a surface
+    lifted off `--bg` in both themes.
+  - **macOS keeps `vibrancy` for now**, which has nothing to show either. It is left only because it
+    cannot be checked from Windows (Next steps).
+  - No new tests: CSS and window configuration. 312 still pass.

@@ -55,16 +55,21 @@ function titleBarOverlay(): { color: string; symbolColor: string; height: number
  * the window is translucent behind it. `backgroundColor` has to be clear for that translucency to
  * show.
  *
- * Both materials went unseen from the day they were set, because `body` painted an opaque `--bg`
- * across the whole window and the transparent `--sidebar` sat on that rather than on the material.
- * The page now paints that surface on `.main` alone (Lucas, 2026-09-17), so the sidebar - and only
- * the sidebar - is genuinely see-through. Give `--sidebar` a real colour on any platform that has
- * no material to show.
+ * **Windows takes no material, on purpose** (Lucas, 2026-09-17). Mica was tried: the sidebar was
+ * made translucent so it would show, and the cost was that Windows owns the tint *and* re-tints it
+ * with a ~225ms crossfade, so the sidebar visibly trailed the page on every theme change. Cutting
+ * the transparency to 15% left a tail that was still visible. A translucent sidebar and an instant
+ * theme switch are one decision, and the switch won - so the page is opaque throughout and the
+ * window needs no material behind it.
  *
- * Windows now hides its title bar too, so the sidebar reaches the top edge there as well. It keeps
- * the Mica material, and `titleBarOverlay` leaves the window controls native: Windows draws them
- * itself, in the right place, with the hover and snap behaviour people expect - drawing our own
- * would have meant reimplementing all of that badly.
+ * macOS still asks for `vibrancy`, and with an opaque sidebar it has nothing to show either. It is
+ * left alone only because it cannot be seen from a Windows machine; someone on the Mac should
+ * decide whether it comes out (PROJECT.md, Next steps).
+ *
+ * Windows hides its title bar too, so the sidebar reaches the top edge there as well, and
+ * `titleBarOverlay` leaves the window controls native: Windows draws them itself, in the right
+ * place, with the hover and snap behaviour people expect - drawing our own would have meant
+ * reimplementing all of that badly.
  *
  * What the window can be dragged by is then entirely ours to get right. The sidebar is the handle
  * on both platforms, which is why every control inside it opts out of the drag region.
@@ -83,11 +88,11 @@ function windowChrome(): BrowserWindowConstructorOptions {
     return {
       titleBarStyle: 'hidden',
       titleBarOverlay: titleBarOverlay(),
-      backgroundMaterial: 'mica',
-      // Clear, for the same reason macOS is: an opaque window background paints over the material
-      // and nothing shows through the sidebar. The page keeps its own opaque surface on `.main`, so
-      // only the sidebar is actually see-through.
-      backgroundColor: '#00000000'
+      // No `backgroundMaterial` here any more. Mica can only show where the page does not paint,
+      // and the page now paints everywhere, so it would be a setting that does nothing - and a
+      // clear `backgroundColor` alongside it would only risk a see-through window before the first
+      // frame arrives.
+      backgroundColor: backgroundColor()
     }
   }
   return { backgroundColor: backgroundColor() }
@@ -119,21 +124,16 @@ export function createMainWindow(): BrowserWindow {
 
   window.on('ready-to-show', () => window.show())
 
-  // Following the system theme means following it while running, not only at launch. Both platforms
-  // with a window material keep their clear background, so it must not be reassigned here: setting
-  // an opaque colour would paint over the material and the sidebar would stop being translucent.
-  if (process.platform === 'win32') {
+  // Following the system theme means following it while running, not only at launch. macOS keeps
+  // its clear background so the vibrancy stays visible, and needs nothing here.
+  if (process.platform !== 'darwin') {
     const onThemeChange = (): void => {
+      if (window.isDestroyed()) return
+      // What shows before the first frame paints, so it has to follow the theme too.
+      window.setBackgroundColor(backgroundColor())
       // The window controls are drawn by Windows, not by the page, so switching to Light in
       // Settings would otherwise leave light glyphs on the new light background.
-      if (!window.isDestroyed()) window.setTitleBarOverlay(titleBarOverlay())
-    }
-    nativeTheme.on('updated', onThemeChange)
-    window.on('closed', () => nativeTheme.off('updated', onThemeChange))
-  } else if (process.platform !== 'darwin') {
-    // No material here, so the window's own colour is what shows before the first frame paints.
-    const onThemeChange = (): void => {
-      if (!window.isDestroyed()) window.setBackgroundColor(backgroundColor())
+      if (process.platform === 'win32') window.setTitleBarOverlay(titleBarOverlay())
     }
     nativeTheme.on('updated', onThemeChange)
     window.on('closed', () => nativeTheme.off('updated', onThemeChange))
