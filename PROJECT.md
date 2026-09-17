@@ -18,9 +18,9 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
 "Working with Lucas") are the handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #37 is on `main`. One branch is waiting
-   for review: **`worktree-theme-instant`**, which made the theme switch instant everywhere. If it
-   has been merged, nothing else is outstanding.
+1. `git checkout main && git pull`. Everything through PR #38 is on `main`. One branch is waiting
+   for review: **`worktree-builtin-player`**, the in-app player. If it has been merged, nothing else
+   is outstanding.
    - `worktree-sidebar-material` is a dead duplicate of the merged `worktree-sidebar-mica`, kept
      only because rewriting a pushed branch means a force-push. Delete it.
 2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads its binary on first
@@ -1935,3 +1935,40 @@ machines, not Lucas's.
   - **macOS keeps `vibrancy` for now**, which has nothing to show either. It is left only because it
     cannot be checked from Windows (Next steps).
   - No new tests: CSS and window configuration. 312 still pass.
+- **2026-09-17:** Built the in-app player, behind the same adapter mpv sits behind.
+  - *(Lucas, 2026-09-17)*: mpv's look is not acceptable; the choice was the system player everywhere
+    or a custom one, "as long as the shuffle works properly still". That condition is what this
+    branch is scoped to - playback inside the app with the shuffle behaving exactly as before, and
+    no polish yet.
+  - **The coordinator did not change at all**, which is the point. `EmbeddedPlayer` implements
+    `PlaybackAdapter` like the mpv one does, so the shuffle, the undo window and the delete flow
+    cannot tell the difference. What is new is that the adapter is split across the process
+    boundary: main holds the state, the `<video>` lives in the renderer, and `playerIpc.ts` joins
+    them.
+  - **The renderer is never told a path.** It is handed a load token and asks for
+    `fsvideo://file/<token>`; `videoProtocol.ts` is the only thing that knows which file that is,
+    and it answers Range requests properly so seeking works and large files are not re-read from
+    the start. The CSP gained `media-src fsvideo:` and nothing wider - without it media was blocked
+    outright, since there was no `media-src` at all.
+  - **Verified by running a real shuffle** on generated clips in an isolated data folder: autoplay
+    (a clip ended and the next one started on its own), Next, Back, delete with the undo window
+    (`restored`, file still on disk) and delete left to expire (trashed, file gone). The video plays
+    at `readyState` 4 with the clock advancing.
+  - **`FILESHUFFLER_DATA` was added to make that possible.** `CLAUDE.md` asks for testing against a
+    copy of the data rather than the real library, and there was no way to do it: Electron resolves
+    `appData` from the operating system, so setting `APPDATA` does nothing. Same shape as
+    `FILESHUFFLER_MPV`.
+  - **Two bugs the tests could not have caught, both found by running it**: `protocol.handle` needs
+    the app to be ready, and services are built before that - so serving the stream is now a
+    separate `startVideoStream()` called from `whenReady`. And the video first covered the Shuffle
+    screen's own Next/Back/Delete, which would have been worse than the window it replaces; it sits
+    above them in the flow instead.
+  - **An upgrade keeps mpv; a fresh install gets the built-in player.** Someone already running
+    this has mpv working, and quietly changing what plays their videos would be a surprise. A new
+    install has no mpv at all, so the built-in player is the only thing that can work out of the
+    box. Settings has a Player choice either way, which is also the way back if this regresses.
+  - 341 tests, up from 312: the adapter's tokens, its unload handshake and its timeout, the range
+    parsing, the URL parsing that refuses anything but a token, the IPC message checks, and the
+    data-folder override.
+  - Still to come: controls over the video, fullscreen and keyboard (branch 2), then the system
+    player as the fallback for what Chromium cannot decode, which is what lets mpv go entirely.

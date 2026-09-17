@@ -1134,3 +1134,34 @@ a,
 [role='button'] {
   -webkit-app-region: no-drag;
 }
+
+/* Video stage
+   ----
+   The built-in player's surface (PROJECT.md section 4). It sits in the flow at the top of the
+   screen area rather than covering it, so the Shuffle screen's title and its Next/Back/Delete stay
+   where they have always been - a video that hid its own controls would be worse than the separate
+   window it replaces. */
+.video-stage {
+  /* The gutter is on `.screen`, so match it here rather than running edge to edge. */
+  width: min(1112px, 100%);
+  padding: 0 36px;
+  margin: 0 auto 4px;
+}
+
+/* Hidden, not unmounted. The file keeps playing while another tab is open. */
+.video-stage.is-hidden {
+  display: none;
+}
+
+.video-stage-el {
+  display: block;
+  width: 100%;
+  /* Tall enough to be worth watching, never so tall that the controls fall off the screen. */
+  max-height: 62vh;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  /* Black, not `--bg`: the bars beside a video should not read as a theme surface. */
+  background: #000000;
+  /* Fit rather than fill: never crop someone's video to tidy up the edges. */
+  object-fit: contain;
+}

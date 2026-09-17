@@ -2,9 +2,10 @@ import { app, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { reportIndexFailure, warnUnreadableIndex } from './dialogs'
-import { copyLegacyData, dataFolderName } from './files/dataFolder'
+import { copyLegacyData, dataFolder } from './files/dataFolder'
 import indexWorkerPath from './library/indexWorker?modulePath'
 import { createMainWindow, isTrustedSender } from './mainWindow'
+import { registerVideoScheme } from './playback/embedded/videoProtocol'
 import { createServices, registerAllIpc, shutdownServices } from './services'
 
 /**
@@ -15,7 +16,11 @@ import { createServices, registerAllIpc, shutdownServices } from './services'
 // The installed app and development runs keep separate data (PROJECT.md §7 Phase 6), so trying
 // things out in development never touches a real library. Set before anything below opens it.
 // Without this, Electron names the folder after package.json ("file-shuffler") for both.
-app.setPath('userData', join(app.getPath('appData'), dataFolderName(app.isPackaged)))
+app.setPath('userData', dataFolder(app.getPath('appData'), app.isPackaged))
+
+// The built-in player streams through its own URL scheme, and a scheme can only be declared before
+// the app is ready - after that the page would be refused by its own CSP (PROJECT.md §4).
+registerVideoScheme()
 
 // One copy of the app per data folder: two would write the same index and progress files and
 // could each start mpv. The lock follows the data folder, so development and the installed app
@@ -65,6 +70,9 @@ function openWindow(): void {
 }
 
 app.whenReady().then(() => {
+  // Can only happen now: a protocol handler needs the app's session, which does not exist before
+  // this point (PROJECT.md §4).
+  services.startVideoStream()
   electronApp.setAppUserModelId('com.lucaswong.fileshuffler')
 
   // F12 opens DevTools in development; reload shortcuts are ignored in a build.

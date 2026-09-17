@@ -23,6 +23,27 @@ export function dataFolderName(packaged: boolean): string {
 }
 
 /**
+ * Where the app keeps its data, with an override for testing.
+ *
+ * `FILESHUFFLER_DATA` points the whole app at another folder, which is the only way to try
+ * something against a *copy* of a real library rather than the real one - what `CLAUDE.md` asks for
+ * when checking behaviour in the running app. Electron resolves `appData` from the operating system
+ * rather than from the environment, so setting `APPDATA` does not do it.
+ *
+ * Same shape as `FILESHUFFLER_MPV`: an escape hatch for the person running the app, never read from
+ * anything the app itself stores.
+ */
+export function dataFolder(
+  appDataPath: string,
+  packaged: boolean,
+  env: NodeJS.ProcessEnv = process.env
+): string {
+  const override = env['FILESHUFFLER_DATA']
+  if (typeof override === 'string' && override.trim() !== '') return override
+  return join(appDataPath, dataFolderName(packaged))
+}
+
+/**
  * Copies FileShuffler's own files from an older data folder into a new one, once: only when the
  * new folder has no index yet and the old folder has something to bring. Copies rather than
  * moves, so the old folder stays behind as a backup. Returns the names copied.

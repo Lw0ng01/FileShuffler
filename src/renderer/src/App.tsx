@@ -5,6 +5,7 @@ import { SettingsScreen } from './components/SettingsScreen'
 import { ShufflerScreen } from './components/ShufflerScreen'
 import { Sidebar, type Page } from './components/Sidebar'
 import { StatsScreen } from './components/StatsScreen'
+import { VideoStage } from './components/VideoStage'
 import { useLibrary } from './hooks/useLibrary'
 import { useSettings } from './hooks/useSettings'
 import { useShuffler } from './hooks/useShuffler'
@@ -40,6 +41,12 @@ function App(): React.JSX.Element {
             the clearance the window controls need. Presentation only, so it is hidden from
             assistive technology. */}
         <div className="titlebar" aria-hidden="true" />
+        {/* Mounted for the whole life of the app, not only while Shuffle is open: unmounting it
+            would stop playback the moment another tab was looked at. Hidden elsewhere, still
+            playing - which is what the separate player window used to do. It sits above the
+            Shuffle screen's own content rather than over it, so the title and the controls stay
+            where they are and stay reachable. */}
+        <VideoStage visible={page === 'shuffle'} />
         {page === 'settings' ? (
           <SettingsScreen
             view={settings.view}

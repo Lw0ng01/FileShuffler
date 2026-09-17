@@ -1,4 +1,4 @@
-import type { Appearance, ClearableData, SettingsView } from '../../shared/settings'
+import type { Appearance, ClearableData, PlayerChoice, SettingsView } from '../../shared/settings'
 import type { AppSettings } from '../files/settingsStore'
 import type { MpvLocation } from '../playback/mpv/findMpv'
 import type { MpvProbe } from '../playback/mpv/probeMpv'
@@ -8,6 +8,7 @@ export interface SettingsSource {
   get(): Promise<AppSettings>
   setMpvPath(path: string | null): Promise<AppSettings>
   setAppearance(value: Appearance): Promise<AppSettings>
+  setPlayer(value: PlayerChoice): Promise<AppSettings>
 }
 
 export interface SettingsServiceDeps {
@@ -55,6 +56,7 @@ export class SettingsService {
   private readonly listeners = new Set<(view: SettingsView) => void>()
   private chosen: string | null = null
   private appearance: Appearance = 'system'
+  private player: PlayerChoice = 'builtin'
   private test: SettingsView['mpv']['test'] = null
   private testing = false
   private notice: string | null = null
@@ -69,6 +71,7 @@ export class SettingsService {
     const saved = await this.deps.store.get()
     this.chosen = saved.mpvPath
     this.appearance = saved.appearance
+    this.player = saved.player
     // Put the saved theme into effect at startup, or the choice would only survive until restart.
     this.deps.applyAppearance?.(this.appearance)
     this.emit()
@@ -85,6 +88,7 @@ export class SettingsService {
         testing: this.testing
       },
       appearance: this.appearance,
+      player: this.player,
       lastNotice: this.notice,
       lastError: this.error
     }
@@ -96,6 +100,18 @@ export class SettingsService {
     await this.deps.store.setAppearance(value)
     this.appearance = value
     this.deps.applyAppearance?.(value)
+    this.emit()
+    return this.getView()
+  }
+
+  /**
+   * Chooses the player the next shuffle starts. Saved, so it survives a restart, and read at every
+   * launch rather than cached, so the choice applies without restarting the app.
+   */
+  async setPlayer(value: PlayerChoice): Promise<SettingsView> {
+    this.reset()
+    await this.deps.store.setPlayer(value)
+    this.player = value
     this.emit()
     return this.getView()
   }

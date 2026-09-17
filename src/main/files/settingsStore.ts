@@ -1,5 +1,10 @@
 import { readFile } from 'node:fs/promises'
-import { APPEARANCES, type Appearance } from '../../shared/settings'
+import {
+  APPEARANCES,
+  PLAYER_CHOICES,
+  type Appearance,
+  type PlayerChoice
+} from '../../shared/settings'
 import { writeJsonAtomic } from './atomicJson'
 
 /**
@@ -16,10 +21,12 @@ export interface AppSettings {
   mpvPath: string | null
   /** Which theme to use, or `system` to follow the desktop. */
   appearance: Appearance
+  /** Which player a shuffle starts (PROJECT.md §4). */
+  player: PlayerChoice
 }
 
 function defaults(): AppSettings {
-  return { mpvPath: null, appearance: 'system' }
+  return { mpvPath: null, appearance: 'system', player: 'builtin' }
 }
 
 /**
@@ -53,6 +60,11 @@ export class SettingsStore {
     return this.save({ ...(await this.get()), appearance })
   }
 
+  /** Saves which player a shuffle starts. */
+  async setPlayer(player: PlayerChoice): Promise<AppSettings> {
+    return this.save({ ...(await this.get()), player })
+  }
+
   private async save(next: AppSettings): Promise<AppSettings> {
     this.cache = next
     this.writes = this.writes
@@ -76,13 +88,18 @@ export class SettingsStore {
       if (input['version'] !== VERSION) return defaults()
       const mpvPath = input['mpvPath']
       const appearance = input['appearance']
+      const player = input['player']
       return {
         mpvPath: typeof mpvPath === 'string' && mpvPath.length > 0 ? mpvPath : null,
         // Absent in files written before this setting existed, and anything unrecognised is
         // treated the same way: follow the system.
         appearance: APPEARANCES.includes(appearance as Appearance)
           ? (appearance as Appearance)
-          : 'system'
+          : 'system',
+        // Absent in files written before the built-in player existed. Those are upgrades rather
+        // than new installs, so they keep mpv - changing what plays their videos without asking
+        // would be a surprise, and Settings is one click away.
+        player: PLAYER_CHOICES.includes(player as PlayerChoice) ? (player as PlayerChoice) : 'mpv'
       }
     } catch {
       return defaults()

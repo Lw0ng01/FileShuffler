@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { LIBRARY_CHANNELS, type LibraryApi, type LibraryView } from '../shared/library'
+import {
+  PLAYER_CHANNELS,
+  type PlayerApi,
+  type PlayerCommandMessage,
+  type PlayerEventMessage
+} from '../shared/player'
 import { CHANNELS, type ShufflerApi, type ShufflerView } from '../shared/shuffler'
 import { SETTINGS_CHANNELS, type SettingsApi, type SettingsView } from '../shared/settings'
 import { STATS_CHANNELS, type StatsApi, type StatsView } from '../shared/stats'
@@ -75,6 +81,7 @@ const settings: SettingsApi = {
   useDefaultMpv: () => ipcRenderer.invoke(SETTINGS_CHANNELS.useDefaultMpv),
   testMpv: () => ipcRenderer.invoke(SETTINGS_CHANNELS.testMpv),
   setAppearance: (value) => ipcRenderer.invoke(SETTINGS_CHANNELS.setAppearance, value),
+  setPlayer: (value) => ipcRenderer.invoke(SETTINGS_CHANNELS.setPlayer, value),
   clearData: (what) => ipcRenderer.invoke(SETTINGS_CHANNELS.clearData, what),
   onView: (listener) => {
     const handler = (_event: IpcRendererEvent, view: SettingsView): void => listener(view)
@@ -85,4 +92,19 @@ const settings: SettingsApi = {
   }
 }
 
-contextBridge.exposeInMainWorld('api', { shuffler, library, stats, settings })
+// The built-in player's own wire (PROJECT.md §4). One-way both directions, and the renderer can
+// only report what happened to a load it was handed: it never names a file or asks for one.
+const player: PlayerApi = {
+  ready: () => ipcRenderer.send(PLAYER_CHANNELS.ready),
+  send: (event: PlayerEventMessage) => ipcRenderer.send(PLAYER_CHANNELS.event, event),
+  onCommand: (listener) => {
+    const handler = (_event: IpcRendererEvent, command: PlayerCommandMessage): void =>
+      listener(command)
+    ipcRenderer.on(PLAYER_CHANNELS.command, handler)
+    return () => {
+      ipcRenderer.removeListener(PLAYER_CHANNELS.command, handler)
+    }
+  }
+}
+
+contextBridge.exposeInMainWorld('api', { shuffler, library, stats, settings, player })

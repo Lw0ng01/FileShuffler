@@ -1,6 +1,12 @@
 import { useState } from 'react'
 import type { LibraryView } from '../../../shared/library'
-import type { Appearance, ClearableData, MpvSource, SettingsView } from '../../../shared/settings'
+import type {
+  Appearance,
+  ClearableData,
+  MpvSource,
+  PlayerChoice,
+  SettingsView
+} from '../../../shared/settings'
 import { formatBytes, formatCount, formatWhen, shortenPath } from '../format'
 import type { LibraryActions } from '../hooks/useLibrary'
 import type { SettingsActions } from '../hooks/useSettings'
@@ -35,6 +41,20 @@ const APPEARANCES: { value: Appearance; label: string }[] = [
   { value: 'system', label: 'Automatic' },
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' }
+]
+
+const PLAYERS: { value: PlayerChoice; label: string; detail: string }[] = [
+  {
+    value: 'builtin',
+    label: 'Built-in',
+    detail: 'Plays inside the app, with the same look on every screen.'
+  },
+  {
+    value: 'mpv',
+    label: 'mpv',
+    detail:
+      'Opens mpv in its own window. Needs mpv installed, and plays formats the built-in one cannot.'
+  }
 ]
 
 interface Clearable {
@@ -224,6 +244,19 @@ export function SettingsScreen({
 
       <section className="dash-section" aria-label="Player">
         <h2 className="section-title">Player</h2>
+        <p className="muted">{PLAYERS.find((p) => p.value === view.player)?.detail}</p>
+        <div className="segmented" role="group" aria-label="Player">
+          {PLAYERS.map((option) => (
+            <button
+              key={option.value}
+              className={`segment${view.player === option.value ? ' on' : ''}`}
+              aria-pressed={view.player === option.value}
+              onClick={() => actions.setPlayer(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
         <div className="card settings-card">
           <p className="eyebrow">mpv</p>
           <p className="setting-path" title={mpv.path}>

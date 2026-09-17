@@ -9,6 +9,7 @@ export const SETTINGS_CHANNELS = {
   useDefaultMpv: 'settings:use-default-mpv',
   testMpv: 'settings:test-mpv',
   setAppearance: 'settings:set-appearance',
+  setPlayer: 'settings:set-player',
   clearData: 'settings:clear-data',
   /** Main → renderer: a new `SettingsView`. */
   view: 'settings:view'
@@ -25,6 +26,15 @@ export type MpvSource = 'environment' | 'settings' | 'bundled' | 'installed' | '
 export type Appearance = 'system' | 'light' | 'dark'
 
 export const APPEARANCES: readonly Appearance[] = ['system', 'light', 'dark']
+
+/**
+ * Which player a shuffle uses (PROJECT.md §4). `builtin` plays inside the app; `mpv` opens the
+ * separate mpv window, which is what the app did before and is kept as the way back - and as the
+ * answer for the few files Chromium cannot decode.
+ */
+export type PlayerChoice = 'builtin' | 'mpv'
+
+export const PLAYER_CHOICES: readonly PlayerChoice[] = ['builtin', 'mpv']
 
 /** What Settings can erase. Each is separate, so clearing one never costs the others. */
 export type ClearableData = 'plays' | 'favorites' | 'progress' | 'index'
@@ -49,6 +59,8 @@ export interface SettingsView {
     testing: boolean
   }
   appearance: Appearance
+  /** Which player a shuffle starts. mpv's settings above only matter when this is `mpv`. */
+  player: PlayerChoice
   lastNotice: string | null
   lastError: string | null
 }
@@ -64,6 +76,8 @@ export interface SettingsApi {
   testMpv(): Promise<SettingsView>
   /** Follows the desktop, or overrides it with light or dark. */
   setAppearance(value: Appearance): Promise<SettingsView>
+  /** Chooses the player the next shuffle starts. Takes effect without a restart. */
+  setPlayer(value: PlayerChoice): Promise<SettingsView>
   clearData(what: ClearableData): Promise<SettingsView>
   onView(listener: (view: SettingsView) => void): () => void
 }
