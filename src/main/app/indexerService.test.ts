@@ -2,6 +2,7 @@ import { describe, expect, it, vi, type Mock } from 'vitest'
 import type { LibraryView } from '../../shared/library'
 import type { ScanFile, ScanOptions, ScanSummary } from '../files/scanner'
 import { IndexDb } from '../library/indexDb'
+import { localIndexStore } from '../library/indexStore'
 import { IndexerService, type IndexerServiceDeps } from './indexerService'
 
 function scanFile(path: string, root: string, overrides: Partial<ScanFile> = {}): ScanFile {
@@ -45,7 +46,7 @@ function setup(deps: Partial<IndexerServiceDeps> = {}): {
   views: LibraryView[]
 } {
   const db = new IndexDb(':memory:')
-  const service = new IndexerService({ db, scan: fakeScan({}), ...deps })
+  const service = new IndexerService({ db: localIndexStore(db), scan: fakeScan({}), ...deps })
   const views: LibraryView[] = []
   service.onView((view) => views.push(view))
   return { service, db, views }
@@ -57,7 +58,7 @@ describe('IndexerService cleanup lists', () => {
     deps: Partial<IndexerServiceDeps> = {}
   ): Promise<IndexerService> {
     const { service } = setup({ scan: fakeScan({ 'D:\\Media': files }), ...deps })
-    service.addRoot('D:\\Media')
+    await service.addRoot('D:\\Media')
     await service.scanAll()
     return service
   }
@@ -69,11 +70,11 @@ describe('IndexerService cleanup lists', () => {
       scanFile('D:\\Media\\a\\other.mp4', 'D:\\Media', { folder: 'D:\\Media\\a', size: 5 })
     ])
 
-    expect(service.biggestFolders(5)).toEqual([
+    expect(await service.biggestFolders(5)).toEqual([
       { folder: 'D:\\Media\\a', drive: 'D:', files: 2, bytes: 105 },
       { folder: 'D:\\Media\\b', drive: 'D:', files: 1, bytes: 100 }
     ])
-    const groups = service.duplicates(5)
+    const groups = await service.duplicates(5)
     expect(groups).toHaveLength(1)
     expect(groups[0]).toMatchObject({ name: 'clip.mp4', size: 100, wastedBytes: 100 })
   })
@@ -88,8 +89,8 @@ describe('IndexerService cleanup lists', () => {
       { now: () => now }
     )
 
-    expect(service.notTouched(180, 10).map((row) => row.name)).toEqual(['old.mp4'])
-    expect(service.notTouched(3650, 10)).toEqual([])
+    expect((await service.notTouched(180, 10)).map((row) => row.name)).toEqual(['old.mp4'])
+    expect(await service.notTouched(3650, 10)).toEqual([])
   })
 
   it('fingerprints a group so real copies can be told from lookalikes', async () => {
@@ -132,7 +133,7 @@ describe('IndexerService opening files', () => {
   async function withIndexedFile(deps: Partial<IndexerServiceDeps> = {}): Promise<IndexerService> {
     const scan = fakeScan({ 'D:\\Videos': [scanFile('D:\\Videos\\a.mp4', 'D:\\Videos')] })
     const { service } = setup({ scan, ...deps })
-    service.addRoot('D:\\Videos')
+    await service.addRoot('D:\\Videos')
     await service.scanAll()
     return service
   }
@@ -143,7 +144,7 @@ describe('IndexerService opening files', () => {
 
     await service.openFile('D:\\Videos\\a.mp4')
     expect(openPath).toHaveBeenCalledWith('D:\\Videos\\a.mp4')
-    expect(service.getView().lastError).toBeNull()
+    expect((await service.getView()).lastError).toBeNull()
   })
 
   it('also opens a file known only from play history', async () => {
@@ -161,7 +162,7 @@ describe('IndexerService opening files', () => {
 
     await service.openFile('C:\\Windows\\System32\\cmd.exe')
     expect(openPath).not.toHaveBeenCalled()
-    expect(service.getView().lastError).toContain('is not in the index')
+    expect((await service.getView()).lastError).toContain('is not in the index')
   })
 
   it('explains when the system cannot open the file', async () => {
@@ -169,7 +170,7 @@ describe('IndexerService opening files', () => {
     const service = await withIndexedFile({ openPath })
 
     await service.openFile('D:\\Videos\\a.mp4')
-    expect(service.getView().lastError).toBe(
+    expect((await service.getView()).lastError).toBe(
       'Could not open D:\\Videos\\a.mp4: no application is registered for .mp4'
     )
   })
@@ -183,7 +184,7 @@ describe('IndexerService opening files', () => {
 
     await service.showInFolder('D:\\Videos\\gone.mp4')
     expect(revealPath).toHaveBeenCalledTimes(1)
-    expect(service.getView().lastError).toContain('is not in the index')
+    expect((await service.getView()).lastError).toContain('is not in the index')
   })
 })
 
@@ -200,7 +201,7 @@ describe('IndexerService excluded folders', () => {
     })
   ): Promise<{ service: IndexerService; scan: typeof scan }> {
     const { service } = setup({ scan, pickFolder, rules: windowsRules })
-    service.addRoot('D:\\Media')
+    await service.addRoot('D:\\Media')
     await service.scanAll()
     return { service, scan }
   }
@@ -208,7 +209,7 @@ describe('IndexerService excluded folders', () => {
   it('drops what is indexed inside an excluded folder straight away, and skips it in scans', async () => {
     const pickFolder = vi.fn(async () => 'D:\\Media\\Games')
     const { service, scan } = await indexed(pickFolder)
-    expect(service.getView().files).toBe(2)
+    expect((await service.getView()).files).toBe(2)
 
     const view = await service.chooseExcluded()
     expect(pickFolder).toHaveBeenCalledWith('exclude')
@@ -228,7 +229,7 @@ describe('IndexerService excluded folders', () => {
     const { service } = await indexed(vi.fn(async () => 'D:\\Media\\Games'))
     await service.chooseExcluded()
 
-    expect(service.removeExcluded('D:\\Media\\Games').excluded).toEqual([])
+    expect((await service.removeExcluded('D:\\Media\\Games')).excluded).toEqual([])
   })
 
   it('refuses to exclude an indexed folder or one that holds it', async () => {
@@ -270,7 +271,7 @@ describe('IndexerService excluded folders', () => {
     )
     const pickFolder = vi.fn(async () => 'D:\\Media\\Games')
     const { service } = setup({ scan, pickFolder, rules: windowsRules })
-    service.addRoot('D:\\Media')
+    await service.addRoot('D:\\Media')
     const scanning = service.scanAll()
 
     const view = await service.chooseExcluded()
@@ -287,7 +288,7 @@ describe('IndexerService drives and folder picking', () => {
     const { service } = setup({ pickFolder })
 
     await service.chooseRoot()
-    expect(service.getView().roots.map((root) => root.path)).toEqual(['D:\\Videos'])
+    expect((await service.getView()).roots.map((root) => root.path)).toEqual(['D:\\Videos'])
   })
 
   it('changes nothing when the picker is cancelled', async () => {
@@ -296,7 +297,7 @@ describe('IndexerService drives and folder picking', () => {
 
     await service.chooseRoot()
     expect(pickFolder).toHaveBeenCalledTimes(1)
-    expect(service.getView().roots).toEqual([])
+    expect((await service.getView()).roots).toEqual([])
   })
 
   it('shows each drive’s size and free space alongside what was indexed', async () => {
@@ -307,46 +308,49 @@ describe('IndexerService drives and folder picking', () => {
       scan,
       driveSpace: async () => ({ total: 1000, free: 400 })
     })
-    service.addRoot('D:\\Videos')
+    await service.addRoot('D:\\Videos')
     await service.scanAll()
 
-    expect(service.getView().drives).toEqual([
+    expect((await service.getView()).drives).toEqual([
       { drive: 'D:', files: 1, bytes: 8, total: 1000, free: 400 }
     ])
   })
 
   it('lists a drive that has a root but nothing indexed yet', async () => {
     const { service } = setup({ driveSpace: async () => ({ total: 500, free: 100 }) })
-    service.addRoot('E:\\Photos')
+    await service.addRoot('E:\\Photos')
     await service.refreshDriveSpace()
 
-    expect(service.getView().drives).toEqual([
+    expect((await service.getView()).drives).toEqual([
       { drive: 'E:', files: 0, bytes: 0, total: 500, free: 100 }
     ])
   })
 
   it('leaves capacity empty when a drive cannot be read, rather than failing', async () => {
     const { service } = setup({ driveSpace: async () => null })
-    service.addRoot('Z:\\Unplugged')
+    await service.addRoot('Z:\\Unplugged')
     await service.refreshDriveSpace()
 
-    expect(service.getView().drives).toEqual([
+    expect((await service.getView()).drives).toEqual([
       { drive: 'Z:', files: 0, bytes: 0, total: null, free: null }
     ])
   })
 })
 
 describe('IndexerService', () => {
-  it('starts empty and offers the default folders only when nothing is indexed', () => {
+  it('starts empty and offers the default folders only when nothing is indexed', async () => {
     const { service, db } = setup({ defaultRoots: () => ['D:\\Videos', 'D:\\Pictures'] })
-    expect(service.getView()).toMatchObject({ status: 'idle', roots: [], files: 0, bytes: 0 })
+    expect(await service.getView()).toMatchObject({ status: 'idle', roots: [], files: 0, bytes: 0 })
 
-    service.addDefaultRoots()
-    expect(service.getView().roots.map((root) => root.path)).toEqual(['D:\\Pictures', 'D:\\Videos'])
+    await service.addDefaultRoots()
+    expect((await service.getView()).roots.map((root) => root.path)).toEqual([
+      'D:\\Pictures',
+      'D:\\Videos'
+    ])
 
     db.addRoot('E:\\More')
-    service.addDefaultRoots()
-    expect(service.getView().roots).toHaveLength(3)
+    await service.addDefaultRoots()
+    expect((await service.getView()).roots).toHaveLength(3)
   })
 
   it('indexes each root and totals what it found', async () => {
@@ -357,12 +361,12 @@ describe('IndexerService', () => {
       ]
     })
     const { service } = setup({ scan })
-    service.addRoot('D:\\Videos')
-    service.addRoot('D:\\Pictures')
+    await service.addRoot('D:\\Videos')
+    await service.addRoot('D:\\Pictures')
 
     await service.scanAll()
 
-    const view = service.getView()
+    const view = await service.getView()
     expect(scan).toHaveBeenCalledTimes(2)
     expect(view).toMatchObject({ status: 'idle', files: 2, bytes: 120, progress: null })
     expect(view.totals).toEqual([
@@ -381,16 +385,16 @@ describe('IndexerService', () => {
       ]
     })
     const { service, db } = setup({ scan: first })
-    service.addRoot('D:\\Videos')
+    await service.addRoot('D:\\Videos')
     await service.scanAll()
     expect(db.fileCount()).toBe(2)
 
     const second = fakeScan({ 'D:\\Videos': [scanFile('D:\\Videos\\stays.mp4', 'D:\\Videos')] })
-    const resumed = new IndexerService({ db, scan: second })
+    const resumed = new IndexerService({ db: localIndexStore(db), scan: second })
     await resumed.scanAll()
 
     expect(db.fileCount()).toBe(1)
-    expect(resumed.getView().lastScan).toMatchObject({ removed: 1 })
+    expect((await resumed.getView()).lastScan).toMatchObject({ removed: 1 })
   })
 
   it('keeps what a cancelled scan found without treating the rest as deleted', async () => {
@@ -401,7 +405,7 @@ describe('IndexerService', () => {
       ]
     })
     const { service, db } = setup({ scan: full })
-    service.addRoot('D:\\Videos')
+    await service.addRoot('D:\\Videos')
     await service.scanAll()
     expect(db.fileCount()).toBe(2)
 
@@ -412,11 +416,11 @@ describe('IndexerService', () => {
         cancelled: true
       }
     )
-    const again = new IndexerService({ db, scan: partial })
+    const again = new IndexerService({ db: localIndexStore(db), scan: partial })
     await again.scanAll()
 
     expect(db.fileCount()).toBe(2)
-    expect(again.getView().lastScan).toMatchObject({ cancelled: true, removed: 0 })
+    expect((await again.getView()).lastScan).toMatchObject({ cancelled: true, removed: 0 })
   })
 
   it('reports folders it could not read instead of failing the scan', async () => {
@@ -427,10 +431,10 @@ describe('IndexerService', () => {
       }
     )
     const { service } = setup({ scan })
-    service.addRoot('D:\\Videos')
+    await service.addRoot('D:\\Videos')
 
     await service.scanAll()
-    expect(service.getView()).toMatchObject({
+    expect(await service.getView()).toMatchObject({
       files: 1,
       lastError: '1 folder could not be read and were skipped.'
     })
@@ -441,10 +445,10 @@ describe('IndexerService', () => {
       throw new Error('drive disconnected')
     })
     const { service } = setup({ scan })
-    service.addRoot('D:\\Videos')
+    await service.addRoot('D:\\Videos')
 
     await service.scanAll()
-    expect(service.getView()).toMatchObject({
+    expect(await service.getView()).toMatchObject({
       status: 'idle',
       lastError: 'Could not index D:\\Videos: drive disconnected'
     })
@@ -456,8 +460,8 @@ describe('IndexerService', () => {
       'D:\\Pictures': [scanFile('D:\\Pictures\\b.jpg', 'D:\\Pictures', { category: 'photo' })]
     })
     const { service } = setup({ scan })
-    service.addRoot('D:\\Videos')
-    service.addRoot('D:\\Pictures')
+    await service.addRoot('D:\\Videos')
+    await service.addRoot('D:\\Pictures')
 
     await service.scanRoot('D:\\Pictures')
     expect(scan).toHaveBeenCalledTimes(1)
@@ -471,19 +475,19 @@ describe('IndexerService', () => {
     })
     const { service, db } = setup({ scan })
     const byCategory = vi.spyOn(db, 'totalsByCategory')
-    service.addRoot('D:\\Videos')
+    await service.addRoot('D:\\Videos')
 
-    for (let i = 0; i < 5; i++) service.getView()
+    for (let i = 0; i < 5; i++) await service.getView()
     expect(byCategory).toHaveBeenCalledTimes(1)
 
     await service.scanAll()
-    expect(service.getView()).toMatchObject({ files: 1, bytes: 10 })
+    expect(await service.getView()).toMatchObject({ files: 1, bytes: 10 })
     const afterScan = byCategory.mock.calls.length
-    for (let i = 0; i < 5; i++) service.getView()
+    for (let i = 0; i < 5; i++) await service.getView()
     expect(byCategory).toHaveBeenCalledTimes(afterScan)
 
-    service.removeRoot('D:\\Videos')
-    expect(service.getView()).toMatchObject({ files: 0, bytes: 0 })
+    await service.removeRoot('D:\\Videos')
+    expect(await service.getView()).toMatchObject({ files: 0, bytes: 0 })
   })
 
   it('runs one scan at a time', async () => {
@@ -494,7 +498,7 @@ describe('IndexerService', () => {
       return { folders: 1, files: 0, bytes: 0, errors: [], cancelled: false, ...options }
     })
     const { service } = setup({ scan: scan as unknown as IndexerServiceDeps['scan'] })
-    service.addRoot('D:\\Videos')
+    await service.addRoot('D:\\Videos')
 
     await Promise.all([service.scanAll(), service.scanAll(), service.scanAll()])
     expect(started).toBe(1)
@@ -503,17 +507,17 @@ describe('IndexerService', () => {
   it('removes a root and everything indexed under it', async () => {
     const scan = fakeScan({ 'D:\\Videos': [scanFile('D:\\Videos\\a.mp4', 'D:\\Videos')] })
     const { service } = setup({ scan })
-    service.addRoot('D:\\Videos')
+    await service.addRoot('D:\\Videos')
     await service.scanAll()
 
-    service.removeRoot('D:\\Videos')
-    expect(service.getView()).toMatchObject({ roots: [], files: 0 })
+    await service.removeRoot('D:\\Videos')
+    expect(await service.getView()).toMatchObject({ roots: [], files: 0 })
   })
 
   it('tells the window about changes', async () => {
     const scan = fakeScan({ 'D:\\Videos': [scanFile('D:\\Videos\\a.mp4', 'D:\\Videos')] })
     const { service, views } = setup({ scan })
-    service.addRoot('D:\\Videos')
+    await service.addRoot('D:\\Videos')
     await service.scanAll()
 
     expect(views.length).toBeGreaterThan(1)
