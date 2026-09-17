@@ -22,10 +22,11 @@ session starts without earlier chats or local memory. This section, the rest of 
   and Delete with a 5-second undo before trashing. See §2, §3, §4 and §6 (Implementation notes).
 - The Windows desktop is set up: Node 24.21, npm 11.19, Git 2.55 and mpv 0.41 from winget
   (§5 Existing setup notes). `npm ci`, typecheck and Electron 44.3.0 work.
-- `npm test` runs 275 unit tests. Seven more run against a real mpv when `MPV_PATH` is set. All
-  282 pass on Windows.
+- `npm test` runs 287 unit tests. Seven more run against a real mpv when `MPV_PATH` is set. All
+  294 pass on Windows.
 - Features are frozen for v1. The agreed order from here is packaging (done, apart from a
-  clean-machine test), measure and harden (in progress), a small refactor, then the front end
+  clean-machine test), measure and harden (done, apart from Lucas's USB and clean-machine tests),
+  a small refactor (done 2026-09-17: the index runs in a worker thread), then the front end
   (§7 working order).
 - Checked on Windows with disposable clips (§2 How delete is implemented, §4 Implementation):
   - mpv's named pipe, loads, end of file, key bindings and unload-until-idle (the real-mpv tests).
@@ -60,8 +61,9 @@ session starts without earlier chats or local memory. This section, the rest of 
   Measurements, §10). Lucas confirmed the merged features work (2026-09-16).
 
 **Next steps, in order**
-1. The small refactor (§7 working order), starting with moving database work off the main
-   process, then the front end.
+1. The front end (§7 working order): structure first (Cleanup as its own tab, starring from the
+   dashboard, a first-run guide when mpv is missing), then visual polish. The custom-player
+   question (§4, §9) feeds into it.
 2. Whenever convenient, Lucas: try a delete where recycling isn't supported, on a removable USB
    stick or a network share. It must fail with an error and keep the file, never delete
    permanently. His external drive doesn't count: Windows treats it as a local disk and it has a
@@ -503,7 +505,7 @@ as features arrive; avoid a generic plugin framework or services that the MVP do
 | Application coordinator | Shuffle session, navigation, pending trash, playback transitions | One authority for commands/events; explicit states and errors |
 | Pure domain logic | Shuffle bag, cycle coverage, history rules | No React, Electron, filesystem, or player dependency |
 | Adapters | mpv control, OS trash, folder reads, later storage/indexing | Small interfaces; real platform behavior tested separately |
-| Background work | Later indexing, probing, thumbnails, CPU-heavy tasks | Bounded concurrency, cancellation, progress, and cleanup |
+| Background work | The index database (a worker thread since 2026-09-17); later probing, thumbnails, CPU-heavy tasks | Bounded concurrency, cancellation, progress, and cleanup |
 
 Keep context isolation and renderer sandboxing enabled, Node integration disabled, and a
 restrictive content security policy. Validate IPC senders and requests. Resolve file actions
@@ -582,11 +584,29 @@ at `ready-to-show`, memory read 10 s after it appears, summed over all four Elec
   memory under 250 MB. Not yet measured: memory during a long scan and during playback (mpv is its
   own process), and a machine slower than this one.
 
+**Database work moved off the main process** (refactor, 2026-09-17). SQLite is synchronous, so
+every query used to hold Electron's main process, which also drives the window. The index now
+lives in a worker thread. Measured in plain Node on a synthetic 1,000,000-file index, running the
+dashboard's heavy reads (category and drive totals, biggest folders, duplicates, a name search,
+never played), and timing the longest gap in a 5 ms timer on the calling thread:
+
+| Three rounds | On the main thread | Through the worker |
+|---|---|---|
+| Longest stall | 3,059–3,242 ms | 18–22 ms |
+| Time for the queries themselves | 3,059–3,242 ms | 2,952–3,233 ms |
+
+- The queries take as long as before; the difference is that the window keeps responding while
+  they run.
+- Packaged app after the change, warm starts with Lucas's real index: window visible after
+  302–350 ms (first launch after a rebuild: 898 ms), idle private memory 210–223 MB, up from
+  188 MB. The worker thread's own JavaScript engine and SQLite cache account for that; still under
+  the proposed 250 MB budget. A normal close takes about 130 ms, index closed cleanly.
+
 **Still to address:**
-- The database runs synchronously on Electron's main process, so a slow query freezes the window.
-  At a million files, totals after a change and the biggest-folders list each take about a second.
-  Moving database work to a worker thread belongs to the refactor step (§7 working order).
 - Not yet tested: a delete on a removable USB stick or network share, and a clean machine.
+- Queries at a million files still take seconds in total, even though the window stays
+  responsive. If that matters in practice, the next step is per-query work (for example keeping
+  running totals rather than summing), measured first.
 
 References for implementation and review:
 - [Electron performance](https://www.electronjs.org/docs/latest/tutorial/performance)
@@ -796,7 +816,8 @@ The front end comes last, as the least complex part. Two things that order depen
    and a second launch no longer break startup (§10, 2026-09-16). The USB and network delete tests
    and the clean machine remain, both for Lucas.*
 3. **A small refactor** where the code actually strains (`src/main/index.ts`, the dashboard screen,
-   duplicated IPC test fakes). Not a rewrite.
+   duplicated IPC test fakes). Not a rewrite. *Done 2026-09-17, plus moving the database to a
+   worker thread (§5 Measurements, §10).*
 4. **Front end** — structure first (Cleanup as its own tab, starring from the dashboard, a
    first-run guide), then visual polish. The custom-player question (§4) feeds into this.
 
@@ -1284,3 +1305,26 @@ machines, not Lucas's.
     indexing inside an excluded folder, and changing exclusions mid-scan.
   - Checked on a copy of Lucas's real index in the packaged build: the new table was added on
     startup with all 6 folders and 21,976 files intact. Not exercised by hand: the picker itself.
+- **2026-09-17:** The small refactor (§7 working order). No features change.
+  - **The index moved to a worker thread.** At a million files the dashboard's heavy reads froze
+    the window for about 3 seconds; through the worker the longest stall was about 20 ms (§5
+    Measurements).
+    - How it works: `indexWorker.ts` owns the database and answers one request at a time, in the
+      order sent, so a scan's writes always land before its sweep. Services use an `IndexStore`,
+      where every index operation returns a promise, so `IndexerService` and `StatsService` became
+      async.
+    - The worker answers only a fixed list of operations (`INDEX_METHODS`).
+    - If the worker fails or stops, every waiting request is rejected rather than left hanging.
+    - Opening, including setting a damaged index aside, now happens in the worker. An index that
+      can't be opened for any other reason now shows an error and quits, instead of crashing.
+    - Views built from answers that arrive out of order can't overwrite a newer view.
+    - Cost: about 22 MB more idle memory.
+  - **`src/main/index.ts` split** into startup and shutdown (`index.ts`), service wiring
+    (`services.ts`), the window and its security settings (`mainWindow.ts`), and system dialogs
+    (`dialogs.ts`).
+  - **Dashboard screen split** from 551 lines into its sections under `components/dashboard/`,
+    which also prepares Cleanup to become its own tab.
+  - **One shared `FakeIpc`** (`src/main/testing/fakeIpc.ts`) replaces four copies in the IPC tests.
+  - Checked in the packaged build with a copy of Lucas's real index: Dashboard, Settings and Stats
+    load real data through the worker, a second launch still just focuses the window, and a normal
+    close shuts the index cleanly in about 130 ms.
