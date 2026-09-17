@@ -19,8 +19,8 @@ memory. This section, the rest of this doc and `CLAUDE.md` (including "Working w
 handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #19 is on `main`. One branch is waiting
-   for review: `worktree-drive-platform`, the macOS test fix logged below.
+1. `git checkout main && git pull`. Everything through PR #20 is on `main`. One branch is waiting
+   for review: `worktree-ui-foundations`, the UI skill and the Cleanup tab logged below.
 2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads on first run), then
    `npm test`. Expect 289 passing, plus 7 more with `MPV_PATH` set to the machine's mpv.
 3. Then start the front end (Next steps below).
@@ -76,12 +76,15 @@ machine keeps its own index.
   Measurements, §10). Lucas confirmed the merged features work (2026-09-16).
 
 **Next steps, in order**
-1. The front end (§7 working order): structure first, then visual polish. The custom-player
-   question (§4, §9) feeds into it, because mpv's own window is what Lucas finds ugly.
-   - Structure, as agreed so far: Cleanup as its own tab (`components/dashboard/CleanupSection.tsx`
-     is already separate), starring from the dashboard's lists, and a first-run guide when mpv is
-     missing (pointing to Settings).
-   - Ask Lucas before settling layout or look: the front end is where his taste decides.
+1. The front end (§7 working order): structure first, then visual polish. Lucas chose to run this
+   and the custom-player question (§4, §9 item 5) in parallel, because mpv's own window is what he
+   finds ugly and polish in the app's own screens cannot fix that.
+   - Done: Cleanup is its own tab (`components/CleanupScreen.tsx`), and the front-end conventions
+     live in the `fileshuffler-ui` skill (`.claude/skills/fileshuffler-ui/SKILL.md`).
+   - Still to do: starring from the dashboard's lists, and a first-run guide when mpv is missing
+     (pointing to Settings). Then visual polish, once the motion values are agreed.
+   - Ask Lucas before settling layout or look: the front end is where his taste decides. The skill
+     labels unsettled things "Open" for exactly this reason.
 2. Whenever convenient, Lucas, on the Windows desktop: try a delete where recycling isn't supported, on a removable USB
    stick or a network share. It must fail with an error and keep the file, never delete
    permanently. His external drive doesn't count: Windows treats it as a local disk and it has a
@@ -1375,3 +1378,28 @@ machines, not Lucas's.
     clean.
   - Found while checking, and left alone: the intermittent real-mpv load test (known quirks above).
     No file under `src/main/playback/` is touched by this branch.
+- **2026-09-17:** Front-end foundations: a UI skill, and Cleanup as its own tab.
+  - Lucas asked whether Claude skills would help here, since for this app his concern is a concise,
+    fluid front end rather than frameworks. The agreed reasoning: a skill is not worth writing to
+    *teach* design, which is general knowledge, but is worth writing against **drift**. Every
+    session starts cold, now across two machines, so without written values each one picks slightly
+    different durations and easings and the app stops feeling coherent. That is the same argument
+    that justifies this document.
+  - `.claude/skills/fileshuffler-ui/SKILL.md`, kept in the repo so it is versioned with the code and
+    travels between the MacBook and the Windows desktop; a skill in `~/.claude` would not. Entries
+    are labelled **Recorded** (already true in the code, or a hard constraint) or **Open** (Lucas
+    decides). Written thin on purpose: it records the CSP and no-network limits, the existing
+    tokens, the radii scale, the focus and icon conventions and how to add a screen, and leaves
+    durations and easings Open rather than inventing his taste and following it back.
+  - Found while writing it: there are only two transitions in 842 lines of CSS, and **no
+    `prefers-reduced-motion` handling anywhere**. The skill requires one alongside the first real
+    animation, rather than as a later pass.
+  - **Cleanup is its own tab**, which Lucas asked for on 2026-09-16 because it sat at the bottom of
+    the dashboard and took scrolling to find. `dashboard/CleanupSection.tsx` became
+    `components/CleanupScreen.tsx` with a real screen header, Refresh moved up into it, and each of
+    the three lists is now its own section. No query or behaviour changed, and the dashboard no
+    longer takes a `cleanup` prop.
+  - Rejected, with reasons: third-party skill packs (generic advice, not this project's taste),
+    `theme-factory` (it themes artifacts, not an Electron renderer), and replacing the undo toast
+    with Sonner (it gates the delete window, so it is safety-critical working code).
+  - Deliberately left to its own branch: the embedded-player spike (§4, §9 item 5).

@@ -82,7 +82,11 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
 - `src/preload/`: the only bridge to the UI. Expose narrow, typed functions; keep `index.d.ts` in sync
 - `src/renderer/`: React UI, presentation only (`components/`, one hook per area in `hooks/`, and
   shared display formatting in `format.ts`). The sidebar switches between Shuffle, Dashboard,
-  Stats and Settings. The dashboard's sections live in `components/dashboard/`
+  Cleanup, Stats and Settings. The dashboard's sections live in `components/dashboard/`
+  - Front-end conventions (tokens, the shape scale, motion, focus, adding a screen) live in the
+    `fileshuffler-ui` skill, `.claude/skills/fileshuffler-ui/SKILL.md`. Read it before changing
+    anything under `src/renderer/`, and move an entry from "Open" to "Recorded" once Lucas settles
+    it
 - `src/shared/shuffler.ts`, `library.ts`, `stats.ts` and `settings.ts`: the view types, API types
   and channel names shared by all three
 

@@ -1,7 +1,6 @@
 import type { LibraryFilePage, LibraryView } from '../../../shared/library'
 import { formatCount, shortenPath } from '../format'
-import type { CleanupLists, LibraryActions, SearchFilters } from '../hooks/useLibrary'
-import { CleanupSection } from './dashboard/CleanupSection'
+import type { LibraryActions, SearchFilters } from '../hooks/useLibrary'
 import { FileList, ListFoot } from './dashboard/FileList'
 import { FilterBar } from './dashboard/FilterBar'
 import { Drives, Totals } from './dashboard/LibrarySummary'
@@ -14,7 +13,6 @@ interface Props {
   results: LibraryFilePage | null
   filters: SearchFilters
   error: string | null
-  cleanup: CleanupLists
   actions: LibraryActions
   /** Opens Settings, where the indexed folders are managed. */
   onManageFolders: () => void
@@ -28,7 +26,6 @@ export function DashboardScreen({
   results,
   filters,
   error,
-  cleanup,
   actions,
   onManageFolders
 }: Props): React.JSX.Element {
@@ -131,8 +128,6 @@ export function DashboardScreen({
               </section>
             </div>
           )}
-
-          {results === null && <CleanupSection cleanup={cleanup} actions={actions} />}
         </>
       )}
     </div>
