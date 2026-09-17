@@ -19,8 +19,8 @@ memory. This section, the rest of this doc and `CLAUDE.md` (including "Working w
 handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #21 is on `main`. One branch is waiting
-   for review: `worktree-cross-platform`, the macOS drive-grouping fix logged below.
+1. `git checkout main && git pull`. Everything through PR #22 is on `main`. One branch is waiting
+   for review: `worktree-ui-shuffle`, the Shuffle screen's motion logged below.
 2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads on first run), then
    `npm test`. Expect 292 passing, plus 7 more with `MPV_PATH` set to the machine's mpv.
 3. Then start the front end (Next steps below).
@@ -1430,3 +1430,26 @@ machines, not Lucas's.
     `videoFolder.ts` (lowercases extensions, and `isFile()` skips links and junctions),
     `fileIdentity.ts` (unmounting a volume removes `/Volumes/<name>`, so the parent-folder check
     throws "can't tell" and a delete fails closed, exactly as on Windows), and `dialogs.ts`.
+- **2026-09-17:** Motion on the Shuffle screen, and the first agreed design decisions.
+  - Lucas set the direction: springs on the moments that carry meaning and nothing elsewhere, the
+    Shuffle screen first, and the existing roomy layout kept and refined rather than replaced. Those
+    entries moved from "Open" to "Recorded" in the `fileshuffler-ui` skill.
+  - **Springs without a dependency.** The spring is a CSS `linear()` curve, which expresses the real
+    overshoot instead of approximating it with a bezier, behind an `@supports` test with a
+    `cubic-bezier` fallback. No animation library, so nothing joins the bundle and the CSP and
+    no-network rules are untouched. It has to be `@supports` rather than two declarations, because a
+    custom property is not validated until it is used: an unsupported `linear()` would have made
+    every rule using it invalid rather than falling back.
+  - **No new renderer state.** Every animation runs on mount, triggered by React mounting an element
+    or by a changing `key`. Pressing Next twice quickly restarts the title animation instead of
+    queueing one, and no timing logic enters the renderer, which has no test setup at all.
+  - Moments that move: the now-playing filename, the controls and key hints arriving, banners, the
+    undo toast, and button press feedback (60 ms down, spring back). Nothing loops or pulses.
+  - **The app now honours `prefers-reduced-motion`**, which it ignored entirely before.
+  - A typographic fix alongside: `.now-title` inherited the body's 1.45 line-height, loose at 26px
+    and blurring the jump from eyebrow to title. Now 1.2.
+  - Deliberately not done: exit animations. React unmounts immediately, so animating one out needs a
+    presence hook, and that would put timing state in the undo path, which gates file deletion and
+    has no tests. Worth it only if the entrances feel lopsided in use (skill, Motion "Open").
+  - **Not yet seen running.** Springs are judged by feel, not by reading CSS: `npm run dev`, then
+    Next, Back, and a delete with an undo.

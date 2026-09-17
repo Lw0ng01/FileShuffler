@@ -66,14 +66,16 @@ export function ShufflerScreen({
         )}
       </header>
 
+      {/* Keyed by the text so a second, different message replays the entrance instead of silently
+          swapping words in place, which was easy to miss. */}
       {error !== null && (
-        <div className="banner banner-error" role="alert">
+        <div className="banner banner-error" role="alert" key={error}>
           {error}
         </div>
       )}
 
       {actionNotice !== null && (
-        <div className="banner banner-notice" role="status">
+        <div className="banner banner-notice" role="status" key={actionNotice}>
           {actionNotice}
         </div>
       )}
@@ -195,7 +197,11 @@ function StatusCard({
             <span className={`dot ${view.status}`} />
             {view.status === 'loading' ? 'Opening' : 'Now playing'}
           </p>
-          <p className="now-title">{view.current}</p>
+          {/* Keyed by the filename: each new video remounts this, so the title springs in rather
+              than the text swapping in place. Pressing Next twice quickly simply restarts it. */}
+          <p className="now-title" key={view.current}>
+            {view.current}
+          </p>
           <Progress view={view} onRestartCycle={actions.restartCycle} />
         </div>
       )
