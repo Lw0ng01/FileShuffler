@@ -27,6 +27,11 @@ export interface IndexerServiceDeps {
   pickFolder?: (purpose: 'index' | 'exclude') => Promise<string | null>
   /** The platform's built-in skip rules. Folders excluded in Settings are added at each scan. */
   rules?: SkipRules
+  /**
+   * Which flavour of path to read drive letters with, and the platform `rules` default to. Defaults
+   * to this machine's; tests set it so Windows paths behave the same way wherever they run.
+   */
+  platform?: NodeJS.Platform
   /** Size and free space of the drive holding a path, or null when it can't be read. */
   driveSpace?: (path: string) => Promise<DriveSpace | null>
   /** Opens a file in the system's default application. Resolves a reason when it fails. */
@@ -62,6 +67,7 @@ export class IndexerService {
   private readonly deps: IndexerServiceDeps
   private readonly listeners = new Set<(view: LibraryView) => void>()
   private readonly scan: (options: ScanOptions) => Promise<ScanSummary>
+  private readonly platform: NodeJS.Platform
   private readonly rules: SkipRules
   private scanning: Promise<void> | null = null
   private controller: AbortController | null = null
@@ -89,7 +95,8 @@ export class IndexerService {
   constructor(deps: IndexerServiceDeps) {
     this.deps = deps
     this.scan = deps.scan ?? scanRoots
-    this.rules = deps.rules ?? systemSkipRules()
+    this.platform = deps.platform ?? process.platform
+    this.rules = deps.rules ?? systemSkipRules(this.platform)
   }
 
   /** Adds the default folders, for a first run with nothing indexed yet. */
@@ -201,7 +208,7 @@ export class IndexerService {
     if (read === undefined) return
     for (const root of await this.deps.db.roots()) {
       const space = await read(root.path)
-      const drive = driveOf(root.path)
+      const drive = driveOf(root.path, this.platform)
       if (space === null) this.space.delete(drive)
       else this.space.set(drive, space)
     }
@@ -390,6 +397,7 @@ export class IndexerService {
         summary = await this.scan({
           roots: [root.path],
           rules,
+          platform: this.platform,
           signal: controller.signal,
           // Waiting for each write also holds the scanner back when the index falls behind, so
           // batches can't pile up in memory.
@@ -437,7 +445,7 @@ export class IndexerService {
       })
     }
     for (const root of roots) {
-      const drive = driveOf(root.path)
+      const drive = driveOf(root.path, this.platform)
       if (known.has(drive)) continue
       const space = this.space.get(drive)
       known.set(drive, {

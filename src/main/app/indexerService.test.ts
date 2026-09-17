@@ -46,7 +46,14 @@ function setup(deps: Partial<IndexerServiceDeps> = {}): {
   views: LibraryView[]
 } {
   const db = new IndexDb(':memory:')
-  const service = new IndexerService({ db: localIndexStore(db), scan: fakeScan({}), ...deps })
+  // These tests all use Windows paths, so the flavour is pinned rather than left to whichever
+  // machine runs them: `D:\Videos` has to yield drive `D:` on macOS just as it does on Windows.
+  const service = new IndexerService({
+    db: localIndexStore(db),
+    scan: fakeScan({}),
+    platform: 'win32',
+    ...deps
+  })
   const views: LibraryView[] = []
   service.onView((view) => views.push(view))
   return { service, db, views }
