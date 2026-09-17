@@ -9,6 +9,8 @@ export const LIBRARY_CHANNELS = {
   addRoot: 'library:add-root',
   chooseRoot: 'library:choose-root',
   removeRoot: 'library:remove-root',
+  chooseExcluded: 'library:choose-excluded',
+  removeExcluded: 'library:remove-excluded',
   scan: 'library:scan',
   scanRoot: 'library:scan-root',
   cancelScan: 'library:cancel-scan',
@@ -129,6 +131,8 @@ export interface ScanSummaryView {
 export interface LibraryView {
   status: 'idle' | 'scanning'
   roots: LibraryRoot[]
+  /** Folders left out of every scan, chosen in Settings. */
+  excluded: string[]
   totals: LibraryTotal[]
   drives: LibraryDrive[]
   files: number
@@ -147,6 +151,13 @@ export interface LibraryApi {
   chooseRoot(): Promise<LibraryView>
   /** Forgets a folder and everything indexed under it. */
   removeRoot(path: string): Promise<LibraryView>
+  /**
+   * Opens the folder picker and leaves the chosen folder out: its entries leave the index now and
+   * scans skip it. Never touches the files. Unchanged if cancelled.
+   */
+  chooseExcluded(): Promise<LibraryView>
+  /** Stops excluding a folder; the next scan brings its files back. */
+  removeExcluded(path: string): Promise<LibraryView>
   /** Indexes every root. Resolves when the scan finishes or is cancelled. */
   scan(): Promise<void>
   /** Indexes one folder again. */

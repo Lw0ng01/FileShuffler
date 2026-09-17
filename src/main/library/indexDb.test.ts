@@ -409,6 +409,37 @@ describe('IndexDb', () => {
     expect(db.fileCount()).toBe(0)
   })
 
+  it('excludes a folder: drops only the rows inside it and recounts the root', () => {
+    const scan = db.startScan()
+    db.putFiles(scan, [
+      file('D:\\Media\\Games\\intro.mp4', { size: 700 }),
+      file('D:\\Media\\GAMES\\deep\\trailer.mp4', { size: 50 }),
+      file('D:\\Media\\Games2\\kept.mp4', { size: 30 }),
+      file('D:\\Media\\home.mp4', { size: 5 })
+    ])
+    db.finishRoot('D:\\Media', scan)
+
+    expect(db.excludeFolder('D:\\Media\\Games\\', true)).toEqual({ removed: 2 })
+    expect(db.excludedFolders()).toEqual(['D:\\Media\\Games\\'])
+    expect(db.fileCount()).toBe(2)
+    expect(db.roots()[0]).toMatchObject({ files: 2, bytes: 35 })
+
+    db.includeFolder('D:\\Media\\Games\\')
+    expect(db.excludedFolders()).toEqual([])
+    expect(db.fileCount()).toBe(2)
+  })
+
+  it('matches case exactly when excluding on a case-sensitive system', () => {
+    const scan = db.startScan()
+    db.putFiles(scan, [
+      file('/home/me/Games/a.mp4', { root: '/home/me', drive: '/' }),
+      file('/home/me/games/b.mp4', { root: '/home/me', drive: '/' })
+    ])
+
+    expect(db.excludeFolder('/home/me/Games', false)).toEqual({ removed: 1 })
+    expect(db.hasFile('/home/me/games/b.mp4')).toBe(true)
+  })
+
   it('lists the largest and the most recent files', () => {
     const scan = db.startScan()
     db.putFiles(scan, [

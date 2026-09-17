@@ -117,12 +117,19 @@ shuffler.onView((view) => {
 
 const library = new IndexerService({
   db: indexDb,
-  pickFolder: async () => {
-    const options: Electron.OpenDialogOptions = {
-      title: 'Choose a folder to index',
-      buttonLabel: 'Index this folder',
-      properties: ['openDirectory']
-    }
+  pickFolder: async (purpose) => {
+    const options: Electron.OpenDialogOptions =
+      purpose === 'exclude'
+        ? {
+            title: 'Choose a folder to leave out of the index',
+            buttonLabel: 'Exclude this folder',
+            properties: ['openDirectory']
+          }
+        : {
+            title: 'Choose a folder to index',
+            buttonLabel: 'Index this folder',
+            properties: ['openDirectory']
+          }
     const result = mainWindow
       ? await dialog.showOpenDialog(mainWindow, options)
       : await dialog.showOpenDialog(options)

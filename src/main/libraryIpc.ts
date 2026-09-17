@@ -9,6 +9,8 @@ export type LibraryBackend = Pick<
   | 'addRoot'
   | 'chooseRoot'
   | 'removeRoot'
+  | 'chooseExcluded'
+  | 'removeExcluded'
   | 'scanAll'
   | 'scanRoot'
   | 'cancelScan'
@@ -172,6 +174,10 @@ export function registerLibraryIpc(
   handle(LIBRARY_CHANNELS.addRoot, ([path]) => backend.addRoot(asPath(path)))
   handle(LIBRARY_CHANNELS.chooseRoot, () => backend.chooseRoot())
   handle(LIBRARY_CHANNELS.removeRoot, ([path]) => backend.removeRoot(asPath(path)))
+  // Choosing uses the system picker, so the page can't name a folder to exclude; removing an entry
+  // only deletes that row from the list.
+  handle(LIBRARY_CHANNELS.chooseExcluded, () => backend.chooseExcluded())
+  handle(LIBRARY_CHANNELS.removeExcluded, ([path]) => backend.removeExcluded(asPath(path)))
   handle(LIBRARY_CHANNELS.scan, () => backend.scanAll())
   handle(LIBRARY_CHANNELS.scanRoot, ([path]) => backend.scanRoot(asPath(path)))
   handle(LIBRARY_CHANNELS.cancelScan, () => backend.cancelScan())

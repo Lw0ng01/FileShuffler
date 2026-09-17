@@ -187,6 +187,100 @@ describe('IndexerService opening files', () => {
   })
 })
 
+describe('IndexerService excluded folders', () => {
+  const windowsRules = { prefixes: [], caseInsensitive: true }
+
+  async function indexed(
+    pickFolder: IndexerServiceDeps['pickFolder'],
+    scan = fakeScan({
+      'D:\\Media': [
+        scanFile('D:\\Media\\Games\\intro.mp4', 'D:\\Media', { folder: 'D:\\Media\\Games' }),
+        scanFile('D:\\Media\\Home\\beach.mp4', 'D:\\Media', { folder: 'D:\\Media\\Home' })
+      ]
+    })
+  ): Promise<{ service: IndexerService; scan: typeof scan }> {
+    const { service } = setup({ scan, pickFolder, rules: windowsRules })
+    service.addRoot('D:\\Media')
+    await service.scanAll()
+    return { service, scan }
+  }
+
+  it('drops what is indexed inside an excluded folder straight away, and skips it in scans', async () => {
+    const pickFolder = vi.fn(async () => 'D:\\Media\\Games')
+    const { service, scan } = await indexed(pickFolder)
+    expect(service.getView().files).toBe(2)
+
+    const view = await service.chooseExcluded()
+    expect(pickFolder).toHaveBeenCalledWith('exclude')
+    expect(view.excluded).toEqual(['D:\\Media\\Games'])
+    expect(view.files).toBe(1)
+    expect(view.roots[0]).toMatchObject({ path: 'D:\\Media', files: 1 })
+    expect(view.lastError).toBeNull()
+
+    await service.scanAll()
+    expect(scan.mock.lastCall?.[0].rules).toEqual({
+      ...windowsRules,
+      excluded: ['D:\\Media\\Games']
+    })
+  })
+
+  it('forgets an exclusion when asked, leaving the next scan to bring the files back', async () => {
+    const { service } = await indexed(vi.fn(async () => 'D:\\Media\\Games'))
+    await service.chooseExcluded()
+
+    expect(service.removeExcluded('D:\\Media\\Games').excluded).toEqual([])
+  })
+
+  it('refuses to exclude an indexed folder or one that holds it', async () => {
+    const pickFolder = vi.fn<(purpose: 'index' | 'exclude') => Promise<string | null>>()
+    const { service } = await indexed(pickFolder)
+
+    pickFolder.mockResolvedValueOnce('D:\\Media')
+    let view = await service.chooseExcluded()
+    expect(view.lastError).toBe(
+      'D:\\Media is an indexed folder. Remove it from Indexed folders instead.'
+    )
+
+    pickFolder.mockResolvedValueOnce('D:\\')
+    view = await service.chooseExcluded()
+    expect(view.lastError).toContain('holds the indexed folder D:\\Media')
+    expect(view.excluded).toEqual([])
+    expect(view.files).toBe(2)
+  })
+
+  it('refuses to index a folder inside an excluded one', async () => {
+    const pickFolder = vi.fn<(purpose: 'index' | 'exclude') => Promise<string | null>>()
+    const { service } = await indexed(pickFolder)
+    pickFolder.mockResolvedValueOnce('D:\\Media\\Games')
+    await service.chooseExcluded()
+
+    pickFolder.mockResolvedValueOnce('d:\\media\\games\\Saves')
+    const view = await service.chooseRoot()
+    expect(view.roots.map((root) => root.path)).toEqual(['D:\\Media'])
+    expect(view.lastError).toContain('is inside the excluded folder D:\\Media\\Games')
+  })
+
+  it('leaves exclusions alone while a scan is running', async () => {
+    let finish = (): void => {}
+    const scan = vi.fn(
+      () =>
+        new Promise<ScanSummary>((resolve) => {
+          finish = () => resolve({ folders: 0, files: 0, bytes: 0, errors: [], cancelled: false })
+        })
+    )
+    const pickFolder = vi.fn(async () => 'D:\\Media\\Games')
+    const { service } = setup({ scan, pickFolder, rules: windowsRules })
+    service.addRoot('D:\\Media')
+    const scanning = service.scanAll()
+
+    const view = await service.chooseExcluded()
+    expect(pickFolder).not.toHaveBeenCalled()
+    expect(view.lastError).toBe('Stop the scan before changing excluded folders.')
+    finish()
+    await scanning
+  })
+})
+
 describe('IndexerService drives and folder picking', () => {
   it('indexes the folder the picker returns', async () => {
     const pickFolder = vi.fn(async () => 'D:\\Videos')

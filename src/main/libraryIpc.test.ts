@@ -34,6 +34,8 @@ function setup(trusted = true): { ipc: FakeIpc; backend: LibraryBackend; unregis
     addRoot: vi.fn(),
     chooseRoot: vi.fn(),
     removeRoot: vi.fn(),
+    chooseExcluded: vi.fn(),
+    removeExcluded: vi.fn(),
     scanAll: vi.fn(),
     scanRoot: vi.fn(),
     cancelScan: vi.fn(),
@@ -80,6 +82,16 @@ describe('registerLibraryIpc', () => {
     expect(backend.search).toHaveBeenCalledWith('beach', 5)
     expect(backend.openFile).toHaveBeenCalledWith('D:\\Videos\\a.mp4')
     expect(backend.showInFolder).toHaveBeenCalledWith('D:\\Videos\\a.mp4')
+  })
+
+  it('chooses excluded folders only through the picker, and checks the path to include again', () => {
+    const { ipc, backend } = setup()
+    ipc.invoke(LIBRARY_CHANNELS.chooseExcluded, 'C:\\Anything')
+    ipc.invoke(LIBRARY_CHANNELS.removeExcluded, 'D:\\Games')
+
+    expect(backend.chooseExcluded).toHaveBeenCalledWith()
+    expect(backend.removeExcluded).toHaveBeenCalledWith('D:\\Games')
+    expect(() => ipc.invoke(LIBRARY_CHANNELS.removeExcluded, 42)).toThrow('Expected a folder path')
   })
 
   it('forwards the cleanup queries', () => {

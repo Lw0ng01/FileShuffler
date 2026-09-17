@@ -37,7 +37,8 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
     `scanner.ts`). Only `progressStore.ts` writes, and only inside the app's data folder
   - `src/main/library/`: the index store (`indexDb.ts`) on Node's built-in SQLite (PROJECT.md §5).
     `openIndex.ts` sets a damaged index aside at startup instead of crashing
-  - `src/main/app/indexerService.ts`: roots, scans and the numbers the dashboard reads
+  - `src/main/app/indexerService.ts`: roots, excluded folders (added to the scanner's skip rules
+    at each scan), scans and the numbers the dashboard reads
   - `src/main/libraryIpc.ts`: library commands, with the same sender and argument checks as `ipc.ts`
   - `src/main/app/statsService.ts` and `src/main/statsIpc.ts`: play stats and favorites, read from
     the same database. Play history is recorded through the coordinator's `PlayHistory`

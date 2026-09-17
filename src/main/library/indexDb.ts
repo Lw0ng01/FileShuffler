@@ -45,6 +45,10 @@ const SCHEMA = `
   );
   create index if not exists plays_path on plays(path);
   create index if not exists plays_opened on plays(opened_at desc);
+  create table if not exists excluded_folders (
+    path text primary key,
+    added_at integer not null
+  );
   create table if not exists favorites (
     path text primary key,
     name text not null,
@@ -229,6 +233,54 @@ export class IndexDb {
       this.db.exec('rollback')
       throw error
     }
+  }
+
+  /** Folders excluded in Settings, in path order. */
+  excludedFolders(): string[] {
+    return this.db
+      .prepare('select path from excluded_folders order by path')
+      .all()
+      .map((row) => text((row as Row)['path']))
+  }
+
+  /**
+   * Excludes a folder and drops what the index already holds inside it, in one transaction, so the
+   * dashboard never shows files from a folder it says is excluded. Only index rows are removed;
+   * the files themselves are never touched (PROJECT.md §2). Returns how many rows went.
+   *
+   * `caseInsensitive` should match the scanner's rules for this platform. SQLite's `lower` folds
+   * only ASCII, so a folder name differing in other letters' case keeps its rows until the next
+   * scan skips the folder and sweeps them.
+   */
+  excludeFolder(path: string, caseInsensitive: boolean): { removed: number } {
+    const separator = path.includes('\\') ? '\\' : '/'
+    const trimmed = path.replace(/[\\/]+$/, '')
+    const prefix = `${trimmed}${separator}`
+    const match = caseInsensitive
+      ? 'lower(substr(path, 1, length(?))) = lower(?)'
+      : 'substr(path, 1, length(?)) = ?'
+    this.db.exec('begin')
+    try {
+      this.db
+        .prepare('insert or ignore into excluded_folders (path, added_at) values (?, ?)')
+        .run(path, Date.now())
+      const removed = this.db.prepare(`delete from files where ${match}`).run(prefix, prefix)
+      this.db.exec(
+        `update roots set
+           files = (select count(*) from files where files.root = roots.path),
+           bytes = (select coalesce(sum(size), 0) from files where files.root = roots.path)`
+      )
+      this.db.exec('commit')
+      return { removed: count(removed.changes) }
+    } catch (error) {
+      this.db.exec('rollback')
+      throw error
+    }
+  }
+
+  /** Stops excluding a folder. Its files come back with the next scan. */
+  includeFolder(path: string): void {
+    this.db.prepare('delete from excluded_folders where path = ?').run(path)
   }
 
   roots(): RootRow[] {

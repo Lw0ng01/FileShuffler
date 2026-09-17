@@ -12,6 +12,7 @@ import type {
 import type { DriveSpace } from '../files/driveSpace'
 import type { ScanOptions, ScanSummary } from '../files/scanner'
 import { driveOf, scanRoots } from '../files/scanner'
+import { isInsideFolder, systemSkipRules, type SkipRules } from '../files/scanRules'
 import type { CategoryTotal, DriveTotal, IndexDb } from '../library/indexDb'
 
 export interface IndexerServiceDeps {
@@ -20,8 +21,10 @@ export interface IndexerServiceDeps {
   scan?: (options: ScanOptions) => Promise<ScanSummary>
   /** Folders offered the first time, for example the user's Videos and Pictures. */
   defaultRoots?: () => string[]
-  /** Shows the folder picker. Resolves null when cancelled. */
-  pickFolder?: () => Promise<string | null>
+  /** Shows the folder picker, worded for what the folder is for. Resolves null when cancelled. */
+  pickFolder?: (purpose: 'index' | 'exclude') => Promise<string | null>
+  /** The platform's built-in skip rules. Folders excluded in Settings are added at each scan. */
+  rules?: SkipRules
   /** Size and free space of the drive holding a path, or null when it can't be read. */
   driveSpace?: (path: string) => Promise<DriveSpace | null>
   /** Opens a file in the system's default application. Resolves a reason when it fails. */
@@ -69,9 +72,12 @@ export class IndexerService {
    */
   private cachedTotals: { categories: CategoryTotal[]; drives: DriveTotal[] } | null = null
 
+  private readonly rules: SkipRules
+
   constructor(deps: IndexerServiceDeps) {
     this.deps = deps
     this.scan = deps.scan ?? scanRoots
+    this.rules = deps.rules ?? systemSkipRules()
   }
 
   /** Adds the default folders, for a first run with nothing indexed yet. */
@@ -92,6 +98,7 @@ export class IndexerService {
         files: root.files,
         bytes: root.bytes
       })),
+      excluded: this.deps.db.excludedFolders(),
       totals,
       drives: this.drives(),
       files: totals.reduce((sum, total) => sum + total.files, 0),
@@ -108,6 +115,7 @@ export class IndexerService {
   }
 
   addRoot(path: string): LibraryView {
+    if (!this.canIndex(path)) return this.getView()
     this.deps.db.addRoot(path)
     this.error = null
     this.emit()
@@ -116,11 +124,53 @@ export class IndexerService {
 
   /** Opens the folder picker and indexes the chosen folder. Unchanged if cancelled. */
   async chooseRoot(): Promise<LibraryView> {
-    const folder = await this.deps.pickFolder?.()
+    const folder = await this.deps.pickFolder?.('index')
     if (folder === null || folder === undefined || this.disposed) return this.getView()
+    if (!this.canIndex(folder)) return this.getView()
     this.deps.db.addRoot(folder)
     this.error = null
     await this.refreshDriveSpace()
+    this.emit()
+    return this.getView()
+  }
+
+  /**
+   * Opens the folder picker and leaves the chosen folder out of the index: what's already indexed
+   * inside it disappears now, and scans skip it from then on. The folder comes from the system's
+   * picker, never from the page. Only index entries are removed; no file is touched.
+   */
+  async chooseExcluded(): Promise<LibraryView> {
+    if (this.refuseWhileScanning()) return this.getView()
+    const folder = await this.deps.pickFolder?.('exclude')
+    if (folder === null || folder === undefined || this.disposed) return this.getView()
+    if (this.refuseWhileScanning()) return this.getView()
+
+    // Excluding an indexed folder, or a folder holding one, would make every scan report it as
+    // skipped. Removing the indexed folder is the clear way to do that.
+    const root = this.deps.db
+      .roots()
+      .find((entry) => isInsideFolder(entry.path, folder, this.rules.caseInsensitive))
+    if (root !== undefined) {
+      this.error =
+        root.path === folder
+          ? `${folder} is an indexed folder. Remove it from Indexed folders instead.`
+          : `${folder} holds the indexed folder ${root.path}. Remove that from Indexed folders first.`
+      this.emit()
+      return this.getView()
+    }
+
+    this.deps.db.excludeFolder(folder, this.rules.caseInsensitive)
+    this.error = null
+    this.invalidateTotals()
+    this.emit()
+    return this.getView()
+  }
+
+  /** Stops excluding a folder. Its files return with the next scan. */
+  removeExcluded(path: string): LibraryView {
+    if (this.refuseWhileScanning()) return this.getView()
+    this.deps.db.includeFolder(path)
+    this.error = null
     this.emit()
     return this.getView()
   }
@@ -223,6 +273,28 @@ export class IndexerService {
     }
   }
 
+  /** A folder inside an excluded one can't be indexed: every scan would skip it anyway. */
+  private canIndex(path: string): boolean {
+    const excluded = this.deps.db
+      .excludedFolders()
+      .find((folder) => isInsideFolder(path, folder, this.rules.caseInsensitive))
+    if (excluded === undefined) return true
+    this.error = `${path} is inside the excluded folder ${excluded}. Remove it from Excluded folders first.`
+    this.emit()
+    return false
+  }
+
+  /**
+   * A running scan uses the exclusions it started with, so changing them mid-scan would put
+   * excluded files straight back.
+   */
+  private refuseWhileScanning(): boolean {
+    if (this.scanning === null) return false
+    this.error = 'Stop the scan before changing excluded folders.'
+    this.emit()
+    return true
+  }
+
   private known(path: string): boolean {
     // Play history counts too: a shuffle folder isn't necessarily indexed, and the Stats tab lists
     // what played. Either way it is a path the app itself recorded, never one the renderer made up.
@@ -289,6 +361,7 @@ export class IndexerService {
     let cancelled = false
 
     const roots = this.deps.db.roots().filter((root) => only === undefined || root.path === only)
+    const rules: SkipRules = { ...this.rules, excluded: this.deps.db.excludedFolders() }
     for (const root of roots) {
       if (controller.signal.aborted) {
         cancelled = true
@@ -299,6 +372,7 @@ export class IndexerService {
       try {
         summary = await this.scan({
           roots: [root.path],
+          rules,
           signal: controller.signal,
           onBatch: (batch) => {
             this.deps.db.putFiles(scanId, batch)

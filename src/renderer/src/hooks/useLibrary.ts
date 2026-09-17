@@ -57,6 +57,8 @@ function toQuery(filters: SearchFilters): LibraryFileQuery {
 export interface LibraryActions {
   chooseRoot: () => void
   removeRoot: (path: string) => void
+  chooseExcluded: () => void
+  removeExcluded: (path: string) => void
   scan: () => void
   cancelScan: () => void
   scanRoot: (path: string) => void
@@ -257,6 +259,8 @@ export function useLibrary(): {
     return {
       chooseRoot: () => run(() => api.chooseRoot()),
       removeRoot: (path) => run(() => api.removeRoot(path)),
+      chooseExcluded: () => run(() => api.chooseExcluded()),
+      removeExcluded: (path) => run(() => api.removeExcluded(path)),
       scan: () => run(() => api.scan()),
       cancelScan: () => run(() => api.cancelScan()),
       scanRoot: (path) => run(() => api.scanRoot(path)),

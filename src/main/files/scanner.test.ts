@@ -97,6 +97,19 @@ describe('scanRoots', () => {
     expect(files.map((entry) => entry.name)).toEqual(['mine.mp4'])
   })
 
+  it('skips folders excluded in Settings, and says so when a whole root is excluded', async () => {
+    await file(join(root, 'Games', 'Some Game', 'intro.mp4'))
+    await file(join(root, 'Games2', 'kept.mp4'))
+    await file(join(root, 'Videos', 'mine.mp4'))
+    const excluded: SkipRules = { ...rules, excluded: [join(root, 'Games')] }
+
+    const { files, summary } = await collect([root, join(root, 'Games')], { rules: excluded })
+    expect(files.map((entry) => entry.name).sort()).toEqual(['kept.mp4', 'mine.mp4'])
+    expect(summary.errors.map((error) => error.message)).toEqual([
+      'Excluded in Settings, so it was skipped'
+    ])
+  })
+
   it('never follows links or junctions', async () => {
     await file(join(root, 'real', 'clip.mp4'))
     await mkdir(join(root, 'target'))
