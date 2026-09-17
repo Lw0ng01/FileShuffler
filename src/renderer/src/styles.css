@@ -102,8 +102,16 @@ body,
   margin: 0;
 }
 
+/* Transparent, so the window's own material shows through wherever the page does not paint - which
+   is only the sidebar. `.main` carries `--bg` instead. Both are needed: leaving the background here
+   is what kept Mica and vibrancy invisible from the day they were set, because the sidebar's
+   `transparent` was sitting on an opaque body rather than on the material.
+
+   Where there is no material, or where the desktop has transparency effects switched off, the
+   window's own `backgroundColor` shows here instead and the result is the flat surface the app had
+   before - so this degrades to exactly the old look rather than to a hole. */
 body {
-  background: var(--bg);
+  background: transparent;
   color: var(--text);
   font-size: 14px;
   line-height: 1.45;
@@ -215,6 +223,10 @@ button {
 
 .main {
   overflow-y: auto;
+  /* The page's opaque surface, moved here off `body` so the sidebar can be translucent. Everything
+     that has to hide content scrolling under it - `.titlebar`, `.screen-header` - uses the same
+     token, so they stay consistent with what is behind them. */
+  background: var(--bg);
   /* The side gutter lives on `.screen` rather than here, so `.titlebar` below can span the entire
      width of this area and be grabbed anywhere along it. */
   padding: 28px 0 120px;

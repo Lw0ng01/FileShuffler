@@ -9,13 +9,13 @@ import { is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
 /**
- * The opaque colour behind the page, which has to match the theme or the window flashes the wrong
- * colour before the first frame paints. It was hard-coded dark, so a light-mode user saw a dark
- * flash at every launch.
- *
- * These are `--bg` from `styles.css`, and they have to be changed together: the light value was
- * left behind at `#ececf0` when the palette moved to `#f2f2f7`, which flashed the older, greyer
+ * `--bg` from `styles.css`, and the two have to be changed together: the light value was left
+ * behind at `#ececf0` when the palette moved to `#f2f2f7`, which flashed the older, greyer
  * background at every launch.
+ *
+ * Used for the window itself only where there is no material to show through it, and for the
+ * colour Windows draws its window controls on - which sit over `.main`, where the page does paint
+ * this. It was once hard-coded dark, so a light-mode user saw a dark flash at every launch.
  */
 const WINDOW_BACKGROUND = { dark: '#1c1c1e', light: '#f2f2f7' }
 
@@ -55,10 +55,11 @@ function titleBarOverlay(): { color: string; symbolColor: string; height: number
  * the window is translucent behind it. `backgroundColor` has to be clear for that translucency to
  * show.
  *
- * Neither material is actually visible yet, on either platform: `body` paints an opaque `--bg`
- * across the whole window, and the transparent `--sidebar` sits on that rather than on the
- * material. Moving that background to `.main` would reveal it, which is a change in how the app
- * looks and so Lucas's to make (PROJECT.md, Next steps).
+ * Both materials went unseen from the day they were set, because `body` painted an opaque `--bg`
+ * across the whole window and the transparent `--sidebar` sat on that rather than on the material.
+ * The page now paints that surface on `.main` alone (Lucas, 2026-09-17), so the sidebar - and only
+ * the sidebar - is genuinely see-through. Give `--sidebar` a real colour on any platform that has
+ * no material to show.
  *
  * Windows now hides its title bar too, so the sidebar reaches the top edge there as well. It keeps
  * the Mica material, and `titleBarOverlay` leaves the window controls native: Windows draws them
@@ -83,7 +84,10 @@ function windowChrome(): BrowserWindowConstructorOptions {
       titleBarStyle: 'hidden',
       titleBarOverlay: titleBarOverlay(),
       backgroundMaterial: 'mica',
-      backgroundColor: backgroundColor()
+      // Clear, for the same reason macOS is: an opaque window background paints over the material
+      // and nothing shows through the sidebar. The page keeps its own opaque surface on `.main`, so
+      // only the sidebar is actually see-through.
+      backgroundColor: '#00000000'
     }
   }
   return { backgroundColor: backgroundColor() }
@@ -115,15 +119,21 @@ export function createMainWindow(): BrowserWindow {
 
   window.on('ready-to-show', () => window.show())
 
-  // Following the system theme means following it while running, not only at launch. macOS keeps
-  // its clear background so the vibrancy stays visible, and needs nothing here.
-  if (process.platform !== 'darwin') {
+  // Following the system theme means following it while running, not only at launch. Both platforms
+  // with a window material keep their clear background, so it must not be reassigned here: setting
+  // an opaque colour would paint over the material and the sidebar would stop being translucent.
+  if (process.platform === 'win32') {
     const onThemeChange = (): void => {
-      if (window.isDestroyed()) return
-      window.setBackgroundColor(backgroundColor())
       // The window controls are drawn by Windows, not by the page, so switching to Light in
       // Settings would otherwise leave light glyphs on the new light background.
-      if (process.platform === 'win32') window.setTitleBarOverlay(titleBarOverlay())
+      if (!window.isDestroyed()) window.setTitleBarOverlay(titleBarOverlay())
+    }
+    nativeTheme.on('updated', onThemeChange)
+    window.on('closed', () => nativeTheme.off('updated', onThemeChange))
+  } else if (process.platform !== 'darwin') {
+    // No material here, so the window's own colour is what shows before the first frame paints.
+    const onThemeChange = (): void => {
+      if (!window.isDestroyed()) window.setBackgroundColor(backgroundColor())
     }
     nativeTheme.on('updated', onThemeChange)
     window.on('closed', () => nativeTheme.off('updated', onThemeChange))
