@@ -631,6 +631,11 @@ kbd {
   margin-top: 22px;
 }
 
+/* Two lists of the same length end level because every row is the same height - see `.file-detail`,
+   which is what actually guarantees it. Deliberately nothing here forces it: pushing each footer to
+   the bottom of its column was tried, and it does keep them level after "Show more" lengthens one
+   side, but it leaves the shorter list's footer floating a few hundred pixels below the rows it
+   belongs to, which reads as a bug of its own. A column that really is longer may look longer. */
 .two-col {
   display: grid;
   gap: 22px;
@@ -764,6 +769,16 @@ kbd {
 
 .file-folder {
   max-width: 45%;
+}
+
+/* The size or count at the end of a row never wraps. It is short, it is the value being compared
+   down the column, and letting it fall onto a second line made that one row taller than its
+   neighbours - which is what knocked the two dashboard lists out of alignment with each other
+   (Lucas, 2026-09-17). The name and the folder give up the space instead, which they already do
+   by truncating. */
+.file-detail {
+  flex: none;
+  white-space: nowrap;
 }
 
 .file-row .muted:last-child {

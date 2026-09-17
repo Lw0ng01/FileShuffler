@@ -75,7 +75,7 @@ export function CleanupScreen({
                         {shortenPath(folder.folder)}
                       </span>
                       <span className="muted file-folder">{formatCount(folder.files)}</span>
-                      <span className="muted">{formatBytes(folder.bytes)}</span>
+                      <span className="muted file-detail">{formatBytes(folder.bytes)}</span>
                     </li>
                   ))}
                 </ul>

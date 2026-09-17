@@ -219,7 +219,7 @@ function StatRow({
       <span className="muted file-folder" title={folder}>
         {shortenPath(folder)}
       </span>
-      <span className="muted">{detail}</span>
+      <span className="muted file-detail">{detail}</span>
       <span className="row-actions">
         <button className="btn btn-small" onClick={() => fileActions.openFile(path)}>
           Open

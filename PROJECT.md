@@ -18,9 +18,9 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
 "Working with Lucas") are the handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #31 is on `main`. One branch is waiting
-   for review: **`worktree-window-drag`**, which made the top of the window draggable. If it has
-   been merged, nothing else is outstanding.
+1. `git checkout main && git pull`. Everything through PR #32 is on `main`. One branch is waiting
+   for review: **`worktree-list-align`**, which stopped file rows wrapping. If it has been merged,
+   nothing else is outstanding.
 2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads its binary on first
    run), then `npm test`. Expect 305 passing, plus 7 more with `MPV_PATH` set to mpv's path.
    - **On Windows, use Command Prompt, not PowerShell**, or `npm.cmd run dev`: Windows' default
@@ -1713,3 +1713,23 @@ machines, not Lucas's.
     including next to the window controls, the header stays pinned at 46px through a scroll, and no
     screen collides with the controls at either window size.
   - No new tests: CSS and window configuration, which the unit tests do not reach. 312 still pass.
+- **2026-09-17:** Stopped file rows wrapping, so the dashboard's two lists end level.
+  - **The two lists side by side ended at different heights** *(Lucas, 2026-09-17, with a
+    screenshot)*. The cause was one row, not the layout: a long folder path squeezed the size at the
+    end of the row until it wrapped onto a second line, and that row then stood taller than its
+    neighbour in the other column.
+  - **The size never wraps now.** `.file-detail` is `flex: none; white-space: nowrap`, so the name
+    and the folder give up the space instead - which they already do, by truncating. Every row is
+    48px, both columns end level, and the rows line up one-for-one across the pair.
+  - It is one class on the shared row, so Stats and Cleanup get the same guarantee rather than the
+    dashboard alone. Checked on all three; Cleanup's folder rows are 38px and its file rows 48px,
+    each uniform, because folder rows carry no buttons.
+  - **No added truncation.** The worry was that a size that cannot shrink would eat into the names.
+    Measured at the width the screenshot was taken at: the names are exactly as full as before, and
+    only the rows that used to wrap changed.
+  - **Forcing the columns level was tried and taken back out.** Pushing each footer to the bottom of
+    its column does keep them aligned after "Show more" lengthens one side, but it leaves the
+    shorter list's footer floating a few hundred pixels below its own rows - trading a small
+    misalignment for something that looks more like a bug. A list that really is longer is allowed
+    to look longer, and the real fault was the wrapping.
+  - No new tests: CSS, which the unit tests do not reach. 312 still pass.
