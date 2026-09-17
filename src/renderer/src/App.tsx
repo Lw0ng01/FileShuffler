@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { CleanupScreen } from './components/CleanupScreen'
 import { DashboardScreen } from './components/DashboardScreen'
 import { SettingsScreen } from './components/SettingsScreen'
 import { ShufflerScreen } from './components/ShufflerScreen'
@@ -39,6 +40,8 @@ function App(): React.JSX.Element {
             actions={stats.actions}
             fileActions={library.actions}
           />
+        ) : page === 'cleanup' ? (
+          <CleanupScreen cleanup={library.cleanup} actions={library.actions} />
         ) : page === 'dashboard' ? (
           <DashboardScreen
             view={library.view}
@@ -47,7 +50,6 @@ function App(): React.JSX.Element {
             results={library.results}
             filters={library.filters}
             error={library.error}
-            cleanup={library.cleanup}
             actions={library.actions}
             onManageFolders={() => setPage('settings')}
           />
