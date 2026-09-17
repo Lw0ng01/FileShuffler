@@ -22,6 +22,18 @@ the same way:
   merges himself; end with the `https://github.com/Lw0ng01/FileShuffler/pull/new/<branch>` link.
 - **Commits** are authored `Lucas W <71304042+Lw0ng01@users.noreply.github.com>`, with **no
   Claude co-author or session lines** (his choice).
+- **Write commit messages and PR notes as the person who made the change**, because the author *is*
+  Lucas: a message saying "Lucas asked for X" has him narrating himself in the third person, which
+  is what makes them read as robotic.
+  - Past tense, plain and direct. "The light background was too grey, so it's now `#f2f2f7`" - not
+    "Lucas said the background looked too grey, and he was right".
+  - Never name him, and never frame a change as carrying out an instruction. State the decision and
+    why it was right: "Springs only on the moments that carry meaning" rather than "Lucas chose
+    springs on the moments that matter".
+  - Keep the reasoning and the honest caveats; drop the reporting. What changed, why, what it cost,
+    what is still unverified.
+  - **`PROJECT.md` is the exception**: it is a dated record of who decided what, so attributions
+    like *(Lucas, 2026-09-16)* belong there and should stay.
 - **Before committing:** `npm run lint`, `npm run typecheck`, `npm test` (with `MPV_PATH` when mpv
   is installed). Scan the staged diff for personal data: emails other than the noreply one, local
   paths, and real file or folder names from his library.

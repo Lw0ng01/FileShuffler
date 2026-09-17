@@ -19,8 +19,8 @@ memory. This section, the rest of this doc and `CLAUDE.md` (including "Working w
 handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #25 is on `main`. One branch is waiting
-   for review: `worktree-light-palette`, the lighter light mode logged below.
+1. `git checkout main && git pull`. Everything through PR #26 is on `main`. One branch is waiting
+   for review: `worktree-commit-voice`, the commit-message convention logged below.
 2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads on first run), then
    `npm test`. Expect 301 passing, plus 7 more with `MPV_PATH` set to the machine's mpv.
 3. Then start the front end (Next steps below).
@@ -111,11 +111,15 @@ machine keeps its own index.
   share).
 
 **Open decisions and known quirks**
-- ~~The intermittent real-mpv test~~: explained and fixed 2026-09-17. Its `waitFor` helper gave up
-  after 8 s inside a suite that declares 20 s, so a one-second clip could miss its own deadline in a
-  full parallel run. It now allows 15 s. Not proven beyond doubt, because no failing run was ever
-  captured with the raw mpv events logged: if it comes back, instrument the adapter rather than
-  raising the number again.
+- **The intermittent real-mpv test is open again**, and the earlier explanation was wrong. "Only
+  reports the newer of two back-to-back loads" looked like a timeout that was too tight, so
+  `waitFor` went from 8 s to 15 s on 2026-09-17. It failed again the same day at 15201 ms: the
+  raised budget only made the failure slower, so the timeout was never the cause.
+  - It still passes in isolation (6/6) and fails only under a full parallel run, and every failure
+    so far has the same shape - the correct `loaded` for the newer file, then no `ended` at all.
+  - Next step is to instrument the adapter and capture the raw mpv events from a failing run,
+    rather than raising the number a third time. A dropped or misattributed `end-file` would mean
+    autoplay can silently stall, which is worth knowing for certain either way.
 - mpv is not bundled; people install it (§7 Phase 6 spike findings). Whether to build a custom
   player instead is open (§4 Embedded player).
 - A video restored with Undo doesn't reappear in "Recently played" (cosmetic).
@@ -1520,3 +1524,20 @@ machines, not Lucas's.
     out. The toast floats over the background but carries its own shadow already.
   - No behaviour change, so no new tests: 301 unit tests, 308 with the real-mpv set, lint and
     typecheck clean.
+- **2026-09-17:** Commit messages and PR notes read as the author's own *(Lucas asked for this)*.
+  - Commits are authored `Lucas W`, so messages saying "Lucas asked for X" or "He was right" had him
+    narrating himself in the third person. That is what made them robotic: they reported on a
+    conversation instead of describing a change. They are past tense and first-hand now, with the
+    reasoning and caveats kept and the reporting dropped.
+  - The rule went in `CLAUDE.md` rather than a skill. It passes the test of being something a cold
+    session could not guess, but it applies to every branch, and an always-on convention belongs in
+    the file that is always loaded - a skill earns its indirection only when it is conditional.
+  - **`PROJECT.md` keeps its attributions.** It is a dated record of who decided what, so
+    *(Lucas, 2026-09-17)* is the point of it here. Only commit messages drop the third person.
+  - Earlier commit messages stay as they are: they are merged into `main`, and changing them would
+    mean rewriting published history.
+  - Docs only, so no new tests: 301 unit tests, 308 with the real-mpv set.
+  - Noticed while running the checks: the real-mpv flake returned, failing at 15201 ms under the
+    15 s budget raised earlier the same day. That disproves the timeout explanation, so the quirk is
+    reopened above. Nothing here touches playback - only `CLAUDE.md` and `PROJECT.md` changed - so
+    chasing it belongs on its own branch.
