@@ -520,10 +520,25 @@ as the fallback for the last 1% and for anyone who prefers it. That fits the pla
 interface already in `src/main/playback/types.ts`: an embedded player becomes a second adapter
 rather than a rewrite.
 
-**What is still unproven, and has to be before this ships:** whether Chromium releases its handle
-on a file promptly enough for the delete flow to trash it (§2 requires unloading and observing
-completion first, and Windows file locks are the whole reason that rule exists). Also HDR
-tone-mapping, high-bitrate seeking, and hardware-decode behaviour against mpv on the same files.
+**File release: tested, and it is not a blocker** (2026-09-17, throwaway clips on the internal
+NTFS drive). This was the one thing that could have killed the idea outright, because §2 requires
+unloading a file and observing completion before trashing it, and Windows file locks are the whole
+reason that rule exists.
+
+- **`shell.trashItem` succeeded on a file Chromium was actively playing**, in 367ms, with the file
+  gone afterwards. So Chromium takes no exclusive lock that blocks trashing - the same result mpv
+  gave (§2 How delete is implemented).
+- **After clearing `src` and calling `load()`, trashing succeeded immediately** - 31ms, with no
+  waiting needed at all (`readyState` back to 0).
+- **The discipline still stands regardless.** That a file *can* be trashed mid-playback is a hazard,
+  not a licence: unload first and observe completion, exactly as the mpv path does. What this
+  measurement removes is the fear that an in-app player would make deletes fail, not the rule.
+- **Still to check on the drives that matter**: this was on `C:`. The external drive and a network
+  share have not been tried with a `<video>` element, and the external drive is where most of the
+  library lives.
+
+**What is still unproven:** HDR tone-mapping, high-bitrate seeking, subtitle and multi-track audio
+handling, and hardware-decode behaviour against mpv on the same files.
 
 Immediately after the first working shuffler flow, before extensive dashboard layout work,
 prototype one embedded playback surface on Windows. Test:
@@ -1807,3 +1822,22 @@ machines, not Lucas's.
     too - but the native surface paints above web content, so HTML controls cannot overlay it.
   - Recorded the four routes with honest costs in "Next steps". No code changed; the decision on
     whether an in-app player is v1 scope is Lucas's.
+- **2026-09-17:** Settled the one thing that could have killed the in-app player: file release.
+  - *(Lucas, 2026-09-17)* chose the in-app player as the direction, with uosc as a nice-to-have if
+    there is room. So the gating question had to be answered before any player code: does Chromium
+    hold a file open in a way that stops the delete flow trashing it? Windows file locks are the
+    entire reason §2 requires unloading and observing completion first.
+  - **It does not.** `shell.trashItem` succeeded on a file Chromium was *actively playing* - 367ms,
+    file gone - and succeeded in 31ms with no wait at all once `src` was cleared and `load()`
+    called. Chromium behaves like mpv here: no exclusive lock on a file it is playing.
+  - **The rule does not relax because of this.** That a playing file *can* be trashed is a hazard,
+    not permission: unload first and observe completion, exactly as the mpv path does. What the
+    measurement removes is the risk that an in-app player would make deletes fail.
+  - Tested with generated throwaway clips on the internal NTFS drive, never with library files.
+    **Not yet tried on the external drive or a network share**, and the external drive is where most
+    of the library lives - so that is the next check, not a formality.
+  - Left for Lucas, because they are his calls rather than technical ones: whether the in-app player
+    replaces mpv or sits beside it as a setting, and whether the Shuffle screen becomes the player
+    or the player is its own surface. Also worth revisiting uosc only *after* this lands - if the
+    in-app player works, uosc would only be dressing up the 1% fallback path.
+  - Docs only. No code changed; 312 tests still pass.
