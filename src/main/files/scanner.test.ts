@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { systemSkipRules, type SkipRules } from './scanRules'
-import { scanRoots, type ScanFile } from './scanner'
+import { driveOf, scanRoots, type ScanFile } from './scanner'
 
 /** No real system paths in a temp folder, so only the name-based rules matter here. */
 const rules: SkipRules = { prefixes: [], caseInsensitive: true }
@@ -28,6 +28,21 @@ async function collect(
   })
   return { files, summary }
 }
+
+describe('driveOf', () => {
+  // Asked for the platform rather than reading this machine's, so both flavours are covered
+  // wherever the tests run: before this, the Windows cases only passed on Windows.
+  it('reads a Windows drive letter, and the filesystem root elsewhere', () => {
+    expect(driveOf('C:\\Videos\\clip.mp4', 'win32')).toBe('C:')
+    expect(driveOf('D:\\clip.mp4', 'win32')).toBe('D:')
+    expect(driveOf('/Users/someone/clip.mp4', 'darwin')).toBe('/')
+  })
+
+  it('leaves the drive empty for a relative path', () => {
+    expect(driveOf('videos\\clip.mp4', 'win32')).toBe('')
+    expect(driveOf('videos/clip.mp4', 'darwin')).toBe('')
+  })
+})
 
 describe('scanRoots', () => {
   let root: string
@@ -135,7 +150,8 @@ describe('scanRoots', () => {
   it('refuses a relative root and a system location', async () => {
     const { summary } = await collect(['videos'], {
       roots: ['videos', 'C:\\Windows'],
-      rules: systemSkipRules('win32', 'C:\\Users\\someone')
+      rules: systemSkipRules('win32', 'C:\\Users\\someone'),
+      platform: 'win32'
     })
     expect(summary.errors.map((error) => error.message)).toEqual([
       'Not an absolute path, so it was skipped',

@@ -1,6 +1,6 @@
 import type { Dirent } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
-import { isAbsolute, join, parse } from 'node:path'
+import { posix, win32, type PlatformPath } from 'node:path'
 import {
   categoryOf,
   isExcluded,
@@ -57,6 +57,11 @@ export interface ScanOptions {
   /** Guards against a runaway tree; personal folders are nowhere near this deep. */
   maxDepth?: number
   rules?: SkipRules
+  /**
+   * Which flavour of path to read roots and drives with. Defaults to this machine's; tests set it
+   * so Windows paths are classified the same way wherever the tests run.
+   */
+  platform?: NodeJS.Platform
 }
 
 interface Job {
@@ -65,9 +70,18 @@ interface Job {
   depth: number
 }
 
+/**
+ * Path handling for one platform's flavour. Defaults to this machine's, so nothing about a real
+ * scan changes; passing it explicitly lets Windows paths be read on any machine, exactly as
+ * `systemSkipRules` already allows for skip rules.
+ */
+function pathFor(platform: NodeJS.Platform): PlatformPath {
+  return platform === 'win32' ? win32 : posix
+}
+
 /** `C:` from `C:\Videos\clip.mp4`, `/` on other systems. */
-export function driveOf(path: string): string {
-  const root = parse(path).root
+export function driveOf(path: string, platform: NodeJS.Platform = process.platform): string {
+  const root = pathFor(platform).parse(path).root
   return root.endsWith('\\') || root.endsWith('/') ? root.slice(0, -1) || root : root
 }
 
@@ -87,7 +101,9 @@ function message(error: unknown): string {
  *   and `signal` stops it promptly (§5 Efficiency).
  */
 export async function scanRoots(options: ScanOptions): Promise<ScanSummary> {
-  const rules = options.rules ?? systemSkipRules()
+  const platform = options.platform ?? process.platform
+  const paths = pathFor(platform)
+  const rules = options.rules ?? systemSkipRules(platform)
   // 2,000 rather than 500: fewer, larger transactions were measurably faster to index (PROJECT.md
   // §7 measure and harden), and each batch is still a small, bounded amount of memory.
   const batchSize = Math.max(1, options.batchSize ?? 2000)
@@ -144,7 +160,7 @@ export async function scanRoots(options: ScanOptions): Promise<ScanSummary> {
       if (cancelled()) break
       // True for symlinks and Windows junctions, which are never followed (§2.6).
       if (entry.isSymbolicLink()) continue
-      const full = join(job.folder, entry.name)
+      const full = paths.join(job.folder, entry.name)
 
       if (entry.isDirectory()) {
         if (job.depth >= maxDepth) continue
@@ -163,7 +179,7 @@ export async function scanRoots(options: ScanOptions): Promise<ScanSummary> {
           root: job.root,
           name: entry.name,
           folder: job.folder,
-          drive: driveOf(full),
+          drive: driveOf(full, platform),
           category,
           size: stats.size,
           modifiedMs: stats.mtimeMs
@@ -189,7 +205,7 @@ export async function scanRoots(options: ScanOptions): Promise<ScanSummary> {
 
   let level: Job[] = []
   for (const root of options.roots) {
-    if (!isAbsolute(root)) {
+    if (!paths.isAbsolute(root)) {
       summary.errors.push({ folder: root, message: 'Not an absolute path, so it was skipped' })
       continue
     }
@@ -197,7 +213,7 @@ export async function scanRoots(options: ScanOptions): Promise<ScanSummary> {
       summary.errors.push({ folder: root, message: 'Excluded in Settings, so it was skipped' })
       continue
     }
-    if (shouldSkipFolder(root, parse(root).base || root, rules)) {
+    if (shouldSkipFolder(root, paths.parse(root).base || root, rules)) {
       summary.errors.push({ folder: root, message: 'A system location, so it was skipped' })
       continue
     }
