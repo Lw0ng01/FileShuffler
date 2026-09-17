@@ -3,6 +3,7 @@ import { readdir, stat } from 'node:fs/promises'
 import { isAbsolute, join, parse } from 'node:path'
 import {
   categoryOf,
+  isExcluded,
   shouldSkipFolder,
   SKIP_MARKER_FILES,
   systemSkipRules,
@@ -190,6 +191,10 @@ export async function scanRoots(options: ScanOptions): Promise<ScanSummary> {
   for (const root of options.roots) {
     if (!isAbsolute(root)) {
       summary.errors.push({ folder: root, message: 'Not an absolute path, so it was skipped' })
+      continue
+    }
+    if (isExcluded(root, rules)) {
+      summary.errors.push({ folder: root, message: 'Excluded in Settings, so it was skipped' })
       continue
     }
     if (shouldSkipFolder(root, parse(root).base || root, rules)) {

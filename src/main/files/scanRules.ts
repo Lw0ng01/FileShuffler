@@ -104,6 +104,11 @@ export const SKIP_MARKER_FILES: ReadonlySet<string> = new Set(['pyvenv.cfg'])
 export interface SkipRules {
   /** Absolute paths that are never indexed, along with everything inside them. */
   prefixes: readonly string[]
+  /**
+   * Folders the user chose to leave out in Settings, for example a game library with a name the
+   * built-in rules can't know. Skipped exactly like `prefixes`, but reported differently.
+   */
+  excluded?: readonly string[]
   caseInsensitive: boolean
 }
 
@@ -139,21 +144,33 @@ export function systemSkipRules(
   }
 }
 
-function normalize(path: string, rules: SkipRules): string {
+function normalize(path: string, caseInsensitive: boolean): string {
   const forward = path.replace(/\\/g, '/').replace(/\/+$/, '')
-  return rules.caseInsensitive ? forward.toLowerCase() : forward
+  return caseInsensitive ? forward.toLowerCase() : forward
+}
+
+/** True when `path` is `folder` itself or anywhere inside it. `D:\Games2` is not inside `D:\Games`. */
+export function isInsideFolder(path: string, folder: string, caseInsensitive: boolean): boolean {
+  const inner = normalize(path, caseInsensitive)
+  const outer = normalize(folder, caseInsensitive)
+  return inner === outer || inner.startsWith(`${outer}/`)
+}
+
+/** True when a folder is, or is inside, one the user excluded in Settings. */
+export function isExcluded(fullPath: string, rules: SkipRules): boolean {
+  return (rules.excluded ?? []).some((folder) =>
+    isInsideFolder(fullPath, folder, rules.caseInsensitive)
+  )
 }
 
 /**
- * True when a folder must not be opened: a system location, a dot-folder, or one of the names
- * above. Applies to chosen roots as well, so picking `C:\Windows` still indexes nothing.
+ * True when a folder must not be opened: a system location, a dot-folder, one of the names above,
+ * or a folder excluded in Settings. Applies to chosen roots as well, so picking `C:\Windows` still
+ * indexes nothing.
  */
 export function shouldSkipFolder(fullPath: string, name: string, rules: SkipRules): boolean {
   if (name.startsWith('.')) return true
   if (SKIPPED_NAMES.has(name.toLowerCase())) return true
-  const path = normalize(fullPath, rules)
-  return rules.prefixes.some((prefix) => {
-    const skipped = normalize(prefix, rules)
-    return path === skipped || path.startsWith(`${skipped}/`)
-  })
+  if (isExcluded(fullPath, rules)) return true
+  return rules.prefixes.some((prefix) => isInsideFolder(fullPath, prefix, rules.caseInsensitive))
 }

@@ -22,8 +22,8 @@ session starts without earlier chats or local memory. This section, the rest of 
   and Delete with a 5-second undo before trashing. See §2, §3, §4 and §6 (Implementation notes).
 - The Windows desktop is set up: Node 24.21, npm 11.19, Git 2.55 and mpv 0.41 from winget
   (§5 Existing setup notes). `npm ci`, typecheck and Electron 44.3.0 work.
-- `npm test` runs 262 unit tests. Seven more run against a real mpv when `MPV_PATH` is set. All
-  269 pass on Windows.
+- `npm test` runs 275 unit tests. Seven more run against a real mpv when `MPV_PATH` is set. All
+  282 pass on Windows.
 - Features are frozen for v1. The agreed order from here is packaging (done, apart from a
   clean-machine test), measure and harden (in progress), a small refactor, then the front end
   (§7 working order).
@@ -46,8 +46,8 @@ session starts without earlier chats or local memory. This section, the rest of 
   played, and a starred favorites list (§6 Stats). Favorites don't affect the shuffle.
 - Browsing: search can be narrowed by category, drive and size and sorted by size, date or name,
   and long lists have Show more (§6 Dashboard).
-- A Settings tab manages indexed folders, lets you choose and test mpv, and clears play history,
-  favorites, shuffle progress or the index (§6 Settings).
+- A Settings tab manages indexed and excluded folders, lets you choose and test mpv, and clears
+  play history, favorites, shuffle progress or the index (§6 Settings).
 - Front-end feedback waiting for the design pass: Cleanup should be its own tab rather than a
   section at the bottom of the dashboard, which took scrolling to find (Lucas, 2026-09-16).
 - The old Python shuffler was reviewed. It confirms §3's guess about why it felt bad.
@@ -55,20 +55,19 @@ session starts without earlier chats or local memory. This section, the rest of 
 - Commits use GitHub's private email. In a new clone, run
   `git config user.email "71304042+Lw0ng01@users.noreply.github.com"` before committing. Never
   commit personal emails or local paths.
-
 - Measure and harden so far: scans and the index were measured and sped up, the packaged app has a
   startup and memory baseline, and startup survives a damaged index or a second launch (§5
-  Measurements, §10).
+  Measurements, §10). Lucas confirmed the merged features work (2026-09-16).
 
 **Next steps, in order**
-1. Lucas: try a delete where recycling isn't supported, on a removable USB stick or a network
-   share. It must fail with an error and keep the file, never delete permanently. His external
-   drive doesn't count: Windows treats it as a local disk and it has a Recycle Bin.
-2. Lucas: install `FileShuffler-Setup-1.0.0.exe` from a separate local Windows account with no
-   development tools, as the clean-machine test (§7 Phase 6).
-3. Decide whether a "folders to exclude" setting is worth breaking the feature freeze for (§9).
-4. Then the small refactor (§7 working order), starting with moving database work off the main
+1. The small refactor (§7 working order), starting with moving database work off the main
    process, then the front end.
+2. Whenever convenient, Lucas: try a delete where recycling isn't supported, on a removable USB
+   stick or a network share. It must fail with an error and keep the file, never delete
+   permanently. His external drive doesn't count: Windows treats it as a local disk and it has a
+   Recycle Bin.
+3. Whenever convenient, Lucas: install `FileShuffler-Setup-1.0.0.exe` from a separate local Windows
+   account with no development tools, as the clean-machine test (§7 Phase 6).
 
 **How it was tested without real videos**
 - mpv can generate test clips, for example
@@ -155,8 +154,9 @@ wrong. Error messages, the first run and the installer all have to stand on thei
      `Program Files (x86)`, `WindowsApps`, `steamapps`. So are developer tool folders:
      `site-packages`, `__pycache__`, and any folder containing `pyvenv.cfg` (a Python virtual
      environment). Measured reasons in §5 Measurements.
-   - Game folders with arbitrary names (for example `Riot Games`) can't be recognised by name; see
-     §9 on a folder-exclusion setting.
+   - Game folders with arbitrary names (for example `Riot Games`) can't be recognised by name, so
+     Settings has **Excluded folders** for them (§6 Settings). Excluding removes index entries only,
+     never files.
 6. **Don't follow symlinks or junctions.** Windows AppData junctions can cause infinite loops.
 7. **Fully local.** No network calls, no telemetry. Thumbnail and index caches stay on the machine
    and can be cleared from settings. (Talking to a local player over its local control channel is
@@ -743,6 +743,19 @@ The sidebar's Settings tab is live *(Lucas picked its three sections, 2026-09-16
 
 - **Indexed folders** moved here from the dashboard, which now links to them with "Manage
   folders": add, remove, rescan one folder, or scan them all.
+- **Excluded folders** *(Lucas, 2026-09-16)*: folders scans skip, with everything inside them, for
+  what name rules can't recognise, like a game library.
+  - **Exclude folder** opens the system's folder picker, so the page never names the folder.
+    Entries already indexed inside it leave the index at once, and each indexed folder's totals are
+    recounted, in one transaction. Only index rows go; files are never touched (§2).
+  - **Include again** only removes the entry from the list; the next scan brings the files back.
+  - Refused, with the reason shown: excluding an indexed folder or a folder holding one (every scan
+    would report it as skipped; removing the indexed folder says that clearly), indexing a folder
+    inside an excluded one, and changing exclusions during a scan (the running scan would put the
+    files straight back).
+  - Stored in the index database (`excluded_folders`) beside the indexed folders, and passed to the
+    scanner as part of its skip rules. Matching ignores case on Windows and macOS, as the other skip
+    rules do, and `D:\Games2` is never mistaken for part of `D:\Games`.
 - **Player:** shows the mpv a shuffle will start and where it came from. `locateMpv` prefers the
   `FILESHUFFLER_MPV` environment variable (for development), then a choice made here, then a
   bundled copy, a standard install location, and finally the PATH.
@@ -983,10 +996,8 @@ machines, not Lucas's.
    bundles mpv~~: no, decided 2026-09-16.
 5. A custom built-in player instead of mpv's window: Chromium video (custom look, fewer formats, no
    GPL duty) versus embedded libmpv (mpv's formats, GPL question returns). Decide with a prototype.
-6. A "folders to exclude" setting. Name-based rules catch program installs and Python environments,
-   but not game folders with arbitrary names (on Lucas's D:, `Riot Games` and another game made up
-   a real share of what a whole-drive scan walked). A new setting, so it waits for Lucas during the
-   feature freeze.
+6. ~~A "folders to exclude" setting~~: added 2026-09-16, Lucas's call despite the feature freeze
+   (§6 Settings).
 
 ## 10. Change Log
 
@@ -1265,3 +1276,11 @@ machines, not Lucas's.
     still run side by side. Checked in the packaged build.
   - Still open: the USB and network delete tests and the clean machine (Lucas), and the
     folder-exclusion question (§9).
+- **2026-09-16:** Excluded folders in Settings *(Lucas asked for it, lifting the feature freeze for
+  this one setting)*.
+  - For folders name rules can't recognise, such as game libraries. Excluding one removes its index
+    entries at once and scans skip it from then on; files are never touched (§6 Settings).
+  - Refuses combinations that would only confuse: excluding an indexed folder or one holding it,
+    indexing inside an excluded folder, and changing exclusions mid-scan.
+  - Checked on a copy of Lucas's real index in the packaged build: the new table was added on
+    startup with all 6 folders and 21,976 files intact. Not exercised by hand: the picker itself.

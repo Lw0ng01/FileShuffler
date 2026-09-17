@@ -3,6 +3,7 @@ import {
   AUDIO_EXTENSIONS,
   categoryOf,
   DOCUMENT_EXTENSIONS,
+  isInsideFolder,
   PHOTO_EXTENSIONS,
   shouldSkipFolder,
   systemSkipRules
@@ -91,5 +92,32 @@ describe('shouldSkipFolder', () => {
   it('does not mistake a similarly named folder for a system one', () => {
     expect(shouldSkipFolder('D:\\Windows Wallpapers', 'Windows Wallpapers', windows)).toBe(false)
     expect(shouldSkipFolder('C:\\Windows2', 'Windows2', windows)).toBe(false)
+  })
+
+  it('skips folders excluded in Settings, and everything inside them', () => {
+    const excluded = { ...windows, excluded: ['D:\\Games'] }
+    expect(shouldSkipFolder('D:\\Games', 'Games', excluded)).toBe(true)
+    expect(shouldSkipFolder('d:\\games\\Elden Ring\\movies', 'movies', excluded)).toBe(true)
+    expect(shouldSkipFolder('D:\\Games2', 'Games2', excluded)).toBe(false)
+    expect(shouldSkipFolder('D:\\Videos', 'Videos', excluded)).toBe(false)
+  })
+})
+
+describe('isInsideFolder', () => {
+  it('matches the folder itself and anything below it, not a sibling sharing its start', () => {
+    expect(isInsideFolder('D:\\Games', 'D:\\Games', true)).toBe(true)
+    expect(isInsideFolder('D:\\Games\\a\\b', 'D:\\Games\\', true)).toBe(true)
+    expect(isInsideFolder('D:\\Games2', 'D:\\Games', true)).toBe(false)
+    expect(isInsideFolder('D:\\Games', 'D:\\Games\\a', true)).toBe(false)
+  })
+
+  it('treats a whole drive as holding everything on it', () => {
+    expect(isInsideFolder('D:\\Games', 'D:\\', true)).toBe(true)
+    expect(isInsideFolder('E:\\Games', 'D:\\', true)).toBe(false)
+  })
+
+  it('ignores case only where the platform does', () => {
+    expect(isInsideFolder('d:\\GAMES\\x', 'D:\\Games', true)).toBe(true)
+    expect(isInsideFolder('/home/me/Games/x', '/home/me/games', false)).toBe(false)
   })
 })
