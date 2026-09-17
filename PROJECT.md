@@ -111,13 +111,36 @@ machine keeps its own index.
    - Ask Lucas before settling layout or look. The `fileshuffler-ui` skill marks unsettled things
      "Open" for exactly this reason.
 3. **The player's own look** (§4, §9 item 5). mpv's window is the part Lucas finds ugly, and no
-   amount of polish in the app's own screens changes it. Four options, in order of effort:
-   - tune the built-in OSC through `--script-opts=osc-*` (layout, scale), keeping `--no-config`;
-   - ship a nicer OSC such as uosc - better looking, but it means bundling GPL Lua and reopening
-     the script-loading path `--no-config` deliberately closes (autoload can push files into mpv's
-     own playlist, outside the shuffle session);
-   - `--osc=no` and drive playback from our own window over the IPC channel that already exists;
-   - embed the player properly. Only this one makes playback part of the app.
+   amount of polish in the app's own screens changes it. **mpv is not stuck that way** - but the
+   question splits in two, and only the second answer also makes the app look the same on both
+   platforms, because mpv's window never will.
+
+   *Dress up mpv's own window:*
+   - tune the built-in OSC through `--script-opts=osc-*`, keeping `--no-config`. Cheap - the
+     `extraArgs` hook in `mpvArguments` already exists - but it buys layout and scale only: the
+     built-in OSC's colours are not options, so it still looks like mpv. Low reward, and it differs
+     per platform either way;
+   - ship a nicer OSC such as uosc - genuinely good-looking, but it means bundling GPL Lua and
+     reopening the script-loading path `--no-config` deliberately closes (autoload can push files
+     into mpv's own playlist, outside the shuffle session), and it is still a separate window;
+
+   *Make playback part of the app:*
+   - `--osc=no` and drive playback from our own window over the IPC channel that already exists.
+     Only half an answer on its own: the video stays in mpv's window while the controls are in
+     ours, so it needs the next item to make sense;
+   - `--wid` embeds mpv into our window, and this mpv supports it (verified 2026-09-17). The catch
+     is that the native video surface paints *above* web content, so HTML controls cannot overlay
+     the video - it needs the video confined to a rectangle with the controls outside it, or a
+     second transparent window tracked over the first. Fragile, and different on each platform;
+   - **an in-app `<video>` surface, with mpv kept as the fallback.** The measurement in §4 is what
+     makes this the recommendation rather than a compromise: Chromium here decodes HEVC, H.264,
+     AV1, VP9 and AAC, and covers 98.9% of this library by size. Controls, overlays, keyboard and
+     theming become ordinary HTML and CSS, identical on both platforms, and the separate-window
+     problem disappears. The unproven part is file release for the delete flow (§4), which is what
+     a spike has to settle first.
+
+   **Undecided, and Lucas's call**: whether the in-app player is v1 scope or waits. Features are
+   frozen for v1, and this is a feature.
 4. Whenever convenient, Lucas, on the Windows desktop: try a delete where recycling isn't supported,
    on a removable USB stick or a network share. It must fail with an error and keep the file, never
    delete permanently. His external drive doesn't count: Windows treats it as a local disk and it
@@ -475,6 +498,32 @@ For every player:
 "Built-in native player" means our own integrated interface backed by a native media library
 such as libmpv or libVLC. It does not require writing codecs from scratch. HTML video previews
 can be useful, but do not satisfy the broad-format player goal by themselves.
+
+**Measured on the Windows desktop, 2026-09-17** - this was written before anyone had measured, and
+the measurement moves the answer. Electron 44's Chromium plays much more than "previews":
+
+- **Reported supported** (`canPlayType` and `MediaSource.isTypeSupported`): H.264, **HEVC**
+  (`hvc1` and `hev1`), AV1, VP9, AAC, Opus. **Not** supported: AC-3/E-AC-3 audio, Matroska,
+  AVI, WMV.
+- **Confirmed by actually decoding**, not just by asking: a generated HEVC MP4 and an H.264 `.mov`
+  both reached `readyState` 4 with the right dimensions and a clock that advanced. The `.mov` case
+  matters because `canPlayType('video/quicktime')` answers "no" while the file itself plays fine -
+  the MIME string is not the capability.
+- **Against the real library** (2,090 video files, 950 GB, counted by extension only):
+  `.mp4`/`.mov`/`.m4v`/`.webm` are **2,065 files and 940 GB - 98.8% of files, 98.9% of bytes**.
+  The remainder is `.mkv` (17), `.wmv` (5) and `.avi` (3): 25 files, 10.2 GB.
+- **The residual risk is audio, not video**: an MP4 carrying AC-3 or DTS would show picture with no
+  sound. Rare in MP4, common in Matroska, which is already excluded.
+
+So an in-app `<video>` surface is not a compromise for this library - it is the case, with mpv kept
+as the fallback for the last 1% and for anyone who prefers it. That fits the playback adapter
+interface already in `src/main/playback/types.ts`: an embedded player becomes a second adapter
+rather than a rewrite.
+
+**What is still unproven, and has to be before this ships:** whether Chromium releases its handle
+on a file promptly enough for the delete flow to trash it (§2 requires unloading and observing
+completion first, and Windows file locks are the whole reason that rule exists). Also HDR
+tone-mapping, high-bitrate seeking, and hardware-decode behaviour against mpv on the same files.
 
 Immediately after the first working shuffler flow, before extensive dashboard layout work,
 prototype one embedded playback surface on Windows. Test:
@@ -1733,3 +1782,28 @@ machines, not Lucas's.
     misalignment for something that looks more like a bug. A list that really is longer is allowed
     to look longer, and the real fault was the wrapping.
   - No new tests: CSS, which the unit tests do not reach. 312 still pass.
+- **2026-09-17:** Measured what Chromium can actually play, because the player question turned on it.
+  - The question was whether mpv's look is a dead end *(Lucas, 2026-09-17: "is that possible or is
+    mpv hard stuck in that way")*. It is not, but the useful answer needed a number rather than an
+    opinion, because §4 already claimed HTML video was only good for "previews" - written before
+    anyone had measured.
+  - **Electron 44's Chromium decodes HEVC on this machine.** Confirmed by actually playing a
+    generated HEVC MP4 and an H.264 `.mov`, not just by asking `canPlayType`: both reached
+    `readyState` 4 with correct dimensions and an advancing clock. H.264, AV1, VP9, AAC and Opus
+    too. AC-3 audio, Matroska, AVI and WMV are not supported.
+  - **`.mov` plays even though `canPlayType('video/quicktime')` says "no."** Worth remembering:
+    the MIME answer is not the capability, and a capability matrix built only from `canPlayType`
+    would have written off 61 files for no reason.
+  - **Against the real library, by extension only: 2,065 of 2,090 video files and 940 of 950 GB -
+    98.8% and 98.9% - are in containers Chromium plays.** The rest is 17 `.mkv`, 5 `.wmv` and 3
+    `.avi`. So an in-app `<video>` surface is the case for this library, not a compromise, with mpv
+    kept as the fallback for the last 1%.
+  - **The residual risk is audio, not video**: an MP4 carrying AC-3 or DTS would show picture and no
+    sound. Rare in MP4, common in Matroska, which is excluded anyway.
+  - **What a spike still has to settle**: whether Chromium releases its handle on a file promptly
+    enough for the delete flow to trash it. Windows file locks are the entire reason §2 requires
+    unloading and observing completion first, and nothing here has tested that yet.
+  - Also verified for completeness: this mpv (v0.41) supports `--wid`, so embedding it is possible
+    too - but the native surface paints above web content, so HTML controls cannot overlay it.
+  - Recorded the four routes with honest costs in "Next steps". No code changed; the decision on
+    whether an in-app player is v1 scope is Lucas's.
