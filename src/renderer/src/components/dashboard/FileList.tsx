@@ -22,7 +22,7 @@ export function FileList({
           <span className="muted file-folder" title={file.folder}>
             {shortenPath(file.folder)}
           </span>
-          <span className="muted">{formatBytes(file.size)}</span>
+          <span className="muted file-detail">{formatBytes(file.size)}</span>
           <span className="row-actions">
             <button
               className="btn btn-small"

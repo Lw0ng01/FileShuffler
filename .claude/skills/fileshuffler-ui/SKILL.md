@@ -145,6 +145,22 @@ the material. Showing it means moving that background from `body` to `.main` so 
 clear. That is a real change in how the app looks, on both platforms, so it is Lucas's call - and
 worth asking whether a translucent sidebar is wanted at all before writing the code.
 
+## Lists and rows (Recorded)
+
+A `.file-row` is one line, always. `.file-name` and `.file-folder` truncate with an ellipsis, and
+`.file-detail` - the size or count at the end - is `flex: none; white-space: nowrap`, so it never
+wraps and never causes a taller row.
+
+**That is load-bearing, not tidiness** *(Lucas, 2026-09-17)*. The two dashboard lists sit side by
+side, and one wrapped size on the right made that row taller than its neighbour on the left, so the
+two columns ended at different heights and the block read as broken. Equal row heights are what
+keeps them level; anything new in a row has to either truncate or be `flex: none`.
+
+Nothing forces the columns level beyond that, deliberately. Pushing each footer to the bottom of its
+column was tried, and it does survive "Show more" lengthening one side - but it leaves the shorter
+list's footer floating a few hundred pixels below its own rows, which looks like a bug of its own. A
+list that really is longer is allowed to look longer.
+
 ## Appearance (Recorded)
 
 Settings → Appearance offers Automatic, Light and Dark. Automatic is the default and follows the
