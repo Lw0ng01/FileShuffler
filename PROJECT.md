@@ -13,17 +13,28 @@ care about the name; keep it unless they say otherwise.
 
 ## Resume here
 
-Last updated 2026-09-17, on the Mac laptop, after the long Windows desktop session (2026-09-15 to
-09-17). A new session starts without earlier chats or local
-memory. This section, the rest of this doc and `CLAUDE.md` (including "Working with Lucas") are the
-handoff; keep this section current at the end of each session.
+Last updated 2026-09-17, at the end of the Mac laptop session. **The next session is on the Windows
+desktop.** A new session starts without earlier chats or local memory. This section, the rest of
+this doc and `CLAUDE.md` (including "Working with Lucas") are the handoff; keep this section current
+at the end of each session.
 
-**Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #28 is on `main`. One branch is waiting
-   for review: `worktree-mpv-flake`, the playback investigation logged below.
-2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads on first run), then
-   `npm test`. Expect 305 passing, plus 7 more with `MPV_PATH` set to the machine's mpv.
-3. Then start the front end (Next steps below).
+**Start of the next session - on the Windows desktop**
+1. `git checkout main && git pull`. Everything through PR #29 is on `main`, and no branch is waiting
+   for review.
+2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads its binary on first
+   run), then `npm test`. Expect 305 passing, plus 7 more with `MPV_PATH` set to `mpv.exe`.
+   - **Use Command Prompt, not PowerShell**, or `npm.cmd run dev`: Windows' default execution
+     policy blocks `npm.ps1` (§5). A terminal opened before Node was installed keeps the old PATH,
+     so open a new one.
+   - winget's mpv lives in `C:\Program Files\MPV Player` and is **not** on the PATH. Add it, set
+     `FILESHUFFLER_MPV`, or simply choose it in Settings, which avoids the PATH entirely.
+   - Development data is `%APPDATA%\FileShuffler Dev`, separate from an installed copy, and this
+     machine keeps its own index - so the Mac's library is not here.
+3. **Re-run Windows before anything else.** It has not been run since `driveOf` changed to group
+   files by the volume they sit on (2026-09-17). That change is guarded by `platform === 'darwin'`
+   so Windows should be untouched, but *should* is not *verified*: check the Dashboard still shows
+   `C:` and `D:` as separate drive cards with their own free space.
+4. Then pick up the front end or the player (Next steps below).
 
 **The Mac laptop is set up** (2026-09-17): Node 26.8.2, npm 11.19.1, and mpv 0.41 from Homebrew.
 `npm ci`, typecheck, lint and Electron 44.3.0 all work. Lucas ran `npm run dev` and the app opens
@@ -36,8 +47,8 @@ machine keeps its own index.
   and Delete with a 5-second undo before trashing. See §2, §3, §4 and §6 (Implementation notes).
 - The Windows desktop is set up: Node 24.21, npm 11.19, Git 2.55 and mpv 0.41 from winget
   (§5 Existing setup notes). `npm ci`, typecheck and Electron 44.3.0 work.
-- `npm test` runs 301 unit tests. Seven more run against a real mpv when `MPV_PATH` is set, 308 in
-  all. All 308 pass on the Mac. **Windows has not been re-run since the drive-grouping change**, so
+- `npm test` runs 305 unit tests. Seven more run against a real mpv when `MPV_PATH` is set, 312 in
+  all. All 312 pass on the Mac. **Windows has not been re-run since the drive-grouping change**, so
   that is the first thing to do on the desktop.
 - Features are frozen for v1. The agreed order from here is packaging (done, apart from a
   clean-machine test), measure and harden (done, apart from Lucas's USB and clean-machine tests),
@@ -76,24 +87,38 @@ machine keeps its own index.
   Measurements, §10). Lucas confirmed the merged features work (2026-09-16).
 
 **Next steps, in order**
-1. The front end (§7 working order): structure first, then visual polish. Lucas chose to run this
-   and the custom-player question (§4, §9 item 5) in parallel, because mpv's own window is what he
-   finds ugly and polish in the app's own screens cannot fix that.
-   - Done: Cleanup is its own tab (`components/CleanupScreen.tsx`), and the front-end conventions
-     live in the `fileshuffler-ui` skill (`.claude/skills/fileshuffler-ui/SKILL.md`).
-   - Still to do: starring from the dashboard's lists, and a first-run guide when mpv is missing
-     (pointing to Settings). Then visual polish, once the motion values are agreed.
-   - Ask Lucas before settling layout or look: the front end is where his taste decides. The skill
-     labels unsettled things "Open" for exactly this reason.
-2. Whenever convenient, Lucas, on the Windows desktop: try a delete where recycling isn't supported, on a removable USB
-   stick or a network share. It must fail with an error and keep the file, never delete
-   permanently. His external drive doesn't count: Windows treats it as a local disk and it has a
-   Recycle Bin.
-3. Whenever convenient, Lucas, on the Windows desktop: build the installer (`npm run build:win`)
+1. **Finish the Windows window chrome**, which is deliberately unfinished and needs this machine.
+   macOS hides the title bar so the sidebar runs to the top edge, with a vibrant sidebar behind it.
+   Windows takes only the Mica material and keeps its normal frame, because hiding it there means
+   drawing the window controls with `titleBarOverlay` and reserving space for them, none of which
+   could be checked from a Mac (`mainWindow.ts`, and the skill's Window chrome section). Watch the
+   drag regions: the sidebar drags the window, so anything clickable inside it needs `no-drag`.
+2. The front end (§7 working order). Landed on the Mac on 2026-09-17: motion on the Shuffle screen,
+   the visual overhaul towards Apple's language, an Appearance setting (Automatic/Light/Dark), the
+   Dashboard as the opening tab, and wider list screens.
+   - Still to do: starring from the dashboard's lists, and a first-run guide when mpv is missing.
+     The guide matters more than it did, because a new user now lands on an empty Dashboard rather
+     than on "pick a folder of videos".
+   - **Undecided: whether the UI is good enough to stop.** Ask before another pass.
+   - Ask Lucas before settling layout or look. The `fileshuffler-ui` skill marks unsettled things
+     "Open" for exactly this reason.
+3. **The player's own look** (§4, §9 item 5). mpv's window is the part Lucas finds ugly, and no
+   amount of polish in the app's own screens changes it. Four options, in order of effort:
+   - tune the built-in OSC through `--script-opts=osc-*` (layout, scale), keeping `--no-config`;
+   - ship a nicer OSC such as uosc - better looking, but it means bundling GPL Lua and reopening
+     the script-loading path `--no-config` deliberately closes (autoload can push files into mpv's
+     own playlist, outside the shuffle session);
+   - `--osc=no` and drive playback from our own window over the IPC channel that already exists;
+   - embed the player properly. Only this one makes playback part of the app.
+4. Whenever convenient, Lucas, on the Windows desktop: try a delete where recycling isn't supported,
+   on a removable USB stick or a network share. It must fail with an error and keep the file, never
+   delete permanently. His external drive doesn't count: Windows treats it as a local disk and it
+   has a Recycle Bin.
+5. Whenever convenient, Lucas, on the Windows desktop: build the installer (`npm run build:win`)
    and install it from a separate local Windows account with no development tools, as the
    clean-machine test (§7 Phase 6). Copy it to `C:\Users\Public` first so the other account can
    reach it.
-4. Before any public release: choose a license (§9), and decide whether the unsigned-installer
+6. Before any public release: choose a license (§9), and decide whether the unsigned-installer
    SmartScreen warning is acceptable.
 
 **How it was tested without real videos**
@@ -1600,3 +1625,17 @@ machines, not Lucas's.
     unfamiliar reason look exactly like this flake. Asserted by a test rather than changed, since
     which reasons matter cannot be known without catching one.
   - 305 unit tests, up from 301. No production code changed.
+- **2026-09-17:** Handed the work back to the Windows desktop.
+  - "Resume here" now opens with a Windows checklist rather than a Mac one: Command Prompt instead
+    of PowerShell, winget's mpv not being on the PATH, and `%APPDATA%\FileShuffler Dev` holding this
+    machine's own index, so the Mac's library will not be there.
+  - **First job on that machine is re-running the suite**, which has not happened since `driveOf`
+    began grouping files by volume. The change is guarded by `platform === 'darwin'`, so Windows
+    should be untouched - but that is a prediction, not a result, and the Dashboard showing `C:` and
+    `D:` as separate cards is what confirms it.
+  - Next steps were re-ordered around the machine rather than left as they were. Finishing the
+    Windows window chrome moved to the top, because it was left deliberately incomplete for want of
+    a Windows machine to test on, and the mpv-look options were written out so that decision does
+    not need rediscovering.
+  - Test counts corrected throughout: 305 unit, 312 with the real-mpv set.
+  - Docs only, so no new tests.
