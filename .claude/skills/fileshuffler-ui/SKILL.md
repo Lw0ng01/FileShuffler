@@ -94,6 +94,20 @@ which flashed dark at every launch for a light-mode user.
 means drawing the window controls with `titleBarOverlay` and reserving space for them, which cannot
 be verified from a Mac. Finish that in a Windows session rather than guessing.
 
+## Appearance (Recorded)
+
+Settings → Appearance offers Automatic, Light and Dark. Automatic is the default and follows the
+desktop, which is what the app did before the setting existed.
+
+It works through `nativeTheme.themeSource` in main, which also decides what `prefers-color-scheme`
+reports to the page. **So the renderer needs no theme state at all**: keep it that way, and never
+add a class or a context to track the theme - write the two palettes and let the media query do it.
+`SettingsService` receives it as an injected `applyAppearance`, so the service keeps no Electron
+import.
+
+Use it when checking a change in both themes: that is what it is for, and it beats changing the
+whole computer's appearance to review a screen.
+
 ## Motion
 
 **Recorded - the tokens.** Defined on `:root` in `styles.css`. Use them; never write a raw duration

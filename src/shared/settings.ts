@@ -8,6 +8,7 @@ export const SETTINGS_CHANNELS = {
   chooseMpv: 'settings:choose-mpv',
   useDefaultMpv: 'settings:use-default-mpv',
   testMpv: 'settings:test-mpv',
+  setAppearance: 'settings:set-appearance',
   clearData: 'settings:clear-data',
   /** Main → renderer: a new `SettingsView`. */
   view: 'settings:view'
@@ -15,6 +16,15 @@ export const SETTINGS_CHANNELS = {
 
 /** Where the mpv the app will use came from (PROJECT.md §4). */
 export type MpvSource = 'environment' | 'settings' | 'bundled' | 'installed' | 'path'
+
+/**
+ * Which theme the app uses. `system` follows the desktop, which is the default and what the app did
+ * before this existed; the other two override it, so the look can be checked without changing the
+ * whole computer's appearance.
+ */
+export type Appearance = 'system' | 'light' | 'dark'
+
+export const APPEARANCES: readonly Appearance[] = ['system', 'light', 'dark']
 
 /** What Settings can erase. Each is separate, so clearing one never costs the others. */
 export type ClearableData = 'plays' | 'favorites' | 'progress' | 'index'
@@ -38,6 +48,7 @@ export interface SettingsView {
     test: MpvTest | null
     testing: boolean
   }
+  appearance: Appearance
   lastNotice: string | null
   lastError: string | null
 }
@@ -51,6 +62,8 @@ export interface SettingsApi {
   useDefaultMpv(): Promise<SettingsView>
   /** Runs the mpv a shuffle would use and reports its version. */
   testMpv(): Promise<SettingsView>
+  /** Follows the desktop, or overrides it with light or dark. */
+  setAppearance(value: Appearance): Promise<SettingsView>
   clearData(what: ClearableData): Promise<SettingsView>
   onView(listener: (view: SettingsView) => void): () => void
 }

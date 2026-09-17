@@ -19,10 +19,10 @@ memory. This section, the rest of this doc and `CLAUDE.md` (including "Working w
 handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #23 is on `main`. One branch is waiting
-   for review: `worktree-ui-overhaul`, the visual overhaul logged below.
+1. `git checkout main && git pull`. Everything through PR #24 is on `main`. One branch is waiting
+   for review: `worktree-theme-setting`, the Appearance setting logged below.
 2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads on first run), then
-   `npm test`. Expect 292 passing, plus 7 more with `MPV_PATH` set to the machine's mpv.
+   `npm test`. Expect 301 passing, plus 7 more with `MPV_PATH` set to the machine's mpv.
 3. Then start the front end (Next steps below).
 
 **The Mac laptop is set up** (2026-09-17): Node 26.8.2, npm 11.19.1, and mpv 0.41 from Homebrew.
@@ -36,8 +36,8 @@ machine keeps its own index.
   and Delete with a 5-second undo before trashing. See §2, §3, §4 and §6 (Implementation notes).
 - The Windows desktop is set up: Node 24.21, npm 11.19, Git 2.55 and mpv 0.41 from winget
   (§5 Existing setup notes). `npm ci`, typecheck and Electron 44.3.0 work.
-- `npm test` runs 292 unit tests. Seven more run against a real mpv when `MPV_PATH` is set, 299 in
-  all. All 299 pass on the Mac. **Windows has not been re-run since the drive-grouping change**, so
+- `npm test` runs 301 unit tests. Seven more run against a real mpv when `MPV_PATH` is set, 308 in
+  all. All 308 pass on the Mac. **Windows has not been re-run since the drive-grouping change**, so
   that is the first thing to do on the desktop.
 - Features are frozen for v1. The agreed order from here is packaging (done, apart from a
   clean-machine test), measure and harden (done, apart from Lucas's USB and clean-machine tests),
@@ -1483,3 +1483,26 @@ machines, not Lucas's.
     cheap because the CSS was already fully tokenised - rewriting the tokens re-skinned every screen.
   - **Not verified by eye.** A build proves it compiles, not that it looks right: `npm run dev`, and
     check both themes, that the window still drags, and that the sidebar nav still clicks.
+- **2026-09-17:** An Appearance setting, so the light design can actually be seen.
+  - Lucas ran the overhaul and reported seeing "the basic theme we started with", and asked whether
+    there should be a theme button. He was running it correctly: the app followed the desktop's
+    appearance and had no override, so on a Mac in Dark Mode he saw the new *dark* palette - and old
+    dark (`#0e1014`) against new dark (`#1c1c1e`) reads as "much the same" at a glance. The light
+    half, which is where this design language actually shows, needed changing the whole computer's
+    appearance to see. That is a bad way to review a design.
+  - **Settings → Appearance**: Automatic, Light, Dark, as a segmented control. Automatic is the
+    default and is exactly the old behaviour, so nothing changes for anyone who ignores it.
+  - It works through `nativeTheme.themeSource`, which also decides what `prefers-color-scheme`
+    reports to the page. So one line in main drives the whole UI and the renderer knows nothing
+    about it. `SettingsService` takes it as an injected `applyAppearance`, keeping the service free
+    of Electron imports like the others.
+  - The choice is saved and re-applied at startup, or it would last only until the next restart.
+  - **No settings file version bump**, deliberately: an unknown version reads as the defaults, so
+    bumping it would have silently thrown away everyone's chosen mpv path in order to add a theme.
+    A file written before the field existed still loads, and falls back to Automatic - proven by a
+    test that writes a version 1 file with no `appearance` and checks the mpv path survives.
+  - Found while adding those tests: the store's own tests only ever wrote the file directly *after*
+    a save had created its folder, so a test that writes first failed on a missing directory rather
+    than on what it was checking. The folder is now created in `beforeEach`.
+  - 301 unit tests, up from 292. Nine new: four on the service, two on IPC validation, three on the
+    store, including the two backward-compatibility cases above.
