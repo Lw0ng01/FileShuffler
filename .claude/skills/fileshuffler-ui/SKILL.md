@@ -102,28 +102,23 @@ Three things follow, and each one silently breaks something if forgotten:
   top-right of `.main`. `.is-mac` and `.is-windows` both add 46px of top padding to the sidebar and
   to `.main`, which is what keeps the first row of a screen out from under them. Those classes are
   set in `main.tsx` from the user agent, because the renderer has no Node access.
-- **`--sidebar` owns most of its colour and lets the material through the rest** (`--panel` at 85%).
-  Fully transparent handed the sidebar's colour to the OS, and its *timing* with it: Windows
-  re-tints Mica with a ~225ms crossfade while the page flips in one frame, so on a theme change the
-  sidebar visibly trailed the rest of the window *(Lucas, 2026-09-17)*. Measured before and after:
-  at the moment `.main` flipped, the sidebar was 180 levels away from its final colour; now it is
-  18. **Raising the transparency brings the lag back in proportion** - that is the trade, and a
-  crossfade on the page instead was rejected because text would have to fade too and would pass
-  through an unreadable middle.
-- **The sidebar is the only translucent surface, and that is load-bearing.** `body` is
-  `transparent` and `.main` carries `--bg`, so the window's material - Mica on Windows, vibrancy on
-  macOS - shows through the sidebar and nowhere else. Leaving the background on `body` is what kept
-  both materials invisible from the day they were set *(fixed 2026-09-17, Lucas's call)*. Two rules
-  follow: **never give `body` a background again**, and anything pinned over scrolling content
-  (`.titlebar`, `.screen-header`) must paint `--bg` itself, because there is no longer an opaque
-  body underneath it. Give `--sidebar` a real colour on any platform with no material to show.
-  - The window's `backgroundColor` is `#00000000` on both, or an opaque colour paints over the
-    material. That also means `setBackgroundColor` must not be called on a theme change there -
-    only `setTitleBarOverlay`.
-  - Verified on Windows by sampling the window's pixels: the sidebar reads as the material and
-    tracks the theme (32,32,32 dark, 243,243,243 light) while `.main` is exactly `--bg`. Where
-    there is no material, or the desktop has transparency effects off, it falls back to the flat
-    surface the app had before rather than to a hole.
+- **The page is opaque throughout, and the window takes no material on Windows.** `--sidebar` is
+  `--panel`, `.main` is `--bg`, and `body` stays `transparent` only so those two own their surfaces
+  outright. **Do not make the sidebar translucent again** *(Lucas, 2026-09-17, after two rounds of
+  it)*: any transparency hands part of the sidebar's colour to the OS, and with it the OS's timing.
+  Windows re-tints Mica with a ~225ms crossfade while the page flips in one frame, so the sidebar
+  trails the page on every theme change. Measured, by sampling the window's own pixels through a
+  switch:
+  - fully transparent: the sidebar stepped through 32, 62, 103, 138, 180, 221, 243 - six frames
+    behind the page;
+  - 85% opaque: still five intermediate steps and a visible tail;
+  - opaque: **the sidebar and `.main` change in the same sample, with no intermediate values.**
+  - A crossfade on the page to match the OS instead was rejected: the text would have to fade too,
+    and would pass through a stretch where it is unreadable against a half-changed background.
+- **Anything pinned over scrolling content** (`.titlebar`, `.screen-header`) must paint `--bg`
+  itself, because `body` has no background to sit on.
+- macOS still asks for `vibrancy` and now has nothing to show either. Left alone only because it
+  cannot be checked from Windows - someone on the Mac should decide whether it comes out.
 
 `mainWindow.ts` owns this, and `backgroundColor` follows `nativeTheme` - it was hard-coded dark,
 which flashed dark at every launch for a light-mode user. Its two values **are** `--bg` from
@@ -158,9 +153,11 @@ Two things follow:
   rest there is no line, so a screen keeps the clean top it was designed with. It is a `box-shadow`
   rather than a `border-bottom` so that appearing cannot shift the content below it by a pixel.
 
-**Recorded - the sidebar is translucent** *(Lucas, 2026-09-17)*, which is what the materials were
-set for in the first place. See the Window chrome section above for what that constrains; the short
-version is that `body` must never take a background again.
+**Recorded - the sidebar is opaque, and stays that way** *(Lucas, 2026-09-17)*. It was made
+translucent so the window materials would show, and twice that cost a visible lag on the sidebar at
+every theme change, because a translucent sidebar borrows the OS's tint and its animation with it.
+See the Window chrome section for the measurements. The theme switching instantly is worth more than
+the material.
 
 ## Lists and rows (Recorded)
 
