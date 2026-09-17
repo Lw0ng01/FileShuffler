@@ -18,9 +18,9 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
 "Working with Lucas") are the handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #30 is on `main`. One branch is waiting
-   for review: **`worktree-windows-chrome`**, the Windows window chrome. If it has been merged,
-   nothing else is outstanding.
+1. `git checkout main && git pull`. Everything through PR #31 is on `main`. One branch is waiting
+   for review: **`worktree-window-drag`**, which made the top of the window draggable. If it has
+   been merged, nothing else is outstanding.
 2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads its binary on first
    run), then `npm test`. Expect 305 passing, plus 7 more with `MPV_PATH` set to mpv's path.
    - **On Windows, use Command Prompt, not PowerShell**, or `npm.cmd run dev`: Windows' default
@@ -33,7 +33,9 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
      so one machine's library is not on the other.
 3. **The window chrome is now hidden on both platforms**, so a renderer change has to be checked in
    both: the window controls sit top-left on macOS and top-right on Windows, over the page either
-   way. The `fileshuffler-ui` skill's Window chrome section says what that constrains.
+   way. Three things drag the window - the top strip, the pinned screen header and the sidebar - so
+   anything clickable added to any of them has to opt out of the drag region. The `fileshuffler-ui`
+   skill's Window chrome section says what that constrains.
 4. Then pick up the front end or the player (Next steps below).
 
 **Verified on the Windows desktop** (2026-09-17): all 312 tests pass here, including the 7 real-mpv
@@ -1682,3 +1684,32 @@ machines, not Lucas's.
     a question, not a commit. Recorded as the next step and as an Open entry in the UI skill.
   - No new tests: this is Electron window configuration and CSS, neither of which the unit tests
     reach. It was verified in the running app instead, on the machine it is specific to.
+- **2026-09-17:** Made the top of the window draggable, and pinned the screen header.
+  - **The window could only be dragged from the sidebar**, and only from the empty space above the
+    logo *(Lucas, 2026-09-17)*. Hiding the title bar took away the obvious handle without putting
+    one back: the top of the window, which is where anyone reaches first, did nothing.
+  - **`.titlebar` is that handle**: a strip across the whole width of the screen area, `sticky` so
+    it both reserves the clearance the window controls need and stays put while the content scrolls
+    beneath it. It is a real element rather than `.main`'s top padding, because padding cannot be
+    a drag region.
+  - **The screen header is pinned too** *(Lucas, 2026-09-17: the title and folder buttons should
+    stay, for dragability)*, so a screen's title and its own actions stay reachable and there is
+    always a wide, familiar place to grab. Its buttons still click: the blanket `no-drag` on
+    controls covers them, which was confirmed element by element rather than assumed.
+  - **This is the drag strip that was rejected a commit earlier**, and the reason it is safe now is
+    the part worth keeping: a bare strip over a scrolling list would have been transparent, so
+    content would have passed under it looking clickable while the press went to the window. Both
+    the strip and the header paint `--bg`, so nothing shows through what it cannot click.
+  - **The side gutter moved from `.main` to `.screen`**, so the strip spans the full width instead
+    of stopping 36px short at each edge. `.screen`'s max-widths absorbed the 72px - 832px and
+    1112px - which keeps the reading column at exactly 760px and the wide one at 1040px. Measured
+    on all five tabs at 1080x720 and at the 760x540 minimum: identical to before, to the pixel.
+  - **A hairline under the header, but only once something has scrolled under it.** Content cut off
+    mid-line with no edge to cut against reads as broken text, which is what the first attempt
+    looked like; at rest there is no line, so the screens keep the clean top they were designed
+    with. It is a `box-shadow`, not a `border-bottom`, so appearing cannot nudge the content below
+    it by a pixel.
+  - Checked in the running app on Windows in both themes: the strip drags along its whole width
+    including next to the window controls, the header stays pinned at 46px through a scroll, and no
+    screen collides with the controls at either window size.
+  - No new tests: CSS and window configuration, which the unit tests do not reach. 312 still pass.

@@ -14,6 +14,11 @@ function App(): React.JSX.Element {
   // The dashboard is the app's home: it says what the library holds, and a shuffle starts from a
   // folder rather than from the app opening.
   const [page, setPage] = useState<Page>('dashboard')
+  // Whether anything has scrolled under the pinned header, which is the only thing that decides
+  // whether it draws its edge. At rest there is no line, so the screens look as they did before
+  // the header was pinned. React bails out when the value has not changed, so scrolling does not
+  // re-render on every event.
+  const [scrolled, setScrolled] = useState(false)
   const { view, actions, actionError, actionNotice } = useShuffler()
   // Every hook stays subscribed while the app is open, so switching screens shows current state
   // rather than reloading it. A shuffle keeps running while another screen is showing.
@@ -24,7 +29,17 @@ function App(): React.JSX.Element {
   return (
     <div className="app">
       <Sidebar page={page} onNavigate={setPage} />
-      <main className="main">
+      <main
+        className="main"
+        data-scrolled={scrolled}
+        onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 0)}
+      >
+        {/* With no title bar there is nothing along the top of the window to grab, and the sidebar
+            alone is an odd place to have to reach for. This strip is the handle: it spans the whole
+            width of the screen area, stays put while the content scrolls under it, and doubles as
+            the clearance the window controls need. Presentation only, so it is hidden from
+            assistive technology. */}
+        <div className="titlebar" aria-hidden="true" />
         {page === 'settings' ? (
           <SettingsScreen
             view={settings.view}

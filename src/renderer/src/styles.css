@@ -215,19 +215,45 @@ button {
 
 .main {
   overflow-y: auto;
-  padding: 28px 36px 120px;
+  /* The side gutter lives on `.screen` rather than here, so `.titlebar` below can span the entire
+     width of this area and be grabbed anywhere along it. */
+  padding: 28px 0 120px;
 }
 
-/* With the title bar hidden the page owns the full window height, so the content needs the
-   clearance the title bar used to provide. On Windows this is what keeps the first row of a screen
-   out from under the window controls, which are drawn over the top-right of this area and are 40px
-   tall (`TITLEBAR_HEIGHT` in `mainWindow.ts`) - change one and change the other. */
+/* With the title bar hidden the page owns the full window height, and `.titlebar` provides both the
+   clearance the window controls need and something to drag the window by. */
 .is-mac .main,
 .is-windows .main {
-  padding-top: 46px;
+  padding-top: 0;
+}
+
+/* The window's drag handle, where the title bar used to be. Sticky rather than fixed so it holds
+   its place in the layout - that is what reserves the clearance - while staying put as the content
+   scrolls beneath it. 46px against `TITLEBAR_HEIGHT`'s 40 in `mainWindow.ts`, so Windows' own
+   window controls sit inside it: change one and change the other.
+
+   Only where the title bar is hidden. A platform that still has one needs neither the clearance nor
+   the handle. */
+.titlebar {
+  display: none;
+}
+
+.is-mac .titlebar,
+.is-windows .titlebar {
+  display: block;
+  position: sticky;
+  top: 0;
+  /* Above the pinned screen header, which is itself above the content. */
+  z-index: 2;
+  height: 46px;
+  /* Opaque on purpose: the content scrolls underneath and would otherwise show through. */
+  background: var(--bg);
+  -webkit-app-region: drag;
 }
 
 .loading {
+  /* Not a `.screen`, so it needs the gutter that `.screen` carries for everything else. */
+  padding: 0 36px;
   color: var(--muted);
 }
 
@@ -237,8 +263,11 @@ button {
   display: flex;
   flex-direction: column;
   gap: 24px;
-  /* Reading width. Right for Shuffle and Settings, which are mostly prose and one action. */
-  max-width: 760px;
+  /* Reading width. Right for Shuffle and Settings, which are mostly prose and one action.
+     The 72px on top of it is the side gutter, which moved here off `.main` so that the title bar
+     can span the full width - so the reading column itself is unchanged at 760px. */
+  max-width: 832px;
+  padding: 0 36px;
   margin: 0 auto;
 }
 
@@ -247,16 +276,47 @@ button {
    Deliberately not applied to Shuffle: its ready card holds a count and one button, so a wider
    card would only be more air around the same content, which is what "sparse" actually means. */
 .screen.wide {
-  max-width: 1040px;
+  max-width: 1112px;
 }
 
+/* Pinned, so the title and the screen's own actions stay reachable at any scroll position - and so
+   there is always a wide, familiar place to drag the window from, which is the real reason for it.
+   It needs an opaque background for the same reason `.titlebar` does.
+
+   The negative margin cancels the padding: the padding is only there to give the content a little
+   cover as it slides underneath, and without the cancellation it would also open up the settled
+   spacing below the title, which is already right. */
 .screen-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px 16px;
   min-height: 40px;
+  padding-bottom: 10px;
+  margin-bottom: -10px;
+  background: var(--bg);
+  -webkit-app-region: drag;
+}
+
+/* Below the title bar strip, not underneath it. */
+.is-mac .screen-header,
+.is-windows .screen-header {
+  top: 46px;
+}
+
+/* The one place a horizontal hairline earns its keep. Content passing under a pinned header gets
+   cut off mid-line, and without an edge to cut against that reads as broken text rather than as
+   something sliding underneath - the same job the line down the sidebar does. It appears only once
+   something has actually scrolled under, so a screen at rest keeps its clean top.
+
+   A shadow rather than a border, so it cannot shift the content below it by a pixel when it
+   appears. */
+.main[data-scrolled='true'] .screen-header {
+  box-shadow: 0 1px 0 var(--border);
 }
 
 /* A real large title. Hierarchy comes from the jump between this and 13px secondary text, which is
