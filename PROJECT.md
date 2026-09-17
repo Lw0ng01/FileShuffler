@@ -18,11 +18,11 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
 "Working with Lucas") are the handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #34 is on `main`. One branch is waiting
-   for review: **`worktree-sidebar-mica`**, the translucent sidebar. If it has been merged, nothing
-   else is outstanding.
-   - `worktree-sidebar-material` is the same change on an older base and was replaced rather than
-     rebased, because rewriting a pushed branch means a force-push. Ignore and delete it.
+1. `git checkout main && git pull`. Everything through PR #36 is on `main`. One branch is waiting
+   for review: **`worktree-theme-sync`**, which stopped the sidebar trailing the page on a theme
+   change. If it has been merged, nothing else is outstanding.
+   - `worktree-sidebar-material` is a dead duplicate of the merged `worktree-sidebar-mica`, kept
+     only because rewriting a pushed branch means a force-push. Delete it.
 2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads its binary on first
    run), then `npm test`. Expect 305 passing, plus 7 more with `MPV_PATH` set to mpv's path.
    - **On Windows, use Command Prompt, not PowerShell**, or `npm.cmd run dev`: Windows' default
@@ -139,8 +139,32 @@ machine keeps its own index.
      problem disappears. The unproven part is file release for the delete flow (§4), which is what
      a spike has to settle first.
 
-   **Undecided, and Lucas's call**: whether the in-app player is v1 scope or waits. Features are
-   frozen for v1, and this is a feature.
+   **✅ Decided (Lucas, 2026-09-17): mpv's look is not acceptable, and the way out is the in-app
+   player, with the system player for anything it cannot play.** He put it as a choice between the
+   system default player for everything, or a custom one. The answer is that those are not
+   competing - they do different jobs:
+
+   - **The system player already opens regular videos.** The dashboard's Open is `shell.openPath`
+     (`services.ts`), which hands the file to whatever the OS is set to use. That half is done.
+   - **The system player cannot drive a shuffle**, and this is the part worth being clear about.
+     `shell.openPath` returns as soon as the OS launches the handler: no process handle, no IPC, no
+     events. So there is no end-of-file to autoplay from, no way to send Next or Back, and no way to
+     unload a file before trashing it - which §2 requires precisely because of Windows file locks.
+     A shuffle driven by the system player degrades to "open one file, switch back, click Next", and
+     the delete safety story gets weaker, not just the convenience.
+   - **So: the in-app `<video>` player carries the shuffle**, and `shell.openPath` catches the rest.
+     Both halves are already proven or already written.
+   - **That lets mpv go entirely.** For the ~1% Chromium cannot decode (`.mkv`, `.wmv`, `.avi`, or
+     AC-3 audio) the fallback is the system player rather than a bundled dependency - so mpv stops
+     being required, which also removes the first-run problem of an app that cannot play anything
+     until you install something. The one thing lost is autoplay for those files, and they should
+     say so when opened.
+   - uosc is worth revisiting only *after* this lands, and probably not at all then: it would be
+     dressing up a fallback path the user rarely sees.
+
+   **Still Lucas's call before building**: whether the Shuffle screen becomes the player or the
+   player is its own surface, and whether mpv stays available as an option in Settings for people
+   who want it. Features are frozen for v1, so this is also a v1-scope decision.
 4. Whenever convenient, Lucas, on the Windows desktop: try a delete where recycling isn't supported,
    on a removable USB stick or a network share. It must fail with an error and keep the file, never
    delete permanently. His external drive doesn't count: Windows treats it as a local disk and it
@@ -1866,3 +1890,24 @@ machines, not Lucas's.
   - **Not yet seen on macOS** - same CSS, same already-clear background, so vibrancy should show,
     but that is reasoning rather than a result (Resume here).
   - No new tests: window configuration and CSS. 312 still pass.
+- **2026-09-17:** Stopped the sidebar trailing the rest of the window on a theme change.
+  - **The symptom** *(Lucas, 2026-09-17)*: switching Appearance showed "a slight delay between the
+    main page and the sidebar".
+  - **Measured, because the cause was not obvious.** The page is not slow: the IPC round trip
+    resolves in 2-11ms and `.main` flips to its new colour in a single step. Sampling the window's
+    own pixels through the switch showed the sidebar crossfading behind it - 32, 62, 103, 138, 180,
+    221, 243 - and settling about 225ms after the page had finished. **That fade is Windows', not
+    ours**: making the sidebar fully transparent handed its colour to the OS, and the OS re-tints
+    Mica with an animation.
+  - **So the fix is to own most of the colour**: `--sidebar` is now `--panel` at 85% rather than
+    fully transparent. The sidebar is right in the same frame as the page, and only the last 15%
+    settles behind it. Re-measured the same transition: the gap at the moment `.main` flips fell
+    from 180 levels to 18, and the residual swing from 211 to 29.
+  - **It is a trade, not a free win.** More transparency brings the lag back in proportion. The
+    alternative - crossfading the page to match the OS - was rejected because the text would have
+    to fade too, and would pass through a stretch where it is unreadable against a half-changed
+    background. A snapping page with a barely-moving sidebar beats a smeared one.
+  - The lift it gives is a small improvement in its own right: the sidebar now reads as a surface
+    slightly raised off `--bg` in both themes (41,42,45 against 28,28,30 in dark; 253 against 242 in
+    light) instead of being whatever the desktop happened to tint it.
+  - No new tests: CSS. 312 still pass.

@@ -7,7 +7,13 @@
   --bg: #1c1c1e;
   --panel: #2c2c2e;
   --raised: #3a3a3c;
-  --sidebar: transparent;
+  /* `--panel` at 85%, over the window's material rather than instead of it. Fully transparent left
+     the sidebar's colour entirely to the OS, which re-tints Mica with a ~225ms crossfade on a theme
+     change while the page flips in one frame - so the sidebar visibly trailed the rest of the
+     window (Lucas, 2026-09-17). Owning most of the colour means the sidebar is right immediately
+     and only the last 15% settles behind it. The remaining transparency is what still picks up
+     what is behind the window. */
+  --sidebar: rgba(44, 44, 46, 0.85);
   --border: rgba(255, 255, 255, 0.09);
   --border-strong: rgba(255, 255, 255, 0.16);
   --text: #f5f5f7;
@@ -65,7 +71,8 @@
     --bg: #f2f2f7;
     --panel: #ffffff;
     --raised: #f5f5f7;
-    --sidebar: transparent;
+    /* `--panel` at 85%, matching dark - see the note there. */
+    --sidebar: rgba(255, 255, 255, 0.85);
     --border: rgba(0, 0, 0, 0.08);
     --border-strong: rgba(0, 0, 0, 0.16);
     --text: #1d1d1f;
@@ -137,8 +144,10 @@ button {
 
 /* Sidebar */
 
-/* Transparent so the window's own material shows through on macOS, where the sidebar is vibrant.
-   `--sidebar` stays a token so a platform without vibrancy can give it a real surface. */
+/* Translucent, so the window's own material shows through here and nowhere else - `.main` paints
+   `--bg` over everything on its side. `--sidebar` carries most of the colour rather than none of
+   it, because a fully transparent sidebar inherits the OS's timing as well as its tint: see the
+   token's note. */
 .sidebar {
   display: flex;
   flex-direction: column;
