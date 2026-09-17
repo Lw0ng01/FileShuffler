@@ -82,26 +82,47 @@ line or a box.
 
 ## Window chrome (Recorded)
 
-macOS hides the title bar (`titleBarStyle: 'hiddenInset'`) so the sidebar runs to the top edge, and
-the window is vibrant behind it. Three things follow, and each one silently breaks something if
-forgotten:
+**Neither desktop has a title bar.** macOS uses `titleBarStyle: 'hiddenInset'`, Windows
+`titleBarStyle: 'hidden'` plus `titleBarOverlay`, and on both the sidebar runs to the top edge.
+Three things follow, and each one silently breaks something if forgotten:
 
 - **The sidebar is the drag handle** (`-webkit-app-region: drag`), so every control anywhere inside
   it must opt back out. A blanket `no-drag` on `button, select, input, a, [role="button"]` covers
   this; a new interactive element that is not one of those needs it added, or it will look fine and
   simply not respond to clicks.
-- **The traffic lights float over the top-left of the sidebar**, so `.is-mac` adds top padding to
-  the sidebar and to `.main`. That class is set in `main.tsx` from the user agent, because the
-  renderer has no Node access.
+- **The window controls are on opposite sides**, so each platform needs its own clearance: macOS
+  floats the traffic lights over the top-left of the sidebar, Windows draws its buttons over the
+  top-right of `.main`. `.is-mac` and `.is-windows` both add 46px of top padding to the sidebar and
+  to `.main`, which is what keeps the first row of a screen out from under them. Those classes are
+  set in `main.tsx` from the user agent, because the renderer has no Node access.
 - **`--sidebar` is transparent on macOS** so the vibrancy shows. Give it a real surface on any
   platform that has no window material.
 
 `mainWindow.ts` owns this, and `backgroundColor` follows `nativeTheme` - it was hard-coded dark,
-which flashed dark at every launch for a light-mode user.
+which flashed dark at every launch for a light-mode user. Its two values **are** `--bg` from
+`styles.css` and have to be changed with it: the light one sat at the old `#ececf0` after the
+palette moved to `#f2f2f7`, and flashed the older, greyer background at every launch.
 
-**Windows keeps its normal frame** and takes only the Mica material. Hiding the title bar there
-means drawing the window controls with `titleBarOverlay` and reserving space for them, which cannot
-be verified from a Mac. Finish that in a Windows session rather than guessing.
+**Windows keeps its window controls native** (`titleBarOverlay`), rather than the app drawing three
+buttons of its own. Windows then places them, and the hover, snap-layout and close behaviour come
+for free. Two consequences:
+
+- **The overlay colours do not follow the theme on their own.** Nothing about them is CSS, so
+  `setTitleBarOverlay` has to be called again whenever `nativeTheme` changes, or switching to Light
+  in Settings leaves light glyphs on a light background.
+- **`TITLEBAR_HEIGHT` (40px) and the 46px of CSS clearance are one decision in two files.** Change
+  one and change the other, or the controls end up over the first heading.
+
+Verified on Windows 11 (2026-09-17): the page owns the full 720px window height, the controls take
+the right 137px of a 40px band, and nothing on any of the five tabs lands under them even at the
+760x540 minimum size. Both themes checked through Settings -> Appearance.
+
+**Open - whether the sidebar should be translucent.** `backgroundMaterial: 'mica'` is set on
+Windows and `vibrancy: 'sidebar'` on macOS, but **neither is visible**: `body` paints an opaque
+`--bg` over the whole window, and the transparent `--sidebar` sits on top of that rather than on
+the material. Showing it means moving that background from `body` to `.main` so only the sidebar is
+clear. That is a real change in how the app looks, on both platforms, so it is Lucas's call - and
+worth asking whether a translucent sidebar is wanted at all before writing the code.
 
 ## Appearance (Recorded)
 
