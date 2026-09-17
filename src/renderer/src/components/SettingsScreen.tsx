@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { LibraryView } from '../../../shared/library'
-import type { ClearableData, MpvSource, SettingsView } from '../../../shared/settings'
+import type { Appearance, ClearableData, MpvSource, SettingsView } from '../../../shared/settings'
 import { formatBytes, formatCount, formatWhen, shortenPath } from '../format'
 import type { LibraryActions } from '../hooks/useLibrary'
 import type { SettingsActions } from '../hooks/useSettings'
@@ -30,6 +30,12 @@ const SOURCE_LABELS: Record<MpvSource, string> = {
   installed: 'Found in a standard install location',
   path: 'Looked up on the system PATH'
 }
+
+const APPEARANCES: { value: Appearance; label: string }[] = [
+  { value: 'system', label: 'Automatic' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' }
+]
 
 interface Clearable {
   what: ClearableData
@@ -194,6 +200,26 @@ export function SettingsScreen({
             ))}
           </ul>
         )}
+      </section>
+
+      <section className="dash-section" aria-label="Appearance">
+        <h2 className="section-title">Appearance</h2>
+        <p className="muted">
+          Automatic follows this computer&rsquo;s light or dark setting. Choosing one here overrides
+          it for FileShuffler only.
+        </p>
+        <div className="segmented" role="group" aria-label="Appearance">
+          {APPEARANCES.map((option) => (
+            <button
+              key={option.value}
+              className={`segment${view.appearance === option.value ? ' on' : ''}`}
+              aria-pressed={view.appearance === option.value}
+              onClick={() => actions.setAppearance(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
       </section>
 
       <section className="dash-section" aria-label="Player">

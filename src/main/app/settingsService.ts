@@ -1,4 +1,4 @@
-import type { ClearableData, SettingsView } from '../../shared/settings'
+import type { Appearance, ClearableData, SettingsView } from '../../shared/settings'
 import type { AppSettings } from '../files/settingsStore'
 import type { MpvLocation } from '../playback/mpv/findMpv'
 import type { MpvProbe } from '../playback/mpv/probeMpv'
@@ -7,6 +7,7 @@ import type { MpvProbe } from '../playback/mpv/probeMpv'
 export interface SettingsSource {
   get(): Promise<AppSettings>
   setMpvPath(path: string | null): Promise<AppSettings>
+  setAppearance(value: Appearance): Promise<AppSettings>
 }
 
 export interface SettingsServiceDeps {
@@ -21,6 +22,12 @@ export interface SettingsServiceDeps {
   clear: Record<ClearableData, () => Promise<void> | void>
   /** Clearing the index while a scan writes to it would leave a half-rebuilt index. */
   isScanning: () => boolean
+  /**
+   * Puts the chosen theme into effect. Injected so this service keeps no Electron import: in the
+   * app it sets `nativeTheme.themeSource`, which also decides what `prefers-color-scheme` reports
+   * to the page, so the whole UI follows without the renderer knowing anything about it.
+   */
+  applyAppearance?: (value: Appearance) => void
   now?: () => number
 }
 
@@ -47,6 +54,7 @@ export class SettingsService {
   private readonly deps: SettingsServiceDeps
   private readonly listeners = new Set<(view: SettingsView) => void>()
   private chosen: string | null = null
+  private appearance: Appearance = 'system'
   private test: SettingsView['mpv']['test'] = null
   private testing = false
   private notice: string | null = null
@@ -58,7 +66,11 @@ export class SettingsService {
 
   /** Reads saved settings. Called once at startup. */
   async load(): Promise<void> {
-    this.chosen = (await this.deps.store.get()).mpvPath
+    const saved = await this.deps.store.get()
+    this.chosen = saved.mpvPath
+    this.appearance = saved.appearance
+    // Put the saved theme into effect at startup, or the choice would only survive until restart.
+    this.deps.applyAppearance?.(this.appearance)
     this.emit()
   }
 
@@ -72,9 +84,20 @@ export class SettingsService {
         test: this.test,
         testing: this.testing
       },
+      appearance: this.appearance,
       lastNotice: this.notice,
       lastError: this.error
     }
+  }
+
+  /** Follows the desktop, or overrides it with light or dark. Saved, so it survives a restart. */
+  async setAppearance(value: Appearance): Promise<SettingsView> {
+    this.reset()
+    await this.deps.store.setAppearance(value)
+    this.appearance = value
+    this.deps.applyAppearance?.(value)
+    this.emit()
+    return this.getView()
   }
 
   onView(listener: (view: SettingsView) => void): () => void {

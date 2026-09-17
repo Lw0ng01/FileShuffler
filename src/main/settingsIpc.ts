@@ -1,12 +1,25 @@
 import type { IpcMainInvokeEvent } from 'electron'
-import { CLEARABLE_DATA, SETTINGS_CHANNELS, type ClearableData } from '../shared/settings'
+import {
+  APPEARANCES,
+  CLEARABLE_DATA,
+  SETTINGS_CHANNELS,
+  type Appearance,
+  type ClearableData
+} from '../shared/settings'
 import type { SettingsService } from './app/settingsService'
 import type { IpcRegistry } from './ipc'
 
 export type SettingsBackend = Pick<
   SettingsService,
-  'getView' | 'chooseMpv' | 'useDefaultMpv' | 'testMpv' | 'clearData'
+  'getView' | 'chooseMpv' | 'useDefaultMpv' | 'testMpv' | 'setAppearance' | 'clearData'
 >
+
+function asAppearance(value: unknown): Appearance {
+  if (typeof value !== 'string' || !(APPEARANCES as readonly string[]).includes(value)) {
+    throw new Error('Expected system, light or dark')
+  }
+  return value as Appearance
+}
 
 function asClearable(value: unknown): ClearableData {
   if (typeof value !== 'string' || !(CLEARABLE_DATA as readonly string[]).includes(value)) {
@@ -39,6 +52,7 @@ export function registerSettingsIpc(
   handle(SETTINGS_CHANNELS.chooseMpv, () => backend.chooseMpv())
   handle(SETTINGS_CHANNELS.useDefaultMpv, () => backend.useDefaultMpv())
   handle(SETTINGS_CHANNELS.testMpv, () => backend.testMpv())
+  handle(SETTINGS_CHANNELS.setAppearance, ([value]) => backend.setAppearance(asAppearance(value)))
   handle(SETTINGS_CHANNELS.clearData, ([what]) => backend.clearData(asClearable(what)))
 
   return () => {

@@ -1,4 +1,11 @@
-import { app, shell, type BrowserWindow, type IpcMain, type IpcMainInvokeEvent } from 'electron'
+import {
+  app,
+  nativeTheme,
+  shell,
+  type BrowserWindow,
+  type IpcMain,
+  type IpcMainInvokeEvent
+} from 'electron'
 import { join } from 'path'
 import { Worker } from 'node:worker_threads'
 import { LIBRARY_CHANNELS } from '../shared/library'
@@ -145,7 +152,12 @@ export function createServices(options: ServiceOptions): Services {
         await Promise.all([library.notifyChanged(), stats.notifyChanged()])
       }
     },
-    isScanning: () => library.isScanning()
+    isScanning: () => library.isScanning(),
+    // Electron's own theme override. Setting this also decides what `prefers-color-scheme` reports
+    // to the page, so the entire UI follows from one line and the renderer knows nothing about it.
+    applyAppearance: (value) => {
+      nativeTheme.themeSource = value
+    }
   })
 
   shuffler.onView((view) => sendToWindow(window(), CHANNELS.view, view))

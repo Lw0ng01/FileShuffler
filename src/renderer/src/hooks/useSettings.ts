@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { ClearableData, SettingsView } from '../../../shared/settings'
+import type { Appearance, ClearableData, SettingsView } from '../../../shared/settings'
 
 export interface SettingsActions {
   chooseMpv: () => void
   useDefaultMpv: () => void
   testMpv: () => void
+  setAppearance: (value: Appearance) => void
   clearData: (what: ClearableData) => void
 }
 
@@ -58,6 +59,7 @@ export function useSettings(): {
       chooseMpv: () => run(() => api.chooseMpv()),
       useDefaultMpv: () => run(() => api.useDefaultMpv()),
       testMpv: () => run(() => api.testMpv()),
+      setAppearance: (value) => run(() => api.setAppearance(value)),
       clearData: (what) => run(() => api.clearData(what))
     }
   }, [])

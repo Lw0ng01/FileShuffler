@@ -14,6 +14,7 @@ function setup(trusted = true): {
     chooseMpv: vi.fn(),
     useDefaultMpv: vi.fn(),
     testMpv: vi.fn(),
+    setAppearance: vi.fn(),
     clearData: vi.fn()
   } as unknown as SettingsBackend
   const unregister = registerSettingsIpc(ipc, backend, () => trusted)
@@ -36,6 +37,25 @@ describe('registerSettingsIpc', () => {
     expect(backend.useDefaultMpv).toHaveBeenCalledTimes(1)
     expect(backend.testMpv).toHaveBeenCalledTimes(1)
     expect(backend.clearData).toHaveBeenCalledTimes(4)
+  })
+
+  it('forwards each appearance the app knows', () => {
+    const { ipc, backend } = setup()
+    for (const value of ['system', 'light', 'dark']) {
+      ipc.invoke(SETTINGS_CHANNELS.setAppearance, value)
+    }
+    expect(backend.setAppearance).toHaveBeenCalledTimes(3)
+    expect(backend.setAppearance).toHaveBeenCalledWith('dark')
+  })
+
+  it('rejects an appearance it does not know', () => {
+    const { ipc, backend } = setup()
+    for (const bad of [undefined, 42, '', 'Dark', 'auto', ['light']]) {
+      expect(() => ipc.invoke(SETTINGS_CHANNELS.setAppearance, bad)).toThrow(
+        'Expected system, light or dark'
+      )
+    }
+    expect(backend.setAppearance).not.toHaveBeenCalled()
   })
 
   it('never passes a path along when choosing mpv', () => {

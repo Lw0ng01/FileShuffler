@@ -74,6 +74,7 @@ const settings: SettingsApi = {
   chooseMpv: () => ipcRenderer.invoke(SETTINGS_CHANNELS.chooseMpv),
   useDefaultMpv: () => ipcRenderer.invoke(SETTINGS_CHANNELS.useDefaultMpv),
   testMpv: () => ipcRenderer.invoke(SETTINGS_CHANNELS.testMpv),
+  setAppearance: (value) => ipcRenderer.invoke(SETTINGS_CHANNELS.setAppearance, value),
   clearData: (what) => ipcRenderer.invoke(SETTINGS_CHANNELS.clearData, what),
   onView: (listener) => {
     const handler = (_event: IpcRendererEvent, view: SettingsView): void => listener(view)

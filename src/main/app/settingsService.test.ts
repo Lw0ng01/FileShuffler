@@ -1,19 +1,24 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { ClearableData } from '../../shared/settings'
+import type { Appearance, ClearableData } from '../../shared/settings'
 import type { AppSettings } from '../files/settingsStore'
 import type { MpvLocation } from '../playback/mpv/findMpv'
 import type { MpvProbe } from '../playback/mpv/probeMpv'
 import { SettingsService, type SettingsServiceDeps, type SettingsSource } from './settingsService'
 
 class FakeStore implements SettingsSource {
-  settings: AppSettings = { mpvPath: null }
+  settings: AppSettings = { mpvPath: null, appearance: 'system' }
 
   async get(): Promise<AppSettings> {
     return { ...this.settings }
   }
 
   async setMpvPath(path: string | null): Promise<AppSettings> {
-    this.settings = { mpvPath: path }
+    this.settings = { ...this.settings, mpvPath: path }
+    return { ...this.settings }
+  }
+
+  async setAppearance(appearance: Appearance): Promise<AppSettings> {
+    this.settings = { ...this.settings, appearance }
     return { ...this.settings }
   }
 }
@@ -47,6 +52,44 @@ function setup(overrides: Partial<SettingsServiceDeps> = {}): {
   })
   return { service, store, clear, probe }
 }
+
+describe('SettingsService appearance', () => {
+  it('follows the system until something else is chosen', () => {
+    const { service } = setup()
+    expect(service.getView().appearance).toBe('system')
+  })
+
+  it('saves the choice and puts it into effect', async () => {
+    const applied: Appearance[] = []
+    const { service, store } = setup({ applyAppearance: (value) => applied.push(value) })
+
+    await service.setAppearance('light')
+
+    expect(service.getView().appearance).toBe('light')
+    expect(store.settings.appearance).toBe('light')
+    expect(applied).toEqual(['light'])
+  })
+
+  it('applies the saved choice at startup, so it survives a restart', async () => {
+    const applied: Appearance[] = []
+    const { service, store } = setup({ applyAppearance: (value) => applied.push(value) })
+    store.settings = { mpvPath: null, appearance: 'dark' }
+
+    await service.load()
+
+    expect(service.getView().appearance).toBe('dark')
+    expect(applied).toEqual(['dark'])
+  })
+
+  it('keeps the chosen mpv when the theme changes', async () => {
+    const { service, store } = setup()
+    store.settings = { mpvPath: '/usr/local/bin/mpv', appearance: 'system' }
+
+    await service.setAppearance('dark')
+
+    expect(store.settings.mpvPath).toBe('/usr/local/bin/mpv')
+  })
+})
 
 describe('SettingsService mpv', () => {
   it('finds mpv automatically until one is chosen', () => {
@@ -104,7 +147,7 @@ describe('SettingsService mpv', () => {
 
   it('reads a saved choice at startup', async () => {
     const { service, store } = setup()
-    store.settings = { mpvPath: 'E:\\mpv\\mpv.exe' }
+    store.settings = { mpvPath: 'E:\\mpv\\mpv.exe', appearance: 'system' }
     await service.load()
     expect(service.getView().mpv).toMatchObject({ path: 'E:\\mpv\\mpv.exe', source: 'settings' })
   })
