@@ -18,7 +18,10 @@ export interface ScanFile {
   root: string
   name: string
   folder: string
-  /** `C:` on Windows, `/` elsewhere. Lets the dashboard group by drive without re-parsing paths. */
+  /**
+   * The volume the file is on: `C:` on Windows, `/` or `/Volumes/<name>` on macOS. Lets the
+   * dashboard group by drive without re-parsing paths.
+   */
   drive: string
   category: Category
   size: number
@@ -79,9 +82,29 @@ function pathFor(platform: NodeJS.Platform): PlatformPath {
   return platform === 'win32' ? win32 : posix
 }
 
-/** `C:` from `C:\Videos\clip.mp4`, `/` on other systems. */
+/** Where macOS mounts every volume other than the startup disk. */
+const MAC_VOLUMES = '/Volumes/'
+
+/**
+ * Which drive a file counts as being on: `C:` from `C:\Videos\clip.mp4` on Windows, and the volume
+ * it is mounted on elsewhere.
+ *
+ * macOS needs more than the filesystem root, which is `/` for every path. Grouping by that put
+ * every external disk on one dashboard card, showing whichever volume's free space happened to be
+ * read last (PROJECT.md §7 Phase 4). Mounted volumes live at `/Volumes/<name>`, and that is what
+ * tells them apart. `/System/Volumes/...` is deliberately left on `/`: those are firmlinks to the
+ * startup disk, not drives of their own.
+ *
+ * Pure string work on purpose. This runs for every file in a scan, so it must never touch the disk.
+ */
 export function driveOf(path: string, platform: NodeJS.Platform = process.platform): string {
   const root = pathFor(platform).parse(path).root
+  // A relative path belongs to no drive.
+  if (root === '') return ''
+  if (platform === 'darwin' && path.startsWith(MAC_VOLUMES)) {
+    const name = path.slice(MAC_VOLUMES.length).split('/')[0]
+    if (name !== undefined && name !== '') return `${MAC_VOLUMES}${name}`
+  }
   return root.endsWith('\\') || root.endsWith('/') ? root.slice(0, -1) || root : root
 }
 
