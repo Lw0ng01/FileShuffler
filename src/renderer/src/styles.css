@@ -1,22 +1,28 @@
 :root {
+  /* Dark palette. Near-monochrome by decision (Lucas, 2026-09-17): greys carry the interface and
+     colour is kept for the one primary action and for status, so the one coloured thing on screen
+     means something. Separators are translucent white rather than a solid grey line, which is what
+     stops every element looking boxed-in. */
   color-scheme: dark;
-  --bg: #0e1014;
-  --panel: #151920;
-  --raised: #1c212a;
-  --border: #282e39;
-  --border-strong: #3a4250;
-  --text: #e9ecf1;
-  --muted: #9aa3b2;
-  --faint: #6c7584;
-  --accent: #8b93ff;
-  --accent-hover: #a2a8ff;
-  --accent-text: #0e1014;
-  --accent-soft: rgba(139, 147, 255, 0.14);
-  --danger: #ff7b7b;
-  --danger-soft: rgba(255, 123, 123, 0.12);
-  --warning: #f5c26b;
-  --success: #5fd39a;
-  --shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  --bg: #1c1c1e;
+  --panel: #2c2c2e;
+  --raised: #3a3a3c;
+  --sidebar: transparent;
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --text: #f5f5f7;
+  --muted: rgba(235, 235, 245, 0.6);
+  --faint: rgba(235, 235, 245, 0.35);
+  --selected: rgba(255, 255, 255, 0.11);
+  --accent: #0a84ff;
+  --accent-hover: #409cff;
+  --accent-text: #ffffff;
+  --accent-soft: rgba(10, 132, 255, 0.18);
+  --danger: #ff453a;
+  --danger-soft: rgba(255, 69, 58, 0.16);
+  --warning: #ff9f0a;
+  --success: #32d74b;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.44);
   font-family:
     system-ui,
     -apple-system,
@@ -48,24 +54,30 @@
 
 @media (prefers-color-scheme: light) {
   :root {
+    /* Light palette, designed in its own right rather than derived by inverting the dark one
+       (Lucas, 2026-09-17). Grouped grey behind, white surfaces on top - the opposite relationship
+       to dark, where surfaces are lighter than the background. */
     color-scheme: light;
-    --bg: #f3f4f7;
+    --bg: #ececf0;
     --panel: #ffffff;
-    --raised: #f6f7fa;
-    --border: #e0e3ea;
-    --border-strong: #c9ceda;
-    --text: #141821;
-    --muted: #5a6373;
-    --faint: #8b93a2;
-    --accent: #5a62ee;
-    --accent-hover: #4a52de;
+    --raised: #f5f5f7;
+    --sidebar: transparent;
+    --border: rgba(0, 0, 0, 0.08);
+    --border-strong: rgba(0, 0, 0, 0.16);
+    --text: #1d1d1f;
+    --muted: rgba(60, 60, 67, 0.6);
+    --faint: rgba(60, 60, 67, 0.35);
+    --selected: rgba(0, 0, 0, 0.07);
+    --accent: #007aff;
+    --accent-hover: #0063d1;
     --accent-text: #ffffff;
-    --accent-soft: rgba(90, 98, 238, 0.1);
-    --danger: #d23f3f;
-    --danger-soft: rgba(210, 63, 63, 0.08);
-    --warning: #9a6a00;
-    --success: #1f9d61;
-    --shadow: 0 12px 32px rgba(20, 24, 33, 0.14);
+    --accent-soft: rgba(0, 122, 255, 0.12);
+    --danger: #ff3b30;
+    --danger-soft: rgba(255, 59, 48, 0.1);
+    /* Darkened from the system values, which are unreadable as text on white. */
+    --warning: #b25000;
+    --success: #1d8a3f;
+    --shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
   }
 }
 
@@ -107,13 +119,18 @@ button {
 
 /* Sidebar */
 
+/* Transparent so the window's own material shows through on macOS, where the sidebar is vibrant.
+   `--sidebar` stays a token so a platform without vibrancy can give it a real surface. */
 .sidebar {
   display: flex;
   flex-direction: column;
   gap: 2px;
   padding: 18px 12px;
-  background: var(--panel);
+  background: var(--sidebar);
+  /* A hairline, not a structural border: it separates without drawing a box. */
   border-right: 1px solid var(--border);
+  /* The window has no title bar to grab on macOS, so the sidebar is the drag handle. */
+  -webkit-app-region: drag;
 }
 
 .brand {
@@ -126,14 +143,22 @@ button {
   letter-spacing: -0.01em;
 }
 
+/* The traffic lights float over the top-left of the sidebar, which is exactly where the brand sits,
+   so the whole sidebar drops below them. Only on macOS: every other platform keeps its title bar. */
+.is-mac .sidebar {
+  padding-top: 46px;
+}
+
+/* Monochrome. A coloured badge sitting permanently in the corner spends the accent on decoration,
+   and then the accent no longer means "this is the action". */
 .brand-mark {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: var(--accent);
-  color: var(--accent-text);
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--selected);
+  color: var(--text);
 }
 
 .nav-item {
@@ -150,8 +175,15 @@ button {
   cursor: pointer;
 }
 
+/* A grey pill, not a coloured one. Which tab you are on is orientation, not an action, so it does
+   not need to compete with the one thing on screen worth clicking. */
 .nav-item[aria-current='page'] {
-  background: var(--accent-soft);
+  background: var(--selected);
+  color: var(--text);
+  font-weight: 560;
+}
+
+.nav-item:hover:not(:disabled):not([aria-current='page']) {
   color: var(--text);
 }
 
@@ -173,14 +205,22 @@ button {
   padding: 28px 36px 120px;
 }
 
+/* With the title bar hidden the page owns the full window height, so the content needs the
+   clearance the title bar used to provide. */
+.is-mac .main {
+  padding-top: 46px;
+}
+
 .loading {
   color: var(--muted);
 }
 
+/* Space is the separator now that the borders are gone, so the rhythm between blocks has to be
+   wide enough to do that job on its own. */
 .screen {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 24px;
   max-width: 760px;
   margin: 0 auto;
 }
@@ -194,10 +234,13 @@ button {
   min-height: 40px;
 }
 
+/* A real large title. Hierarchy comes from the jump between this and 13px secondary text, which is
+   what lets the boxes and rules go away. */
 h1 {
-  font-size: 22px;
-  font-weight: 650;
-  letter-spacing: -0.02em;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
 }
 
 .folder {
@@ -207,8 +250,7 @@ h1 {
   min-width: 0;
   max-width: 100%;
   padding: 5px 5px 5px 12px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 9px;
   background: var(--panel);
   color: var(--muted);
 }
@@ -222,10 +264,11 @@ h1 {
 
 /* Cards */
 
+/* No border. A surface is told apart from the background by being a different surface, not by
+   being outlined - drawing a line around everything is what made the app read as generic. */
 .card {
-  padding: 28px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
+  padding: 24px 26px;
+  border-radius: 16px;
   background: var(--panel);
 }
 
@@ -255,20 +298,20 @@ h1 {
   height: 56px;
   margin-bottom: 4px;
   border-radius: 16px;
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--selected);
+  color: var(--muted);
 }
 
+/* Sentence case, normal tracking. Uppercase letter-spaced labels are an enterprise-dashboard
+   habit; this language puts the weight in the type scale instead. */
 .eyebrow {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--faint);
+  gap: 7px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
 }
 
 .dot {
@@ -349,12 +392,12 @@ h1 {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 9px 14px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--raised);
+  padding: 7px 14px;
+  border: none;
+  border-radius: 8px;
+  background: var(--selected);
   color: var(--text);
-  font-weight: 560;
+  font-weight: 510;
   cursor: pointer;
   transition:
     background var(--dur-fast) var(--ease-out),
@@ -370,7 +413,7 @@ h1 {
 }
 
 .btn:hover:not(:disabled) {
-  border-color: var(--border-strong);
+  background: var(--border-strong);
 }
 
 .btn:disabled {
@@ -394,14 +437,13 @@ h1 {
   font-size: 15px;
 }
 
+/* The only filled, coloured control in the app. That is what makes it read as the thing to do. */
 .btn-primary {
-  border-color: transparent;
   background: var(--accent);
   color: var(--accent-text);
 }
 
 .btn-primary:hover:not(:disabled) {
-  border-color: transparent;
   background: var(--accent-hover);
 }
 
@@ -435,10 +477,8 @@ kbd {
   display: inline-block;
   min-width: 20px;
   padding: 0 5px;
-  border: 1px solid var(--border);
-  border-bottom-width: 2px;
   border-radius: 5px;
-  background: var(--raised);
+  background: var(--selected);
   color: var(--muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 11px;
@@ -448,11 +488,10 @@ kbd {
 
 .section-title {
   margin-bottom: 10px;
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--faint);
+  letter-spacing: -0.01em;
+  color: var(--text);
 }
 
 .recent ul {
@@ -468,7 +507,6 @@ kbd {
   max-width: 240px;
   padding: 5px 11px;
   overflow: hidden;
-  border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--panel);
   color: var(--muted);
@@ -484,13 +522,11 @@ kbd {
 }
 
 .banner-error {
-  border: 1px solid transparent;
   background: var(--danger-soft);
   color: var(--text);
 }
 
 .banner-notice {
-  border: 1px solid transparent;
   background: var(--accent-soft);
   color: var(--text);
 }
@@ -663,9 +699,8 @@ kbd {
 
 .dupe {
   margin-bottom: 14px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
   background: var(--raised);
 }
 
@@ -725,10 +760,10 @@ kbd {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 10px;
-  border: 1px solid var(--border);
+  padding: 5px 11px;
+  border: none;
   border-radius: 999px;
-  background: var(--raised);
+  background: var(--selected);
   color: var(--muted);
   font: inherit;
   font-size: 13px;
@@ -736,9 +771,8 @@ kbd {
 }
 
 .chip.on {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--text);
+  background: var(--accent);
+  color: var(--accent-text);
 }
 
 .chip:focus-visible,
@@ -749,9 +783,9 @@ kbd {
 
 .select {
   padding: 5px 8px;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  background: var(--raised);
+  border: none;
+  border-radius: 7px;
+  background: var(--selected);
   color: var(--text);
   font: inherit;
   font-size: 13px;
@@ -819,9 +853,9 @@ kbd {
 .search {
   width: 100%;
   padding: 9px 12px;
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  background: var(--raised);
+  border: none;
+  border-radius: 9px;
+  background: var(--selected);
   color: var(--text);
   font: inherit;
 }
@@ -848,9 +882,8 @@ kbd {
   gap: 12px;
   width: 360px;
   max-width: calc(100vw - 48px);
-  padding: 10px 10px 10px 14px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  padding: 11px 11px 11px 14px;
+  border-radius: 14px;
   background: var(--raised);
   box-shadow: var(--shadow);
   color: var(--danger);
@@ -930,4 +963,17 @@ kbd {
     animation-iteration-count: 1 !important;
     transition-duration: 1ms !important;
   }
+}
+
+/* Window chrome
+   ----
+   The sidebar is the drag handle, so everything inside it that can be clicked has to opt back out.
+   Miss one of these and the control silently stops responding, because the drag region swallows the
+   press before it reaches the button. */
+button,
+select,
+input,
+a,
+[role='button'] {
+  -webkit-app-region: no-drag;
 }

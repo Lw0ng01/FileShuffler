@@ -35,21 +35,64 @@ negotiable without changing `PROJECT.md` §2 and §5.
 
 ## Tokens (Recorded)
 
-Defined on `:root` in `src/renderer/src/styles.css`, dark first, with a light set under
+Defined on `:root` in `src/renderer/src/styles.css`, with a light set under
 `@media (prefers-color-scheme: light)`. **Always use the variable, never a raw hex value** - a
 literal colour will be wrong in one of the two themes.
 
-Surfaces `--bg`, `--panel`, `--raised`; lines `--border`, `--border-strong`; text `--text`,
-`--muted`, `--faint`; accent `--accent`, `--accent-hover`, `--accent-text`, `--accent-soft`; status
-`--danger`, `--danger-soft`, `--warning`, `--success`; plus `--shadow`.
+Surfaces `--bg`, `--panel`, `--raised`, `--sidebar`; fills `--selected`; lines `--border`,
+`--border-strong`; text `--text`, `--muted`, `--faint`; accent `--accent`, `--accent-hover`,
+`--accent-text`, `--accent-soft`; status `--danger`, `--danger-soft`, `--warning`, `--success`; plus
+`--shadow`.
 
 Any new colour is added to **both** blocks in the same commit.
 
+**Both palettes are designed, not derived** *(Lucas, 2026-09-17)*. Light is not the dark one
+inverted: in dark, surfaces are *lighter* than the background; in light, a grouped grey background
+sits behind *white* surfaces. Check a change in both before calling it done.
+
+**Near-monochrome** *(Lucas, 2026-09-17)*. Greys carry the interface. `--accent` appears on the one
+primary action and nowhere else, and colour otherwise means status only - playing, warning, danger,
+or a category in a chart, where the colour *is* the data. Adding a coloured element anywhere else
+spends the accent on decoration, and then it stops meaning "this is the thing to do".
+
+**Separate with surfaces and space, not outlines.** `--border` is a translucent hairline, used
+between rows in a list and down the sidebar edge - never wrapped around a card, button, chip, input
+or pill. Drawing a box around everything is what made this app read as a generic dashboard.
+`--selected` is the neutral fill for a control or a selected row.
+
 ## Shape (Recorded)
 
-The radii in use, smallest to largest: `5px` and `8px` for small controls and inputs, `10px` for
-buttons and rows, `12px`/`14px`/`16px` for cards and panels, `999px` for pills and progress bars,
-`50%` for circular marks. Pick the nearest existing value rather than adding a new one.
+The radii in use, smallest to largest: `5px` for keycaps, `7px` for selects and small marks, `8px`
+for buttons and nav items, `9px` for inputs and inline chrome, `12px` for grouped rows, `14px` for
+toasts, `16px` for cards, `999px` for pills and bars, `50%` for circular marks. Pick the nearest
+existing value rather than adding a new one.
+
+Type carries the hierarchy now that the outlines are gone: a 30px large title against 13px secondary
+text. If a layout is not reading clearly, widen the type jump or the spacing before reaching for a
+line or a box.
+
+## Window chrome (Recorded)
+
+macOS hides the title bar (`titleBarStyle: 'hiddenInset'`) so the sidebar runs to the top edge, and
+the window is vibrant behind it. Three things follow, and each one silently breaks something if
+forgotten:
+
+- **The sidebar is the drag handle** (`-webkit-app-region: drag`), so every control anywhere inside
+  it must opt back out. A blanket `no-drag` on `button, select, input, a, [role="button"]` covers
+  this; a new interactive element that is not one of those needs it added, or it will look fine and
+  simply not respond to clicks.
+- **The traffic lights float over the top-left of the sidebar**, so `.is-mac` adds top padding to
+  the sidebar and to `.main`. That class is set in `main.tsx` from the user agent, because the
+  renderer has no Node access.
+- **`--sidebar` is transparent on macOS** so the vibrancy shows. Give it a real surface on any
+  platform that has no window material.
+
+`mainWindow.ts` owns this, and `backgroundColor` follows `nativeTheme` - it was hard-coded dark,
+which flashed dark at every launch for a light-mode user.
+
+**Windows keeps its normal frame** and takes only the Mica material. Hiding the title bar there
+means drawing the window controls with `titleBarOverlay` and reserving space for them, which cannot
+be verified from a Mac. Finish that in a Windows session rather than guessing.
 
 ## Motion
 
