@@ -86,10 +86,17 @@ line or a box.
 `titleBarStyle: 'hidden'` plus `titleBarOverlay`, and on both the sidebar runs to the top edge.
 Three things follow, and each one silently breaks something if forgotten:
 
-- **The sidebar is the drag handle** (`-webkit-app-region: drag`), so every control anywhere inside
-  it must opt back out. A blanket `no-drag` on `button, select, input, a, [role="button"]` covers
-  this; a new interactive element that is not one of those needs it added, or it will look fine and
-  simply not respond to clicks.
+- **Three things drag the window**: `.titlebar` (the strip across the top of the screen area),
+  `.screen-header` and the sidebar, all with `-webkit-app-region: drag`. So every control anywhere
+  inside any of them must opt back out. A blanket `no-drag` on
+  `button, select, input, a, [role="button"]` covers this; a new interactive element that is not
+  one of those needs it added, or it will look fine and simply not respond to clicks.
+  - The top strip is the one people actually reach for *(Lucas, 2026-09-17: he could only drag from
+    above the logo)*. It is a real element rather than padding, and it is `sticky`, so it both
+    reserves the clearance and stays put while the content scrolls beneath it.
+  - **A drag region has to be opaque wherever content can pass under it**, or the content shows
+    through while being unclickable - which is why the strip and the header both paint `--bg`, and
+    why a bare fixed strip over a scrolling list was rejected before this.
 - **The window controls are on opposite sides**, so each platform needs its own clearance: macOS
   floats the traffic lights over the top-left of the sidebar, Windows draws its buttons over the
   top-right of `.main`. `.is-mac` and `.is-windows` both add 46px of top padding to the sidebar and
@@ -116,6 +123,20 @@ for free. Two consequences:
 Verified on Windows 11 (2026-09-17): the page owns the full 720px window height, the controls take
 the right 137px of a 40px band, and nothing on any of the five tabs lands under them even at the
 760x540 minimum size. Both themes checked through Settings -> Appearance.
+
+**The screen header is pinned** *(Lucas, 2026-09-17)*, so the title and a screen's own actions stay
+reachable at any scroll position - and so there is always a wide, familiar place to grab the window.
+Two things follow:
+
+- **The side gutter lives on `.screen`, not on `.main`.** It moved so that `.titlebar` spans the
+  whole width of the screen area rather than stopping 36px short of each edge. `.screen`'s
+  max-widths carry the 72px, so the reading column is still 760px and the wide one still 1040px -
+  keep that relationship if either number changes.
+- **`.screen-header` draws a hairline, but only once something has scrolled under it**
+  (`.main[data-scrolled='true']`, set from an `onScroll` in `App.tsx`). Content cut off mid-line
+  with no edge to cut against reads as broken text rather than as something passing underneath. At
+  rest there is no line, so a screen keeps the clean top it was designed with. It is a `box-shadow`
+  rather than a `border-bottom` so that appearing cannot shift the content below it by a pixel.
 
 **Open - whether the sidebar should be translucent.** `backgroundMaterial: 'mica'` is set on
 Windows and `vibrancy: 'sidebar'` on macOS, but **neither is visible**: `body` paints an opaque
