@@ -94,13 +94,11 @@ machine keeps its own index.
   Measurements, §10). Lucas confirmed the merged features work (2026-09-16).
 
 **Next steps, in order**
-1. **Decide whether the sidebar should be translucent.** The window materials are set on both
-   platforms - `backgroundMaterial: 'mica'` on Windows, `vibrancy: 'sidebar'` on macOS - but
-   **neither has ever been visible**, because `body` paints an opaque `--bg` across the whole window
-   and the transparent `--sidebar` sits on that rather than on the material. Showing it is a small
-   change (move the background from `body` to `.main`, so only the sidebar is clear), but it changes
-   how the app looks on both platforms, so it needs Lucas's answer to a question first: is a
-   translucent sidebar wanted, or should the materials come out?
+1. **Confirm the translucent sidebar on macOS.** Done and verified on Windows (2026-09-17): the
+   materials that had never been visible now are, because `body` no longer paints over them. The
+   macOS side is the same two lines of CSS and the same already-clear `backgroundColor`, so vibrancy
+   should now show through the sidebar there too - but that has not been seen, only reasoned. Open
+   the app on the Mac and check the sidebar picks up what is behind the window.
 2. The front end (§7 working order). Landed on the Mac on 2026-09-17: motion on the Shuffle screen,
    the visual overhaul towards Apple's language, an Appearance setting (Automatic/Light/Dark), the
    Dashboard as the opening tab, and wider list screens.
@@ -1733,3 +1731,28 @@ machines, not Lucas's.
     misalignment for something that looks more like a bug. A list that really is longer is allowed
     to look longer, and the real fault was the wrapping.
   - No new tests: CSS, which the unit tests do not reach. 312 still pass.
+- **2026-09-17:** Made the sidebar actually translucent, so the window materials finally show.
+  - **Both materials had been invisible since the day they were set.** `backgroundMaterial: 'mica'`
+    on Windows and `vibrancy: 'sidebar'` on macOS were doing nothing, because `body` painted an
+    opaque `--bg` across the whole window and the transparent `--sidebar` sat on that rather than on
+    the material. Found while finishing the Windows chrome and left as a question, since it changes
+    how the app looks on both platforms; *(Lucas, 2026-09-17)* chose to show it.
+  - **The fix is two lines**: `body` is `transparent` and `.main` carries `--bg`. So the page still
+    paints everything except the sidebar, and the sidebar alone is see-through.
+  - **The window's own `backgroundColor` had to go clear on Windows too** (`#00000000`, as macOS
+    already was), because an opaque window background paints over the material regardless of what
+    the page does.
+  - **A theme switch would have undone it.** The handler called `setBackgroundColor` on every
+    `nativeTheme` change for both non-macOS platforms, which would have put an opaque colour back
+    and killed the translucency the moment Appearance changed. Windows now only reapplies
+    `setTitleBarOverlay`; the branch that still sets a background colour is for platforms with no
+    material.
+  - **Verified by sampling the window's pixels rather than trusting the CSS**: the sidebar reads as
+    the material and follows the theme - 32,32,32 in dark, 243,243,243 in light - while `.main` is
+    exactly `--bg` and cards are exactly `--panel`. `body`, `html` and `.sidebar` all compute to
+    fully transparent.
+  - **It degrades to the old look, not to a hole**: with no material, or with the desktop's
+    transparency effects switched off, the window's own colour shows through the sidebar instead.
+  - **Not yet seen on macOS** - same CSS, same already-clear background, so vibrancy should show,
+    but that is reasoning rather than a result (Resume here).
+  - No new tests: window configuration and CSS. 312 still pass.

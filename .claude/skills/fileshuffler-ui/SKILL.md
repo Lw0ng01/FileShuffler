@@ -102,8 +102,20 @@ Three things follow, and each one silently breaks something if forgotten:
   top-right of `.main`. `.is-mac` and `.is-windows` both add 46px of top padding to the sidebar and
   to `.main`, which is what keeps the first row of a screen out from under them. Those classes are
   set in `main.tsx` from the user agent, because the renderer has no Node access.
-- **`--sidebar` is transparent on macOS** so the vibrancy shows. Give it a real surface on any
-  platform that has no window material.
+- **The sidebar is the only translucent surface, and that is load-bearing.** `body` is
+  `transparent` and `.main` carries `--bg`, so the window's material - Mica on Windows, vibrancy on
+  macOS - shows through the sidebar and nowhere else. Leaving the background on `body` is what kept
+  both materials invisible from the day they were set *(fixed 2026-09-17, Lucas's call)*. Two rules
+  follow: **never give `body` a background again**, and anything pinned over scrolling content
+  (`.titlebar`, `.screen-header`) must paint `--bg` itself, because there is no longer an opaque
+  body underneath it. Give `--sidebar` a real colour on any platform with no material to show.
+  - The window's `backgroundColor` is `#00000000` on both, or an opaque colour paints over the
+    material. That also means `setBackgroundColor` must not be called on a theme change there -
+    only `setTitleBarOverlay`.
+  - Verified on Windows by sampling the window's pixels: the sidebar reads as the material and
+    tracks the theme (32,32,32 dark, 243,243,243 light) while `.main` is exactly `--bg`. Where
+    there is no material, or the desktop has transparency effects off, it falls back to the flat
+    surface the app had before rather than to a hole.
 
 `mainWindow.ts` owns this, and `backgroundColor` follows `nativeTheme` - it was hard-coded dark,
 which flashed dark at every launch for a light-mode user. Its two values **are** `--bg` from
@@ -138,12 +150,9 @@ Two things follow:
   rest there is no line, so a screen keeps the clean top it was designed with. It is a `box-shadow`
   rather than a `border-bottom` so that appearing cannot shift the content below it by a pixel.
 
-**Open - whether the sidebar should be translucent.** `backgroundMaterial: 'mica'` is set on
-Windows and `vibrancy: 'sidebar'` on macOS, but **neither is visible**: `body` paints an opaque
-`--bg` over the whole window, and the transparent `--sidebar` sits on top of that rather than on
-the material. Showing it means moving that background from `body` to `.main` so only the sidebar is
-clear. That is a real change in how the app looks, on both platforms, so it is Lucas's call - and
-worth asking whether a translucent sidebar is wanted at all before writing the code.
+**Recorded - the sidebar is translucent** *(Lucas, 2026-09-17)*, which is what the materials were
+set for in the first place. See the Window chrome section above for what that constrains; the short
+version is that `body` must never take a background again.
 
 ## Lists and rows (Recorded)
 
