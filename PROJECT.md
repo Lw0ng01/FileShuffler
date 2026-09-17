@@ -13,28 +13,32 @@ care about the name; keep it unless they say otherwise.
 
 ## Resume here
 
-Last updated 2026-09-17, at the end of the Mac laptop session. **The next session is on the Windows
-desktop.** A new session starts without earlier chats or local memory. This section, the rest of
-this doc and `CLAUDE.md` (including "Working with Lucas") are the handoff; keep this section current
-at the end of each session.
+Last updated 2026-09-17, at the end of a Windows desktop session. A new session starts without
+earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md` (including
+"Working with Lucas") are the handoff; keep this section current at the end of each session.
 
-**Start of the next session - on the Windows desktop**
-1. `git checkout main && git pull`. Everything through PR #29 is on `main`, and no branch is waiting
-   for review.
+**Start of the next session**
+1. `git checkout main && git pull`. Everything through PR #30 is on `main`. **PR #31 (the Windows
+   window chrome) is waiting for review** - it is the only branch outstanding.
 2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads its binary on first
-   run), then `npm test`. Expect 305 passing, plus 7 more with `MPV_PATH` set to `mpv.exe`.
-   - **Use Command Prompt, not PowerShell**, or `npm.cmd run dev`: Windows' default execution
-     policy blocks `npm.ps1` (§5). A terminal opened before Node was installed keeps the old PATH,
-     so open a new one.
+   run), then `npm test`. Expect 305 passing, plus 7 more with `MPV_PATH` set to mpv's path.
+   - **On Windows, use Command Prompt, not PowerShell**, or `npm.cmd run dev`: Windows' default
+     execution policy blocks `npm.ps1` (§5). A terminal opened before Node was installed keeps the
+     old PATH, so open a new one.
    - winget's mpv lives in `C:\Program Files\MPV Player` and is **not** on the PATH. Add it, set
      `FILESHUFFLER_MPV`, or simply choose it in Settings, which avoids the PATH entirely.
-   - Development data is `%APPDATA%\FileShuffler Dev`, separate from an installed copy, and this
-     machine keeps its own index - so the Mac's library is not here.
-3. **Re-run Windows before anything else.** It has not been run since `driveOf` changed to group
-   files by the volume they sit on (2026-09-17). That change is guarded by `platform === 'darwin'`
-   so Windows should be untouched, but *should* is not *verified*: check the Dashboard still shows
-   `C:` and `D:` as separate drive cards with their own free space.
+   - Development data is `%APPDATA%\FileShuffler Dev` on Windows and
+     `~/Library/Application Support/FileShuffler Dev` on macOS. Each machine keeps its own index,
+     so one machine's library is not on the other.
+3. **The window chrome is now hidden on both platforms**, so a renderer change has to be checked in
+   both: the window controls sit top-left on macOS and top-right on Windows, over the page either
+   way. The `fileshuffler-ui` skill's Window chrome section says what that constrains.
 4. Then pick up the front end or the player (Next steps below).
+
+**Verified on the Windows desktop** (2026-09-17): all 312 tests pass here, including the 7 real-mpv
+ones. The drive grouping is right - the Dashboard shows `C:`, `D:` and `F:` as separate cards, and
+each card's free space matches `Win32_LogicalDisk` once the GiB-labelled-"GB" convention Explorer
+also uses is accounted for. So the `driveOf` change for macOS left Windows alone, as intended.
 
 **The Mac laptop is set up** (2026-09-17): Node 26.8.2, npm 11.19.1, and mpv 0.41 from Homebrew.
 `npm ci`, typecheck, lint and Electron 44.3.0 all work. Lucas ran `npm run dev` and the app opens
@@ -48,8 +52,8 @@ machine keeps its own index.
 - The Windows desktop is set up: Node 24.21, npm 11.19, Git 2.55 and mpv 0.41 from winget
   (§5 Existing setup notes). `npm ci`, typecheck and Electron 44.3.0 work.
 - `npm test` runs 305 unit tests. Seven more run against a real mpv when `MPV_PATH` is set, 312 in
-  all. All 312 pass on the Mac. **Windows has not been re-run since the drive-grouping change**, so
-  that is the first thing to do on the desktop.
+  all. All 312 pass on both machines, Windows last re-run on 2026-09-17 after the drive-grouping
+  and window-chrome changes.
 - Features are frozen for v1. The agreed order from here is packaging (done, apart from a
   clean-machine test), measure and harden (done, apart from Lucas's USB and clean-machine tests),
   a small refactor (done 2026-09-17: the index runs in a worker thread), then the front end
@@ -87,12 +91,13 @@ machine keeps its own index.
   Measurements, §10). Lucas confirmed the merged features work (2026-09-16).
 
 **Next steps, in order**
-1. **Finish the Windows window chrome**, which is deliberately unfinished and needs this machine.
-   macOS hides the title bar so the sidebar runs to the top edge, with a vibrant sidebar behind it.
-   Windows takes only the Mica material and keeps its normal frame, because hiding it there means
-   drawing the window controls with `titleBarOverlay` and reserving space for them, none of which
-   could be checked from a Mac (`mainWindow.ts`, and the skill's Window chrome section). Watch the
-   drag regions: the sidebar drags the window, so anything clickable inside it needs `no-drag`.
+1. **Decide whether the sidebar should be translucent.** The window materials are set on both
+   platforms - `backgroundMaterial: 'mica'` on Windows, `vibrancy: 'sidebar'` on macOS - but
+   **neither has ever been visible**, because `body` paints an opaque `--bg` across the whole window
+   and the transparent `--sidebar` sits on that rather than on the material. Showing it is a small
+   change (move the background from `body` to `.main`, so only the sidebar is clear), but it changes
+   how the app looks on both platforms, so it needs Lucas's answer to a question first: is a
+   translucent sidebar wanted, or should the materials come out?
 2. The front end (§7 working order). Landed on the Mac on 2026-09-17: motion on the Shuffle screen,
    the visual overhaul towards Apple's language, an Appearance setting (Automatic/Light/Dark), the
    Dashboard as the opening tab, and wider list screens.
@@ -1510,9 +1515,10 @@ machines, not Lucas's.
     sidebar behind it. That brings a drag region - the sidebar drags the window, so every control
     inside it opts out with `no-drag`, or it would look fine and ignore clicks - and `.is-mac`
     clearance for the traffic lights, set from the user agent since the renderer has no Node access.
-  - **Windows deliberately keeps its normal frame**, taking only the Mica material. A hidden title
-    bar there needs `titleBarOverlay` and reserved space for the window controls, none of which can
-    be checked from a Mac; shipping an undraggable window would be worse than a plain one.
+  - **Windows deliberately keeps its normal frame** for now, taking only the Mica material. A hidden
+    title bar there needs `titleBarOverlay` and reserved space for the window controls, none of which
+    can be checked from a Mac; shipping an undraggable window would be worse than a plain one.
+    Finished on the Windows desktop on 2026-09-17, below.
   - **A launch bug fixed on the way:** `backgroundColor` was hard-coded `#0e1014`, so a light-mode
     user saw a dark flash at every launch. It now follows `nativeTheme`, and keeps following it
     while running.
@@ -1639,3 +1645,39 @@ machines, not Lucas's.
     not need rediscovering.
   - Test counts corrected throughout: 305 unit, 312 with the real-mpv set.
   - Docs only, so no new tests.
+- **2026-09-17:** Hid the title bar on Windows, and confirmed the drive grouping there.
+  - **The prediction held.** `driveOf` grouping files by volume was guarded by
+    `platform === 'darwin'`, and Windows is untouched: the Dashboard shows `C:`, `D:` and `F:` as
+    separate cards, and each card's free space matches `Win32_LogicalDisk` to the gigabyte. The app
+    labels GiB as "GB", which is the same thing Explorer does, so the numbers differ from the
+    decimal capacity on the drive's label rather than from each other. All 312 tests pass here,
+    including the 7 real-mpv ones.
+  - **Windows now hides its title bar too**, so the sidebar reaches the top edge on both platforms
+    and the app stops looking like a page inside a frame on the machine it is mainly used on.
+  - **The window controls stay native** (`titleBarStyle: 'hidden'` plus `titleBarOverlay`). Drawing
+    three buttons in the page was the alternative, and it would have meant reimplementing hover,
+    snap layouts and the close affordance - badly, and on the one platform where people know exactly
+    how they should behave. The cost is that their colours are not CSS: `setTitleBarOverlay` has to
+    be called again on every theme change, or Light mode gets light glyphs on a light background.
+  - **What was checked, rather than assumed.** The controls take the right 137px of a 40px band; the
+    page owns the full window height; nothing on any of the five tabs lands under them, at 1080x720
+    or at the 760x540 minimum; both themes were switched through Settings -> Appearance and the
+    glyphs follow; and the window keeps its exact bounds across a theme change - that last one after
+    a throwaway Electron probe cleared `setBackgroundColor`, `setTitleBarOverlay` and a
+    `nativeTheme` change of moving the window, which external window-poking during testing had made
+    it look like they did.
+  - **Dragging is unchanged and still the sidebar's job.** A drag strip along the top of the main
+    area was considered and rejected: it would be transparent over a scrolling list, so content
+    would pass under it looking clickable while the press went to the window instead. Every control
+    in the sidebar was confirmed to opt out - all five nav buttons compute `no-drag`, and only the
+    brand block drags.
+  - **A launch flash fixed on the way:** `WINDOW_BACKGROUND.light` was still `#ececf0` after the
+    light palette moved to `#f2f2f7`, so every launch flashed the older, greyer background before
+    the first frame. The constant is `--bg` and now says so.
+  - **Found and left for Lucas: the window materials have never been visible.** Mica on Windows and
+    vibrancy on macOS are both set, but `body` paints an opaque `--bg` over the whole window and the
+    transparent `--sidebar` sits on that rather than on the material. The fix is small - move the
+    background from `body` to `.main` - but it changes how the app looks on both platforms, so it is
+    a question, not a commit. Recorded as the next step and as an Open entry in the UI skill.
+  - No new tests: this is Electron window configuration and CSS, neither of which the unit tests
+    reach. It was verified in the running app instead, on the machine it is specific to.

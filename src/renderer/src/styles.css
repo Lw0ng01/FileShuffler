@@ -153,9 +153,12 @@ button {
   letter-spacing: -0.01em;
 }
 
-/* The traffic lights float over the top-left of the sidebar, which is exactly where the brand sits,
-   so the whole sidebar drops below them. Only on macOS: every other platform keeps its title bar. */
-.is-mac .sidebar {
+/* No title bar means the sidebar starts at the very top edge of the window, so the brand needs the
+   clearance the title bar used to give it. On macOS there is a second reason: the traffic lights
+   float over exactly where the brand sits. Windows puts its buttons on the other side, but takes
+   the same 46px, which keeps the brand level with the page heading on both. */
+.is-mac .sidebar,
+.is-windows .sidebar {
   padding-top: 46px;
 }
 
@@ -216,8 +219,11 @@ button {
 }
 
 /* With the title bar hidden the page owns the full window height, so the content needs the
-   clearance the title bar used to provide. */
-.is-mac .main {
+   clearance the title bar used to provide. On Windows this is what keeps the first row of a screen
+   out from under the window controls, which are drawn over the top-right of this area and are 40px
+   tall (`TITLEBAR_HEIGHT` in `mainWindow.ts`) - change one and change the other. */
+.is-mac .main,
+.is-windows .main {
   padding-top: 46px;
 }
 

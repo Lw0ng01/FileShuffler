@@ -12,11 +12,40 @@ import icon from '../../resources/icon.png?asset'
  * The opaque colour behind the page, which has to match the theme or the window flashes the wrong
  * colour before the first frame paints. It was hard-coded dark, so a light-mode user saw a dark
  * flash at every launch.
+ *
+ * These are `--bg` from `styles.css`, and they have to be changed together: the light value was
+ * left behind at `#ececf0` when the palette moved to `#f2f2f7`, which flashed the older, greyer
+ * background at every launch.
  */
-const WINDOW_BACKGROUND = { dark: '#1c1c1e', light: '#ececf0' }
+const WINDOW_BACKGROUND = { dark: '#1c1c1e', light: '#f2f2f7' }
+
+/** `--text`, for the window control glyphs Windows draws over our own background. */
+const CONTROL_SYMBOL = { dark: '#f5f5f7', light: '#1d1d1f' }
+
+/**
+ * The height reserved for Windows' window controls. 40px rather than the system's 32: the controls
+ * sit in the 46px of clearance the page already leaves at the top (`.is-windows` in `styles.css`),
+ * and filling more of it keeps them from looking stranded above the first heading. Changing this
+ * means changing that clearance too.
+ */
+const TITLEBAR_HEIGHT = 40
 
 function backgroundColor(): string {
   return nativeTheme.shouldUseDarkColors ? WINDOW_BACKGROUND.dark : WINDOW_BACKGROUND.light
+}
+
+/**
+ * Windows draws the minimise, maximise and close buttons itself, over the top-right of our page,
+ * so it needs to be told what they sit on. Both colours follow the theme, and so must be reapplied
+ * with `setTitleBarOverlay` when it changes - unlike `vibrancy` on macOS, nothing here adapts on
+ * its own, and dark glyphs on a dark background would be invisible.
+ */
+function titleBarOverlay(): { color: string; symbolColor: string; height: number } {
+  return {
+    color: backgroundColor(),
+    symbolColor: nativeTheme.shouldUseDarkColors ? CONTROL_SYMBOL.dark : CONTROL_SYMBOL.light,
+    height: TITLEBAR_HEIGHT
+  }
 }
 
 /**
@@ -24,12 +53,20 @@ function backgroundColor(): string {
  *
  * macOS gets the full treatment: the title bar is hidden so the sidebar runs to the top edge, and
  * the window is translucent behind it. `backgroundColor` has to be clear for that translucency to
- * show; the page paints its own background over everything except the sidebar.
+ * show.
  *
- * Windows deliberately keeps its normal frame and only takes the Mica material. Hiding the title
- * bar there means drawing the window controls with `titleBarOverlay` and reserving space for them,
- * and none of that can be checked from a Mac - an undraggable window would be worse than a plain
- * one. Finish it in a Windows session (PROJECT.md).
+ * Neither material is actually visible yet, on either platform: `body` paints an opaque `--bg`
+ * across the whole window, and the transparent `--sidebar` sits on that rather than on the
+ * material. Moving that background to `.main` would reveal it, which is a change in how the app
+ * looks and so Lucas's to make (PROJECT.md, Next steps).
+ *
+ * Windows now hides its title bar too, so the sidebar reaches the top edge there as well. It keeps
+ * the Mica material, and `titleBarOverlay` leaves the window controls native: Windows draws them
+ * itself, in the right place, with the hover and snap behaviour people expect - drawing our own
+ * would have meant reimplementing all of that badly.
+ *
+ * What the window can be dragged by is then entirely ours to get right. The sidebar is the handle
+ * on both platforms, which is why every control inside it opts out of the drag region.
  */
 function windowChrome(): BrowserWindowConstructorOptions {
   if (process.platform === 'darwin') {
@@ -42,7 +79,12 @@ function windowChrome(): BrowserWindowConstructorOptions {
     }
   }
   if (process.platform === 'win32') {
-    return { backgroundMaterial: 'mica', backgroundColor: backgroundColor() }
+    return {
+      titleBarStyle: 'hidden',
+      titleBarOverlay: titleBarOverlay(),
+      backgroundMaterial: 'mica',
+      backgroundColor: backgroundColor()
+    }
   }
   return { backgroundColor: backgroundColor() }
 }
@@ -74,10 +116,14 @@ export function createMainWindow(): BrowserWindow {
   window.on('ready-to-show', () => window.show())
 
   // Following the system theme means following it while running, not only at launch. macOS keeps
-  // its clear background so the vibrancy stays visible.
+  // its clear background so the vibrancy stays visible, and needs nothing here.
   if (process.platform !== 'darwin') {
     const onThemeChange = (): void => {
-      if (!window.isDestroyed()) window.setBackgroundColor(backgroundColor())
+      if (window.isDestroyed()) return
+      window.setBackgroundColor(backgroundColor())
+      // The window controls are drawn by Windows, not by the page, so switching to Light in
+      // Settings would otherwise leave light glyphs on the new light background.
+      if (process.platform === 'win32') window.setTitleBarOverlay(titleBarOverlay())
     }
     nativeTheme.on('updated', onThemeChange)
     window.on('closed', () => nativeTheme.off('updated', onThemeChange))
