@@ -33,7 +33,10 @@ describe.skipIf(mpvPath === undefined)('MpvPlayer with a real mpv', { timeout: 2
   async function waitFor(
     events: PlaybackEvent[],
     matches: (event: PlaybackEvent) => boolean,
-    timeoutMs = 8000
+    // Inside the 20 s budget this suite declares, which the old 8 s default undercut: a full run
+    // starts several real mpv processes alongside 27 other test files, and a one-second clip can
+    // take longer than that to finish under the contention.
+    timeoutMs = 15000
   ): Promise<void> {
     const deadline = Date.now() + timeoutMs
     while (!events.some(matches)) {

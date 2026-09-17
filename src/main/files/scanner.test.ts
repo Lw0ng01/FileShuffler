@@ -32,10 +32,32 @@ async function collect(
 describe('driveOf', () => {
   // Asked for the platform rather than reading this machine's, so both flavours are covered
   // wherever the tests run: before this, the Windows cases only passed on Windows.
-  it('reads a Windows drive letter, and the filesystem root elsewhere', () => {
+  it('reads a Windows drive letter', () => {
     expect(driveOf('C:\\Videos\\clip.mp4', 'win32')).toBe('C:')
     expect(driveOf('D:\\clip.mp4', 'win32')).toBe('D:')
+  })
+
+  it('groups macOS files by the volume they sit on, not the filesystem root', () => {
+    // Everything on the startup disk is one drive.
     expect(driveOf('/Users/someone/clip.mp4', 'darwin')).toBe('/')
+    // Each mounted volume is its own drive. Without this every external disk on a Mac shares a
+    // single card showing one arbitrary volume's free space (PROJECT.md §7 Phase 4).
+    expect(driveOf('/Volumes/Archive/clip.mp4', 'darwin')).toBe('/Volumes/Archive')
+    expect(driveOf('/Volumes/My Passport/movies/clip.mp4', 'darwin')).toBe('/Volumes/My Passport')
+    expect(driveOf('/Volumes/Archive', 'darwin')).toBe('/Volumes/Archive')
+    // `/Volumes` itself is a folder on the startup disk, not a volume.
+    expect(driveOf('/Volumes', 'darwin')).toBe('/')
+  })
+
+  it('keeps macOS system firmlinks on the startup disk', () => {
+    // `/System/Volumes/...` is the same physical disk as `/`, not a drive of its own.
+    expect(driveOf('/System/Volumes/Data/Users/someone/clip.mp4', 'darwin')).toBe('/')
+  })
+
+  it('uses the filesystem root on other Unix systems', () => {
+    // `/Volumes` is a macOS convention, so it means nothing here.
+    expect(driveOf('/home/someone/clip.mp4', 'linux')).toBe('/')
+    expect(driveOf('/Volumes/Archive/clip.mp4', 'linux')).toBe('/')
   })
 
   it('leaves the drive empty for a relative path', () => {

@@ -19,10 +19,10 @@ memory. This section, the rest of this doc and `CLAUDE.md` (including "Working w
 handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #20 is on `main`. One branch is waiting
-   for review: `worktree-ui-foundations`, the UI skill and the Cleanup tab logged below.
+1. `git checkout main && git pull`. Everything through PR #21 is on `main`. One branch is waiting
+   for review: `worktree-cross-platform`, the macOS drive-grouping fix logged below.
 2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads on first run), then
-   `npm test`. Expect 289 passing, plus 7 more with `MPV_PATH` set to the machine's mpv.
+   `npm test`. Expect 292 passing, plus 7 more with `MPV_PATH` set to the machine's mpv.
 3. Then start the front end (Next steps below).
 
 **The Mac laptop is set up** (2026-09-17): Node 26.8.2, npm 11.19.1, and mpv 0.41 from Homebrew.
@@ -36,9 +36,9 @@ machine keeps its own index.
   and Delete with a 5-second undo before trashing. See §2, §3, §4 and §6 (Implementation notes).
 - The Windows desktop is set up: Node 24.21, npm 11.19, Git 2.55 and mpv 0.41 from winget
   (§5 Existing setup notes). `npm ci`, typecheck and Electron 44.3.0 work.
-- `npm test` runs 289 unit tests. Seven more run against a real mpv when `MPV_PATH` is set, 296 in
-  all. The 289 pass on Windows and on the Mac; the real-mpv set passes on Windows, and on the Mac
-  one of the seven is intermittent (known quirks below).
+- `npm test` runs 292 unit tests. Seven more run against a real mpv when `MPV_PATH` is set, 299 in
+  all. All 299 pass on the Mac. **Windows has not been re-run since the drive-grouping change**, so
+  that is the first thing to do on the desktop.
 - Features are frozen for v1. The agreed order from here is packaging (done, apart from a
   clean-machine test), measure and harden (done, apart from Lucas's USB and clean-machine tests),
   a small refactor (done 2026-09-17: the index runs in a worker thread), then the front end
@@ -111,11 +111,11 @@ machine keeps its own index.
   share).
 
 **Open decisions and known quirks**
-- On the Mac, the real-mpv test "only reports the newer of two back-to-back loads" is intermittent:
-  it failed twice in eight runs, each time after the correct `loaded`, with no `ended` inside the
-  8 s wait for a 1-second clip. No playback file has changed and it passes on Windows, so it reads as a timing assumption
-  that doesn't hold on this machine rather than a fault in the adapter. Worth pinning down before
-  trusting the real-mpv set on macOS.
+- ~~The intermittent real-mpv test~~: explained and fixed 2026-09-17. Its `waitFor` helper gave up
+  after 8 s inside a suite that declares 20 s, so a one-second clip could miss its own deadline in a
+  full parallel run. It now allows 15 s. Not proven beyond doubt, because no failing run was ever
+  captured with the raw mpv events logged: if it comes back, instrument the adapter rather than
+  raising the number again.
 - mpv is not bundled; people install it (§7 Phase 6 spike findings). Whether to build a custom
   player instead is open (§4 Embedded player).
 - A video restored with Undo doesn't reappear in "Recently played" (cosmetic).
@@ -1403,3 +1403,30 @@ machines, not Lucas's.
     `theme-factory` (it themes artifacts, not an Electron renderer), and replacing the undo toast
     with Sonner (it gates the delete window, so it is safety-critical working code).
   - Deliberately left to its own branch: the embedded-player spike (§4, §9 item 5).
+- **2026-09-17:** Cross-platform fixes, so the app is correct on macOS as well as Windows.
+  - **Drive grouping was wrong on macOS.** `driveOf` returned the filesystem root, which is `/` for
+    every path on a Mac. So every mounted volume collapsed into a single Dashboard card, the drive
+    filter offered one useless `/` option, and `refreshDriveSpace` wrote one `/` entry per root,
+    leaving the card showing whichever volume's free space happened to be read last. Windows was
+    never affected, since `C:` and `D:` already separate.
+  - Now `driveOf` returns the mount point: `/Volumes/<name>` for a mounted volume, `/` for the
+    startup disk. `/System/Volumes/...` deliberately stays on `/`, because those are firmlinks to
+    the startup disk rather than drives of their own. It stays pure string work, with no disk
+    access, because it runs for every file in a scan.
+  - Written as a failing test first: the new case failed with `expected '/' to be
+    '/Volumes/Archive'` before the fix. The firmlink and Linux cases passed already and stay as
+    regression guards. 292 unit tests now, up from 289.
+  - **Existing Mac indexes need one rescan.** `drive` is written per file at scan time, so rows
+    scanned before this still read `/` until Scan now rewrites them. Deliberately not migrated:
+    each machine keeps its own index and the laptop's is new, so a migration would be cost for
+    almost no one.
+  - **The intermittent real-mpv test was a budget mismatch, not a dropped event.** The suite
+    declares a 20 s timeout, but its `waitFor` helper gave up after 8 s, so in a full run - several
+    real mpv processes alongside 27 other test files - a one-second clip could miss its own
+    deadline. It passed 8/8 in isolation and failed only in full runs. `waitFor` now allows 15 s.
+    Not proven beyond doubt: no failing run was captured with the raw mpv events logged. If it
+    comes back, instrument the adapter rather than raising the number again.
+  - Audited and deliberately left alone, because they are already right on both systems:
+    `videoFolder.ts` (lowercases extensions, and `isFile()` skips links and junctions),
+    `fileIdentity.ts` (unmounting a volume removes `/Volumes/<name>`, so the parent-folder check
+    throws "can't tell" and a delete fails closed, exactly as on Windows), and `dialogs.ts`.
