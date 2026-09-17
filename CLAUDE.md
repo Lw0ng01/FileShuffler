@@ -13,6 +13,28 @@ Efficiency and good architecture matter too. Explain why non-obvious choices fit
 low memory use or migrate stacks for prestige: measurements and the embedded-player prototype
 drive stack decisions.
 
+## Working with Lucas
+
+How sessions have gone, so a new one (on another machine, with no memory of earlier chats) works
+the same way:
+- **One branch per step.** `git fetch`, confirm the previous branch is merged, then branch from
+  `origin/main` as `worktree-<topic>`. Never push to `main` or force-push. Lucas reviews and
+  merges himself; end with the `https://github.com/Lw0ng01/FileShuffler/pull/new/<branch>` link.
+- **Commits** are authored `Lucas W <71304042+Lw0ng01@users.noreply.github.com>`, with **no
+  Claude co-author or session lines** (his choice).
+- **Before committing:** `npm run lint`, `npm run typecheck`, `npm test` (with `MPV_PATH` when mpv
+  is installed). Scan the staged diff for personal data: emails other than the noreply one, local
+  paths, and real file or folder names from his library.
+- **Every branch updates `PROJECT.md`** (Resume here and the Change Log) and this file when the
+  layout or a convention changes.
+- **Check behavior in the running app**, not just the tests. A packaged build writes to the
+  installed app's data folder: use a copy of the data, and remove it afterwards. To check the UI
+  without screenshots, launch with `--remote-debugging-port` and read the page text. **Never
+  capture his whole screen**; it shows his own apps.
+- **Features are frozen for v1.** New features need his OK first; he approved Excluded folders.
+- He tests merged work himself and reports back. Explain in plain terms, recommend rather than list
+  every option, and use multiple-choice questions for real decisions.
+
 ## Hard rules (full text in PROJECT.md §2)
 
 - Never permanently delete. Trash only (`shell.trashItem`) and fail closed. Extra confirmation

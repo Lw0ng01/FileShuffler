@@ -4,8 +4,8 @@
 > change happens (see Change Log at the bottom). `CLAUDE.md` covers *how to work in the code*;
 > this file covers *what and why*.
 
-**Status:** Phase 1 (app works on macOS and runs on Windows; mpv and trash checked there;
-next: finish the Windows click-through, then package) ·
+**Status:** v1 features frozen; packaging, measure and harden, and the refactor done; next: the
+front end (Resume here) ·
 **Stack:** Electron + React + TypeScript (electron-vite) · **Name:** FileShuffler. Lucas doesn't
 care about the name; keep it unless they say otherwise.
 
@@ -13,9 +13,25 @@ care about the name; keep it unless they say otherwise.
 
 ## Resume here
 
-Last updated 2026-09-16, during measure and harden on the Windows desktop. A new
-session starts without earlier chats or local memory. This section, the rest of this doc and
-`CLAUDE.md` are the handoff; keep this section current at the end of each session.
+Last updated 2026-09-17, at the end of the long Windows desktop session (2026-09-15 to 09-17).
+The next session is on the Mac laptop. A new session starts without earlier chats or local
+memory. This section, the rest of this doc and `CLAUDE.md` (including "Working with Lucas") are the
+handoff; keep this section current at the end of each session.
+
+**Start of the next session (Mac laptop)**
+1. `git checkout main && git pull`. Everything through PR #18, plus this handoff note, is on
+   `main`; no branch is waiting to merge.
+2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads on first run), then
+   `npm test`. Expect 287 passing, plus 7 more with `MPV_PATH` set to the laptop's mpv.
+3. Run `npm run dev` once and check what was only verified on Windows so far:
+   - The index now runs in a worker thread (`src/main/library/indexWorker.ts`, loaded with
+     electron-vite's `?modulePath`). Dashboard, Stats and Settings should load, and quitting should
+     close cleanly.
+   - Settings → Excluded folders (added 2026-09-16).
+   - Development data lives in `~/Library/Application Support/FileShuffler Dev`. The laptop's index
+     starts empty (each machine has its own), and the first run copies the old `file-shuffler`
+     folder across once, if one exists.
+4. Then start the front end (Next steps below).
 
 **Where things stand**
 - The Phase 1 app works on macOS: choose a folder, shuffle, play in mpv with autoplay, Next/Back,
@@ -61,15 +77,22 @@ session starts without earlier chats or local memory. This section, the rest of 
   Measurements, §10). Lucas confirmed the merged features work (2026-09-16).
 
 **Next steps, in order**
-1. The front end (§7 working order): structure first (Cleanup as its own tab, starring from the
-   dashboard, a first-run guide when mpv is missing), then visual polish. The custom-player
-   question (§4, §9) feeds into it.
-2. Whenever convenient, Lucas: try a delete where recycling isn't supported, on a removable USB
+1. The front end (§7 working order): structure first, then visual polish. The custom-player
+   question (§4, §9) feeds into it, because mpv's own window is what Lucas finds ugly.
+   - Structure, as agreed so far: Cleanup as its own tab (`components/dashboard/CleanupSection.tsx`
+     is already separate), starring from the dashboard's lists, and a first-run guide when mpv is
+     missing (pointing to Settings).
+   - Ask Lucas before settling layout or look: the front end is where his taste decides.
+2. Whenever convenient, Lucas, on the Windows desktop: try a delete where recycling isn't supported, on a removable USB
    stick or a network share. It must fail with an error and keep the file, never delete
    permanently. His external drive doesn't count: Windows treats it as a local disk and it has a
    Recycle Bin.
-3. Whenever convenient, Lucas: install `FileShuffler-Setup-1.0.0.exe` from a separate local Windows
-   account with no development tools, as the clean-machine test (§7 Phase 6).
+3. Whenever convenient, Lucas, on the Windows desktop: build the installer (`npm run build:win`)
+   and install it from a separate local Windows account with no development tools, as the
+   clean-machine test (§7 Phase 6). Copy it to `C:\Users\Public` first so the other account can
+   reach it.
+4. Before any public release: choose a license (§9), and decide whether the unsigned-installer
+   SmartScreen warning is acceptable.
 
 **How it was tested without real videos**
 - mpv can generate test clips, for example
@@ -1328,3 +1351,8 @@ machines, not Lucas's.
   - Checked in the packaged build with a copy of Lucas's real index: Dashboard, Settings and Stats
     load real data through the worker, a second launch still just focuses the window, and a normal
     close shuts the index cleanly in about 130 ms.
+- **2026-09-17:** Handoff to the Mac laptop. "Resume here" now opens with a start-of-session
+  checklist (pull, install, and a check on macOS of the worker thread and Excluded folders, which
+  were only run on Windows). `CLAUDE.md` gained "Working with Lucas", recording how sessions have
+  worked (a branch per step that Lucas merges, commit author, personal-data checks, no
+  screenshots of his screen, the feature freeze), which until now lived only in chat history.
