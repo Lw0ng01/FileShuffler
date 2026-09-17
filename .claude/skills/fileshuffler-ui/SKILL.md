@@ -102,6 +102,14 @@ Three things follow, and each one silently breaks something if forgotten:
   top-right of `.main`. `.is-mac` and `.is-windows` both add 46px of top padding to the sidebar and
   to `.main`, which is what keeps the first row of a screen out from under them. Those classes are
   set in `main.tsx` from the user agent, because the renderer has no Node access.
+- **`--sidebar` owns most of its colour and lets the material through the rest** (`--panel` at 85%).
+  Fully transparent handed the sidebar's colour to the OS, and its *timing* with it: Windows
+  re-tints Mica with a ~225ms crossfade while the page flips in one frame, so on a theme change the
+  sidebar visibly trailed the rest of the window *(Lucas, 2026-09-17)*. Measured before and after:
+  at the moment `.main` flipped, the sidebar was 180 levels away from its final colour; now it is
+  18. **Raising the transparency brings the lag back in proportion** - that is the trade, and a
+  crossfade on the page instead was rejected because text would have to fade too and would pass
+  through an unreadable middle.
 - **The sidebar is the only translucent surface, and that is load-bearing.** `body` is
   `transparent` and `.main` carries `--bg`, so the window's material - Mica on Windows, vibrancy on
   macOS - shows through the sidebar and nowhere else. Leaving the background on `body` is what kept
