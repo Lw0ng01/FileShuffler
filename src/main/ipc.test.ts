@@ -1,28 +1,7 @@
-import type { IpcMainInvokeEvent } from 'electron'
 import { describe, expect, it, vi } from 'vitest'
 import { CHANNELS } from '../shared/shuffler'
-import { registerShufflerIpc, type IpcRegistry, type ShufflerBackend } from './ipc'
-
-class FakeIpc implements IpcRegistry {
-  readonly handlers = new Map<string, (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown>()
-
-  handle(
-    channel: string,
-    listener: (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown
-  ): void {
-    this.handlers.set(channel, listener)
-  }
-
-  removeHandler(channel: string): void {
-    this.handlers.delete(channel)
-  }
-
-  invoke(channel: string, ...args: unknown[]): unknown {
-    const handler = this.handlers.get(channel)
-    if (handler === undefined) throw new Error(`No handler for ${channel}`)
-    return handler({} as IpcMainInvokeEvent, ...args)
-  }
-}
+import { registerShufflerIpc, type ShufflerBackend } from './ipc'
+import { FakeIpc } from './testing/fakeIpc'
 
 function setup(trusted = true): { ipc: FakeIpc; backend: ShufflerBackend; unregister: () => void } {
   const ipc = new FakeIpc()

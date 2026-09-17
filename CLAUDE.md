@@ -27,6 +27,9 @@ drive stack decisions.
 
 Electron + React + TypeScript via electron-vite. Tests use vitest.
 - `src/main/`: main process: application coordinator and adapters (filesystem, trash, player control)
+  - `src/main/index.ts`: startup and shutdown only. `services.ts` builds the services and joins
+    them to Electron (the only place that does), `mainWindow.ts` holds the window and its security
+    settings, and `dialogs.ts` every system picker and message box
   - `src/main/domain/`: pure logic with tests beside it (`shuffle.ts` is the shuffle engine,
     PROJECT.md §3)
   - `src/main/app/`: the coordinator that connects the shuffle session to a player
@@ -37,6 +40,12 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
     `scanner.ts`). Only `progressStore.ts` writes, and only inside the app's data folder
   - `src/main/library/`: the index store (`indexDb.ts`) on Node's built-in SQLite (PROJECT.md §5).
     `openIndex.ts` sets a damaged index aside at startup instead of crashing
+    - The database lives in a worker thread (`indexWorker.ts`). Services get an `IndexStore`
+      (`indexStore.ts`): every operation returns a promise, answered in the order sent
+      (`workerIndexStore.ts`). A new `IndexDb` method must be added to `INDEX_METHODS`, or the
+      worker refuses it
+    - Tests use `localIndexStore(new IndexDb(':memory:'))`, which answers a turn later like the
+      worker does
   - `src/main/app/indexerService.ts`: roots, excluded folders (added to the scanner's skip rules
     at each scan), scans and the numbers the dashboard reads
   - `src/main/libraryIpc.ts`: library commands, with the same sender and argument checks as `ipc.ts`
@@ -46,11 +55,12 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
     stored in `files/settingsStore.ts`; mpv is located by `playback/mpv/findMpv.ts` (`locateMpv`)
     and checked by `playback/mpv/probeMpv.ts` before a choice is saved
   - `src/main/app/shufflerService.ts`: one folder session (shuffle, coordinator, player lifecycle)
-  - `src/main/ipc.ts`: renderer commands, with sender and argument checks
+  - `src/main/ipc.ts`: renderer commands, with sender and argument checks. The IPC tests share
+    `testing/fakeIpc.ts`
 - `src/preload/`: the only bridge to the UI. Expose narrow, typed functions; keep `index.d.ts` in sync
 - `src/renderer/`: React UI, presentation only (`components/`, one hook per area in `hooks/`, and
   shared display formatting in `format.ts`). The sidebar switches between Shuffle, Dashboard,
-  Stats and Settings
+  Stats and Settings. The dashboard's sections live in `components/dashboard/`
 - `src/shared/shuffler.ts`, `library.ts`, `stats.ts` and `settings.ts`: the view types, API types
   and channel names shared by all three
 
@@ -84,7 +94,7 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
   - Don't assume pushed events: VLC is polled.
   - Unload the file and observe completion before trashing it.
 - Keep the security baseline:
-  - In `src/main/index.ts`: sandbox on, context isolation on, Node integration off, navigation and
+  - In `src/main/mainWindow.ts`: sandbox on, context isolation on, Node integration off, navigation and
     new windows blocked. Keep the strict CSP in `src/renderer/index.html`.
   - Validate IPC senders and input at runtime in main.
   - Never expose raw `ipcRenderer`, shell execution or arbitrary paths. File actions resolve

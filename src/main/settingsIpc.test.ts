@@ -1,30 +1,7 @@
-import type { IpcMainInvokeEvent } from 'electron'
 import { describe, expect, it, vi } from 'vitest'
 import { SETTINGS_CHANNELS } from '../shared/settings'
-import type { IpcRegistry } from './ipc'
 import { registerSettingsIpc, type SettingsBackend } from './settingsIpc'
-
-/** Stands in for Electron's ipcMain, keeping the handlers so a test can call them. */
-class FakeIpc implements IpcRegistry {
-  readonly handlers = new Map<string, (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown>()
-
-  handle(
-    channel: string,
-    listener: (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown
-  ): void {
-    this.handlers.set(channel, listener)
-  }
-
-  removeHandler(channel: string): void {
-    this.handlers.delete(channel)
-  }
-
-  invoke(channel: string, ...args: unknown[]): unknown {
-    const handler = this.handlers.get(channel)
-    if (handler === undefined) throw new Error(`no handler for ${channel}`)
-    return handler({} as IpcMainInvokeEvent, ...args)
-  }
-}
+import { FakeIpc } from './testing/fakeIpc'
 
 function setup(trusted = true): {
   ipc: FakeIpc
