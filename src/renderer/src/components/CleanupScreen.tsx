@@ -35,7 +35,7 @@ export function CleanupScreen({
   actions: LibraryActions
 }): React.JSX.Element {
   return (
-    <div className="screen">
+    <div className="screen wide">
       <header className="screen-header">
         <h1>Cleanup</h1>
         {cleanup.loaded && (

@@ -231,8 +231,17 @@ button {
   display: flex;
   flex-direction: column;
   gap: 24px;
+  /* Reading width. Right for Shuffle and Settings, which are mostly prose and one action. */
   max-width: 760px;
   margin: 0 auto;
+}
+
+/* The screens that hold lists and grids. Widening these fits more per row instead of stretching
+   the same few things - `.two-col` gets two real columns sooner, and more drive cards fit across.
+   Deliberately not applied to Shuffle: its ready card holds a count and one button, so a wider
+   card would only be more air around the same content, which is what "sparse" actually means. */
+.screen.wide {
+  max-width: 1040px;
 }
 
 .screen-header {

@@ -19,8 +19,8 @@ memory. This section, the rest of this doc and `CLAUDE.md` (including "Working w
 handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #26 is on `main`. One branch is waiting
-   for review: `worktree-commit-voice`, the commit-message convention logged below.
+1. `git checkout main && git pull`. Everything through PR #27 is on `main`. One branch is waiting
+   for review: `worktree-layout-density`, the Dashboard-first tab order and wider screens below.
 2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads on first run), then
    `npm test`. Expect 301 passing, plus 7 more with `MPV_PATH` set to the machine's mpv.
 3. Then start the front end (Next steps below).
@@ -1541,3 +1541,23 @@ machines, not Lucas's.
     15 s budget raised earlier the same day. That disproves the timeout explanation, so the quirk is
     reopened above. Nothing here touches playback - only `CLAUDE.md` and `PROJECT.md` changed - so
     chasing it belongs on its own branch.
+- **2026-09-17:** Dashboard became the opening tab, and the list screens got wider.
+  - **Dashboard is first in the sidebar and the tab the app opens on** *(Lucas, 2026-09-17: it makes
+    more sense)*. The app is as much a library tool as a shuffler now, and a shuffle starts from
+    choosing a folder rather than from the app opening.
+  - **Why the screens are not all wider.** The overhaul looked sparse because the decoration was
+    removed without reworking the layout. But widening everything would have made it worse: the
+    Shuffle ready card holds a count, a line of text and one button, so a wider card is just more
+    air around the same content. `.screen` keeps its 760px reading width, and a `wide` variant at
+    1040px goes on the screens built from lists and grids - Dashboard, Cleanup and Stats - where the
+    extra width fits more per row rather than stretching what is there.
+  - An earlier claim corrected: the content column was said to leave about 160px of dead gutter each
+    side. That only holds maximised. At the default 1080px window the content box is about 796px
+    against a 760px cap, so there was almost no slack; on a maximised laptop display there is about
+    230px a side. Widening helps the second case and does nothing in the first.
+  - Worth knowing for the public download (`CLAUDE.md`): a new user with nothing indexed now lands
+    on an empty dashboard rather than on "pick a folder". That strengthens the case for the
+    first-run guide still outstanding in Next steps.
+  - `PROJECT.md` §6's layout sketch is stale - it still shows Dashboard and Settings marked "Soon" -
+    and was left alone here rather than rewritten on a layout branch.
+  - Renderer only, so no new tests: 301 unit tests, 308 with the real-mpv set.

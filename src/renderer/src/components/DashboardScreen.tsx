@@ -35,7 +35,7 @@ export function DashboardScreen({
   const hasRoots = view.roots.length > 0
 
   return (
-    <div className="screen">
+    <div className="screen wide">
       <header className="screen-header">
         <h1>Dashboard</h1>
         <div className="folder">
