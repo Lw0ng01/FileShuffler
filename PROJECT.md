@@ -19,10 +19,10 @@ memory. This section, the rest of this doc and `CLAUDE.md` (including "Working w
 handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #27 is on `main`. One branch is waiting
-   for review: `worktree-layout-density`, the Dashboard-first tab order and wider screens below.
+1. `git checkout main && git pull`. Everything through PR #28 is on `main`. One branch is waiting
+   for review: `worktree-mpv-flake`, the playback investigation logged below.
 2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads on first run), then
-   `npm test`. Expect 301 passing, plus 7 more with `MPV_PATH` set to the machine's mpv.
+   `npm test`. Expect 305 passing, plus 7 more with `MPV_PATH` set to the machine's mpv.
 3. Then start the front end (Next steps below).
 
 **The Mac laptop is set up** (2026-09-17): Node 26.8.2, npm 11.19.1, and mpv 0.41 from Homebrew.
@@ -111,15 +111,31 @@ machine keeps its own index.
   share).
 
 **Open decisions and known quirks**
-- **The intermittent real-mpv test is open again**, and the earlier explanation was wrong. "Only
-  reports the newer of two back-to-back loads" looked like a timeout that was too tight, so
-  `waitFor` went from 8 s to 15 s on 2026-09-17. It failed again the same day at 15201 ms: the
-  raised budget only made the failure slower, so the timeout was never the cause.
-  - It still passes in isolation (6/6) and fails only under a full parallel run, and every failure
-    so far has the same shape - the correct `loaded` for the newer file, then no `ended` at all.
-  - Next step is to instrument the adapter and capture the raw mpv events from a failing run,
-    rather than raising the number a third time. A dropped or misattributed `end-file` would mean
-    autoplay can silently stall, which is worth knowing for certain either way.
+- **The intermittent real-mpv test**, "only reports the newer of two back-to-back loads", fails
+  roughly once in thirty runs. Every failure has the same shape: the correct `loaded` for the newer
+  file, then no `ended` at all.
+  - **The adapter is not the cause.** Four deterministic tests replay the orderings that could
+    produce exactly that signature against the fake mpv - both files starting before either reports
+    being loaded, the replaced file ending with `stop` and with `redirect`, and all of the newer
+    file's events arriving before its `loadfile` reply - and it behaves correctly in all of them
+    (`mpvPlayer.test.ts`). So nothing here drops or misattributes an end-of-file, and autoplay is
+    not silently stalling.
+  - **Two earlier explanations were both wrong.** It is not the timeout: raising `waitFor` from 8 s
+    to 15 s only made the failure slower (15201 ms). It is not parallel load either: 12 filtered
+    runs, 15 whole-file runs and 6 full-suite runs produced one failure, and that one came from a
+    whole-file run on its own.
+  - What is left is mpv itself not finishing a one-second clip inside 15 s. Filtering down to the
+    single test never reproduced it, so the preceding tests in the file matter, which points at
+    process teardown rather than anything about two back-to-back loads.
+  - **The next failure will explain itself.** The integration test now records every raw mpv message
+    with the milliseconds since the player started, and prints them on a timeout, which tells
+    "never arrived" apart from "arrived late" apart from "arrived with a reason that maps to
+    silence". Read that before theorising a fourth time.
+  - One latent hazard found and deliberately left alone: `endOutcome` turns any `end-file` reason
+    other than `eof` and `error` into silence, so a reason this code has never seen would look
+    exactly like this flake. That is right for `stop` and `redirect`, where the file was replaced on
+    purpose, and which reasons matter cannot be known without catching one. Asserted by a test
+    rather than changed on a guess.
 - mpv is not bundled; people install it (§7 Phase 6 spike findings). Whether to build a custom
   player instead is open (§4 Embedded player).
 - A video restored with Undo doesn't reappear in "Recently played" (cosmetic).
@@ -1561,3 +1577,26 @@ machines, not Lucas's.
   - `PROJECT.md` §6's layout sketch is stale - it still shows Dashboard and Settings marked "Soon" -
     and was left alone here rather than rewritten on a layout branch.
   - Renderer only, so no new tests: 301 unit tests, 308 with the real-mpv set.
+- **2026-09-17:** Chased the real-mpv flake, and cleared the adapter of it.
+  - **The adapter is not dropping end-of-file.** Four deterministic tests replay the orderings that
+    could produce the observed signature - the correct `loaded`, then silence - against the fake
+    mpv: both files starting before either reports being loaded, the replaced file ending with
+    `stop` and with `redirect`, and all of the newer file's events arriving before its `loadfile`
+    reply. It behaves correctly in every one, so autoplay is not silently stalling. That was the
+    part worth knowing, and it is now guarded rather than assumed.
+  - **Both earlier explanations were wrong, and the second one was wrong in a way worth recording.**
+    Not the timeout: raising `waitFor` to 15 s only made the failure slower. Not parallel load
+    either: 33 runs this session - 12 filtered, 15 whole-file, 6 full-suite - produced a single
+    failure, and it came from a whole-file run on its own, which is the opposite of what was
+    claimed. Guessing at a race twice cost more than instrumenting once would have.
+  - **The instrumentation is the durable part.** The integration test now records every raw mpv
+    message with the milliseconds since the player started and prints them on a timeout, so the next
+    occurrence distinguishes "never arrived" from "arrived late" from "arrived with a reason that
+    maps to silence" - on either machine, without anyone having to be watching.
+  - Filtering to the single test never reproduced it, so the preceding tests in the file matter.
+    That points at process teardown rather than anything intrinsic to two back-to-back loads.
+  - A latent hazard was found and left alone on purpose: any `end-file` reason other than `eof` and
+    `error` produces no event at all, which is correct for `stop` and `redirect` but would make an
+    unfamiliar reason look exactly like this flake. Asserted by a test rather than changed, since
+    which reasons matter cannot be known without catching one.
+  - 305 unit tests, up from 301. No production code changed.

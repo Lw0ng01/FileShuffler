@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { PlaybackEvent } from '../types'
+import type { MpvEvent } from './ipcClient'
 import { launchMpv, type MpvPlayer } from './mpvPlayer'
 
 /**
@@ -19,12 +20,28 @@ describe.skipIf(mpvPath === undefined)('MpvPlayer with a real mpv', { timeout: 2
     await Promise.all(players.splice(0).map((player) => player.dispose()))
   })
 
+  /**
+   * Every mpv message of the current test, with the milliseconds since it started.
+   *
+   * A timeout here used to report only the events the adapter chose to emit, which cannot tell
+   * "mpv never said anything" apart from "mpv ended the file for a reason that maps to no event at
+   * all" - `endOutcome` turns everything except `eof` and `error` into silence. Two attempts to
+   * explain this flake were guesses for want of exactly this. Module scope is safe because vitest
+   * runs the tests in a file one after another unless they are marked concurrent.
+   */
+  let raw: { at: number; event: MpvEvent }[] = []
+
   async function start(): Promise<{ player: MpvPlayer; events: PlaybackEvent[] }> {
     const player = await launchMpv({
       mpvPath: mpvPath as string,
       extraArgs: ['--vo=null', '--ao=null']
     })
     players.push(player)
+    const startedAt = Date.now()
+    raw = []
+    // Test-only access to the IPC client, to record what mpv actually sent before the adapter
+    // interpreted it.
+    player['client'].onEvent((event) => raw.push({ at: Date.now() - startedAt, event }))
     const events: PlaybackEvent[] = []
     player.onEvent((event) => events.push(event))
     return { player, events }
@@ -41,7 +58,11 @@ describe.skipIf(mpvPath === undefined)('MpvPlayer with a real mpv', { timeout: 2
     const deadline = Date.now() + timeoutMs
     while (!events.some(matches)) {
       if (Date.now() > deadline) {
-        throw new Error(`Timed out; events so far: ${JSON.stringify(events)}`)
+        throw new Error(
+          `Timed out after ${timeoutMs} ms.\n` +
+            `Emitted: ${JSON.stringify(events)}\n` +
+            `Raw mpv messages: ${JSON.stringify(raw)}`
+        )
       }
       await new Promise((resolve) => setTimeout(resolve, 20))
     }

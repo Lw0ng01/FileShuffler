@@ -111,6 +111,93 @@ describe('MpvPlayer', () => {
     expect(events).toEqual([{ type: 'loaded', token: second }])
   })
 
+  /*
+   * The real-mpv test "only reports the newer of two back-to-back loads" fails roughly once in
+   * thirty runs, always the same way: the correct `loaded` for the newer file, then no `ended` at
+   * all. Two explanations were guessed and both were wrong, and 33 instrumented runs failed to
+   * catch it again. These replay the orderings that could produce that signature against the fake
+   * mpv, so the adapter's half of the question is settled without waiting for the race.
+   */
+  it('reports the newer load when both files start before either reports being loaded', async () => {
+    const { mpv, player, events } = setup()
+    player.load('/videos/a.mkv')
+    const second = player.load('/videos/b.mkv')
+    await flush()
+
+    // `file-loaded` carries no entry id of its own, so it is attributed to the most recent
+    // `start-file`. Two starts arriving before it is the ordering that tests that.
+    mpv.send({ event: 'start-file', playlist_entry_id: 1 })
+    mpv.send({ event: 'start-file', playlist_entry_id: 2 })
+    mpv.send({ event: 'file-loaded' })
+    mpv.send({ event: 'end-file', reason: 'stop', playlist_entry_id: 1 })
+    mpv.send({ event: 'end-file', reason: 'eof', playlist_entry_id: 2 })
+    await flush()
+
+    expect(events).toEqual([
+      { type: 'loaded', token: second },
+      { type: 'ended', token: second }
+    ])
+  })
+
+  it('still ends the newer load when the replaced file ends with redirect', async () => {
+    const { mpv, player, events } = setup()
+    player.load('/videos/a.mkv')
+    const second = player.load('/videos/b.mkv')
+    await flush()
+
+    // mpv uses `redirect` as well as `stop` for a file replaced underneath it; neither is a
+    // natural end, and neither may swallow the newer file's.
+    mpv.send({ event: 'start-file', playlist_entry_id: 1 })
+    mpv.send({ event: 'end-file', reason: 'redirect', playlist_entry_id: 1 })
+    mpv.send({ event: 'start-file', playlist_entry_id: 2 })
+    mpv.send({ event: 'file-loaded' })
+    mpv.send({ event: 'end-file', reason: 'eof', playlist_entry_id: 2 })
+    await flush()
+
+    expect(events).toEqual([
+      { type: 'loaded', token: second },
+      { type: 'ended', token: second }
+    ])
+  })
+
+  it('reports the newer load whose events all arrive before its loadfile reply', async () => {
+    const { mpv, player, events } = setup()
+    player.load('/videos/a.mkv')
+    mpv.holdReplies = true
+    const second = player.load('/videos/b.mkv')
+    await flush()
+
+    mpv.send({ event: 'start-file', playlist_entry_id: 2 })
+    mpv.send({ event: 'file-loaded' })
+    mpv.send({ event: 'end-file', reason: 'eof', playlist_entry_id: 2 })
+    await flush()
+
+    mpv.releaseReplies()
+    await flush()
+    expect(events).toEqual([
+      { type: 'loaded', token: second },
+      { type: 'ended', token: second }
+    ])
+  })
+
+  it('says nothing at all when a file ends for a reason it does not recognise', async () => {
+    const { mpv, player, events } = setup()
+    player.load('/videos/a.mkv')
+    await flush()
+
+    mpv.send({ event: 'start-file', playlist_entry_id: 1 })
+    mpv.send({ event: 'file-loaded' })
+    mpv.send({ event: 'end-file', reason: 'something-new', playlist_entry_id: 1 })
+    await flush()
+
+    // Current behaviour, asserted rather than changed: only `eof` and `error` produce an event, so
+    // any other reason is silence, and a caller waiting on that load waits forever. That is right
+    // for `stop` and `redirect`, where the file was replaced deliberately, but it means a reason
+    // this code has never seen would look exactly like the flake above. Left as is because which
+    // reasons matter cannot be known without catching one.
+    expect(events).toEqual([{ type: 'loaded', token: 1 }])
+  })
+
   it('still reports events that arrive before the loadfile reply', async () => {
     const { mpv, player, events } = setup()
     mpv.holdReplies = true
