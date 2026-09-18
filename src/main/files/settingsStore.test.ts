@@ -54,9 +54,8 @@ describe('SettingsStore', () => {
     await writeFile(file, '{ not json', 'utf8')
     expect(await new SettingsStore(file).get()).toEqual(defaults)
 
-    // Readable, but with no `player`: an upgrade rather than a fresh install, so it keeps mpv.
     await writeFile(file, JSON.stringify({ version: 1, mpvPath: 42 }), 'utf8')
-    expect(await new SettingsStore(file).get()).toEqual({ ...defaults, player: 'mpv' })
+    expect(await new SettingsStore(file).get()).toEqual(defaults)
 
     await writeFile(file, JSON.stringify({ version: 99, mpvPath: 'D:\\mpv.exe' }), 'utf8')
     expect(await new SettingsStore(file).get()).toEqual(defaults)
@@ -81,24 +80,27 @@ describe('SettingsStore', () => {
     expect(await new SettingsStore(file).get()).toEqual({
       mpvPath: 'D:\\mpv.exe',
       appearance: 'system',
-      player: 'mpv'
+      player: 'builtin'
     })
   })
 
-  it('leaves an existing install on mpv, and starts a new one on the built-in player', async () => {
-    // Someone upgrading already has mpv working, and quietly changing what plays their videos
-    // would be a surprise. A fresh install has no mpv at all, so the built-in player is the only
-    // thing that can work out of the box.
+  it('uses the built-in player unless mpv was actually chosen', async () => {
+    // Keeping upgrades on mpv was tried and was exactly wrong: the point of the built-in player is
+    // not to see mpv's window, so a settings file written before it existed must not pin someone
+    // to mpv. Only an explicit choice does that.
     await writeFile(file, JSON.stringify({ version: 1, mpvPath: null }), 'utf8')
-    expect((await new SettingsStore(file).get()).player).toBe('mpv')
+    expect((await new SettingsStore(file).get()).player).toBe('builtin')
 
     await rm(file, { force: true })
     expect((await new SettingsStore(file).get()).player).toBe('builtin')
+
+    await new SettingsStore(file).setPlayer('mpv')
+    expect((await new SettingsStore(file).get()).player).toBe('mpv')
   })
 
-  it('reads an unrecognised player as mpv, the safe direction for an upgrade', async () => {
+  it('reads an unrecognised player as the built-in one', async () => {
     await writeFile(file, JSON.stringify({ version: 1, player: 'vlc' }), 'utf8')
-    expect((await new SettingsStore(file).get()).player).toBe('mpv')
+    expect((await new SettingsStore(file).get()).player).toBe('builtin')
   })
 
   it('reads an unrecognised theme as following the system', async () => {

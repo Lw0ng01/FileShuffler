@@ -18,9 +18,9 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
 "Working with Lucas") are the handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #38 is on `main`. One branch is waiting
-   for review: **`worktree-builtin-player`**, the in-app player. If it has been merged, nothing else
-   is outstanding.
+1. `git checkout main && git pull`. Everything through PR #39 is on `main`. One branch is waiting
+   for review: **`worktree-player-fixes`**, which made the built-in player the default and stopped
+   it marking files as failed. If it has been merged, nothing else is outstanding.
    - `worktree-sidebar-material` is a dead duplicate of the merged `worktree-sidebar-mica`, kept
      only because rewriting a pushed branch means a force-push. Delete it.
 2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads its binary on first
@@ -1972,3 +1972,32 @@ machines, not Lucas's.
     data-folder override.
   - Still to come: controls over the video, fullscreen and keyboard (branch 2), then the system
     player as the fallback for what Chromium cannot decode, which is what lets mpv go entirely.
+- **2026-09-17:** Fixed three things the in-app player got wrong in practice.
+  - *(Lucas, 2026-09-17, after merging)*: "Is the black box supposed to be the built in player? It
+    still brings mpv pop up." Three separate faults, and two of them were decisions rather than
+    slips.
+  - **mpv still opened, by design, and the design was wrong.** A settings file written before the
+    built-in player existed was read as "keep mpv", so the one person who asked for the built-in
+    player got mpv and the feature looked like it had not shipped. The reasoning - do not surprise
+    an upgrade - was sound in general and wrong here: the entire point is not to see mpv's window.
+    An absent or unrecognised choice now means the built-in player, and only an explicit choice
+    means mpv.
+  - **The black box was the player, showing with nothing in it.** The surface appeared whenever the
+    Shuffle tab was open, including before anything had played. It is now hidden until a file is
+    actually loaded: no video, nothing on screen.
+  - **The real bug: files were being marked failed and skipped.** Chromium refuses `play()` while
+    the window is in the background - "video-only background media was paused to save power" - and
+    that rejection was reported as a playback failure. The coordinator did what it was told and
+    skipped the file, so a whole cycle could empty itself without playing anything, which is what
+    the test run showed: `failed: 2` of 2, `opened: 0`.
+    - `loaded` now comes from the file being open (`loadeddata`), which is what the interface says
+      it means, rather than from playback starting.
+    - A refused `play()` is treated as "not now", not as a broken file, and is retried when the
+      window becomes visible again - otherwise a file started in the background would sit paused
+      forever with nothing to say so.
+    - Confirmed after the fix: the same run reports `opened: 1, failed: 0` with no error, and the
+      clip plays through once the window is visible.
+  - Worth keeping in mind for the next branch: none of the three could have been caught by a unit
+    test. They came from starting the app, pressing play, and looking at it.
+  - 341 tests, unchanged in number; the settings-store tests now assert the new default instead of
+    the old one.
