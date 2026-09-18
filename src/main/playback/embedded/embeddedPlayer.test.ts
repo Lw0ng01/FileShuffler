@@ -34,6 +34,9 @@ function fakeTransport(options: { live?: boolean } = {}): PlayerTransport & {
       this.cleared += 1
       this.sources.clear()
     },
+    pathFor(token: number): string | null {
+      return this.sources.get(token) ?? null
+    },
     reply(message): void {
       for (const listener of [...listeners]) listener(message)
     }
@@ -85,9 +88,104 @@ describe('EmbeddedPlayer', () => {
     const events = collect(player)
     const token = player.load('C:/videos/a.mp4')
 
-    transport.reply({ type: 'failed', token, reason: 'DEMUXER_ERROR' })
+    transport.reply({ type: 'failed', token, reason: 'DEMUXER_ERROR', code: 2 })
 
     expect(events).toEqual([{ type: 'failed', token, reason: 'DEMUXER_ERROR' }])
+  })
+
+  describe('when the format is one Chromium cannot decode', () => {
+    it('opens it in the system player and reports it as playing elsewhere', async () => {
+      const opened: string[] = []
+      const transport = fakeTransport()
+      const player = new EmbeddedPlayer({
+        transport,
+        openExternally: async (path) => {
+          opened.push(path)
+          return ''
+        }
+      })
+      const events = collect(player)
+      const token = player.load('C:/videos/a.mkv')
+
+      transport.reply({ type: 'failed', token, reason: 'not supported', code: 4 })
+      await Promise.resolve()
+      await Promise.resolve()
+
+      expect(opened).toEqual(['C:/videos/a.mkv'])
+      // Not `failed`: the shuffle must stay on it, or the next file starts over the top of it.
+      expect(events).toEqual([{ type: 'external', token }])
+    })
+
+    it('reports a real failure when the system player cannot open it either', async () => {
+      const transport = fakeTransport()
+      const player = new EmbeddedPlayer({
+        transport,
+        // `shell.openPath` answers with the reason rather than throwing.
+        openExternally: async () => 'No application is associated with this file'
+      })
+      const events = collect(player)
+      const token = player.load('C:/videos/a.mkv')
+
+      transport.reply({ type: 'failed', token, reason: 'not supported', code: 4 })
+      await Promise.resolve()
+      await Promise.resolve()
+
+      expect(events).toEqual([
+        { type: 'failed', token, reason: 'No application is associated with this file' }
+      ])
+    })
+
+    it('reports a real failure when opening throws', async () => {
+      const transport = fakeTransport()
+      const player = new EmbeddedPlayer({
+        transport,
+        openExternally: async () => {
+          throw new Error('shell is unavailable')
+        }
+      })
+      const events = collect(player)
+      const token = player.load('C:/videos/a.mkv')
+
+      transport.reply({ type: 'failed', token, reason: 'not supported', code: 4 })
+      await Promise.resolve()
+      await Promise.resolve()
+
+      expect(events).toEqual([{ type: 'failed', token, reason: 'shell is unavailable' }])
+    })
+
+    it('leaves a file that simply would not read alone', async () => {
+      const opened: string[] = []
+      const transport = fakeTransport()
+      const player = new EmbeddedPlayer({
+        transport,
+        openExternally: async (path) => {
+          opened.push(path)
+          return ''
+        }
+      })
+      const events = collect(player)
+      const token = player.load('C:/videos/a.mp4')
+
+      // 1 is aborted and 2 is a network/read error: the file is the problem, not the format, and
+      // handing it to another player would only fail again somewhere less visible.
+      transport.reply({ type: 'failed', token, reason: 'network', code: 2 })
+      await Promise.resolve()
+
+      expect(opened).toEqual([])
+      expect(events).toEqual([{ type: 'failed', token, reason: 'network' }])
+    })
+
+    it('skips the file when there is no system player to fall back to', async () => {
+      const transport = fakeTransport()
+      const player = new EmbeddedPlayer({ transport })
+      const events = collect(player)
+      const token = player.load('C:/videos/a.mkv')
+
+      transport.reply({ type: 'failed', token, reason: 'not supported', code: 4 })
+      await Promise.resolve()
+
+      expect(events).toEqual([{ type: 'failed', token, reason: 'not supported' }])
+    })
   })
 
   it('fails the load when there is no window, instead of hanging', async () => {

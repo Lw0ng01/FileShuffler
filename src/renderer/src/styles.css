@@ -435,6 +435,12 @@ h1 {
   background: var(--warning);
 }
 
+/* Playing, but not in here. Warning rather than success: it is working, and it is also not what
+   was meant to happen, which is exactly what this colour is for. */
+.dot.playing-elsewhere {
+  background: var(--warning);
+}
+
 .now-title {
   font-size: 26px;
   font-weight: 650;

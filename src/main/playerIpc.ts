@@ -61,7 +61,8 @@ export function createPlayerTransport(options: PlayerIpcOptions): {
       return () => listeners.delete(listener)
     },
     setSource: (token, path) => options.sources.set(token, path),
-    clearSources: () => options.sources.clear()
+    clearSources: () => options.sources.clear(),
+    pathFor: (token) => options.sources.get(token)
   }
 
   return {
@@ -89,8 +90,15 @@ export function asEventMessage(value: unknown): PlayerEventMessage | null {
         ? ({ type: message['type'], token: message['token'] } as PlayerEventMessage)
         : null
     case 'failed':
-      return isToken(message['token']) && typeof message['reason'] === 'string'
-        ? { type: 'failed', token: message['token'], reason: message['reason'].slice(0, 200) }
+      return isToken(message['token']) &&
+        typeof message['reason'] === 'string' &&
+        typeof message['code'] === 'number'
+        ? {
+            type: 'failed',
+            token: message['token'],
+            reason: message['reason'].slice(0, 200),
+            code: message['code']
+          }
         : null
     case 'unloaded':
       return isToken(message['requestId'])

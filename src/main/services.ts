@@ -121,7 +121,13 @@ export function createServices(options: ServiceOptions): Services {
     launchPlayer: async () => {
       const saved = await settingsStore.get()
       if (saved.player === 'builtin') {
-        return new EmbeddedPlayer({ transport: playerTransport.transport })
+        return new EmbeddedPlayer({
+          transport: playerTransport.transport,
+          // The last 1%: Matroska, AVI, WMV and the odd AC-3 soundtrack, which Chromium will not
+          // decode. They open in whatever the system uses rather than being skipped, which is also
+          // what lets mpv stop being a requirement (PROJECT.md §4).
+          openExternally: (path) => shell.openPath(path)
+        })
       }
       return launchMpv({ mpvPath: mpvLocation(saved.mpvPath).path })
     },

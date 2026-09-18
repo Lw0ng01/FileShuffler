@@ -20,10 +20,20 @@ export interface PlayerTransport {
   setSource(token: number, path: string): void
   /** Called on dispose, so no token keeps pointing at a file after the session ends. */
   clearSources(): void
+  /** What a token points at, for the handful of files that have to go elsewhere. */
+  pathFor(token: number): string | null
 }
 
 export interface EmbeddedPlayerOptions {
   transport: PlayerTransport
+  /**
+   * Opens a file in whatever the system is set to use, for the formats Chromium cannot decode -
+   * Matroska, AVI, WMV and the odd AC-3 soundtrack, about 1% of a real library (PROJECT.md §4).
+   * Resolves with an empty string on success, or the reason it could not, like `shell.openPath`.
+   *
+   * Without it those files are simply skipped, which is the behaviour when it is not supplied.
+   */
+  openExternally?: (path: string) => Promise<string>
   /**
    * How long to wait for the renderer to confirm it has let go of the file. The delete flow waits
    * on this, so it must fail open rather than hang: a page that never answers must not be able to
@@ -34,8 +44,13 @@ export interface EmbeddedPlayerOptions {
 
 const DEFAULT_UNLOAD_TIMEOUT_MS = 2000
 
+/** `MediaError` codes that mean "this app cannot play that", rather than "that file is no good". */
+const MEDIA_ERR_DECODE = 3
+const MEDIA_ERR_SRC_NOT_SUPPORTED = 4
+
 export class EmbeddedPlayer implements PlaybackAdapter {
   private readonly transport: PlayerTransport
+  private readonly openExternally: ((path: string) => Promise<string>) | undefined
   private readonly unloadTimeoutMs: number
   private readonly listeners = new Set<(event: PlaybackEvent) => void>()
   private readonly pendingUnloads = new Map<number, () => void>()
@@ -46,6 +61,7 @@ export class EmbeddedPlayer implements PlaybackAdapter {
 
   constructor(options: EmbeddedPlayerOptions) {
     this.transport = options.transport
+    this.openExternally = options.openExternally
     this.unloadTimeoutMs = options.unloadTimeoutMs ?? DEFAULT_UNLOAD_TIMEOUT_MS
     this.stopListening = this.transport.onMessage((message) => this.handle(message))
   }
@@ -115,9 +131,46 @@ export class EmbeddedPlayer implements PlaybackAdapter {
         this.emit({ type: message.type, token: message.token })
         return
       case 'failed':
-        this.emit({ type: 'failed', token: message.token, reason: message.reason })
+        this.handleFailure(message.token, message.reason, message.code)
         return
     }
+  }
+
+  /**
+   * A file the built-in player cannot decode is not a broken file, so it goes to the system's own
+   * player rather than being skipped. Anything else - unreadable, gone, aborted - is a real
+   * failure and is reported as one.
+   *
+   * The shuffle deliberately stays on it afterwards (`external` counts as opened). Advancing would
+   * start the next file in here while that one is still playing over there, and two videos at once
+   * is worse than either.
+   */
+  private handleFailure(token: number, reason: string, code: number): void {
+    const fallback = this.openExternally
+    const path = this.transport.pathFor(token)
+    const unsupported = code === MEDIA_ERR_DECODE || code === MEDIA_ERR_SRC_NOT_SUPPORTED
+    if (fallback === undefined || path === null || !unsupported) {
+      this.emit({ type: 'failed', token, reason })
+      return
+    }
+
+    void fallback(path).then(
+      (problem) => {
+        if (this.disposed) return
+        // `shell.openPath` answers with the reason rather than throwing, and an empty string means
+        // it worked.
+        if (problem === '') this.emit({ type: 'external', token })
+        else this.emit({ type: 'failed', token, reason: problem })
+      },
+      (error: unknown) => {
+        if (this.disposed) return
+        this.emit({
+          type: 'failed',
+          token,
+          reason: error instanceof Error ? error.message : String(error)
+        })
+      }
+    )
   }
 
   private emit(event: PlaybackEvent): void {
