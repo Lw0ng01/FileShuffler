@@ -18,9 +18,9 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
 "Working with Lucas") are the handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #39 is on `main`. One branch is waiting
-   for review: **`worktree-player-fixes`**, which made the built-in player the default and stopped
-   it marking files as failed. If it has been merged, nothing else is outstanding.
+1. `git checkout main && git pull`. Everything through PR #40 is on `main`. One branch is waiting
+   for review: **`worktree-player-controls`**, the player's own controls and fullscreen. If it has
+   been merged, nothing else is outstanding.
    - `worktree-sidebar-material` is a dead duplicate of the merged `worktree-sidebar-mica`, kept
      only because rewriting a pushed branch means a force-push. Delete it.
 2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads its binary on first
@@ -2001,3 +2001,35 @@ machines, not Lucas's.
     test. They came from starting the app, pressing play, and looking at it.
   - 341 tests, unchanged in number; the settings-store tests now assert the new default instead of
     the old one.
+- **2026-09-17:** Gave the built-in player its own controls, and fullscreen.
+  - *(Lucas, 2026-09-17)*: "I like that it plays in there, my biggest problem with mpv was the look
+    of the media controls. The progress bar, volume, play/pause were quite ugly." So the answer to
+    "is there a world where it's possible" is that the previous branch already bought it: the
+    `<video>` deliberately carries no `controls` attribute, which makes every control ordinary HTML
+    and CSS using the app's own tokens. No alternative player was needed.
+  - **What it has**: a seek bar with the played part filled in `--accent`, play/pause, previous and
+    next, elapsed and total time, mute with a volume slider, and fullscreen. The controls fade out
+    while it plays and return on hover, on focus, or whenever it is paused.
+  - **Fullscreen goes on the stage, not the `<video>`.** Fullscreening the element itself hands back
+    the browser's own control bar, which is the exact look this exists to replace. Putting it on the
+    stage keeps our controls inside the fullscreen element, so they come with it.
+  - **Native `<input type="range">`, restyled** rather than sliders built from divs: the keyboard
+    and screen-reader behaviour comes free, and the filled track is a gradient driven by a
+    `--played` property the component sets.
+  - **Delete is deliberately absent from the player.** The undo toast is `position: fixed` outside
+    the fullscreen element, so a delete made in fullscreen would have no visible way back - and a
+    delete that cannot be undone is what §2 exists to prevent. It stays on the Shuffle screen until
+    the undo itself lives inside the player.
+  - **Two bugs found by looking at it.** The control bar first spanned the whole stage, overhanging
+    the picture on both sides, because the stage carries the screen gutter - there is a `.video-frame`
+    around the video and its controls now, which is also what clips both to the same corners. And
+    React's compiler rules rejected mutating a `<video>` reached through props, which was the right
+    complaint: the controls take refs now, because a media element is something you change by
+    setting its properties.
+  - Verified in the running app: seeking to 12.5s moved the picture and the clock to `0:12 / 0:29`,
+    mute flipped the control to Unmute, the volume slider set 0.4 and cleared mute, and a real click
+    on fullscreen put `.video-stage` into `document.fullscreenElement` with the controls still on it.
+  - 345 tests, up from 341: `formatClock`, including the NaN and Infinity that a media element
+    reports before a file is read.
+  - Next: the system player as the fallback for what Chromium cannot decode, which is what lets mpv
+    go entirely.

@@ -46,7 +46,14 @@ function App(): React.JSX.Element {
             playing - which is what the separate player window used to do. It sits above the
             Shuffle screen's own content rather than over it, so the title and the controls stay
             where they are and stay reachable. */}
-        <VideoStage visible={page === 'shuffle'} />
+        <VideoStage
+          visible={page === 'shuffle'}
+          onNext={actions.next}
+          onBack={actions.back}
+          // Matches the rest of the Shuffle screen: nothing moves while a delete is waiting out
+          // its undo window.
+          canMove={(view?.pendingDeletes.length ?? 0) === 0}
+        />
         {page === 'settings' ? (
           <SettingsScreen
             view={settings.view}

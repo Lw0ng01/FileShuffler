@@ -175,6 +175,34 @@ column was tried, and it does survive "Show more" lengthening one side - but it 
 list's footer floating a few hundred pixels below its own rows, which looks like a bug of its own. A
 list that really is longer is allowed to look longer.
 
+## The player's controls (Recorded)
+
+The reason playback moved into the app *(Lucas, 2026-09-17: mpv's controls were the problem, not
+mpv)*. They are ordinary elements in `PlayerControls.tsx`, styled with the app's tokens, over the
+bottom of the picture.
+
+- **White, not `--text`.** These sit on the picture rather than on a surface, so they have to read
+  the same in both themes and over any frame. That is the one place a literal colour is right, and
+  the reason is here rather than guessable.
+- **`--accent` fills the played part** of the seek and volume bars. Colour as data, which is what
+  the near-monochrome rule allows.
+- **Native `<input type="range">`, restyled.** Rebuilding a slider from divs throws away the
+  keyboard and screen-reader behaviour that comes free. The filled track is a gradient driven by a
+  `--played` custom property the component sets.
+- **They fade out while playing and come back on hover, on focus, or whenever it is paused.** A
+  paused video with no visible way to restart it is the one state where hiding them is unhelpful.
+- **The `<video>` carries no `controls` attribute.** The browser's own bar is exactly the look this
+  exists to replace, and going fullscreen on the video element rather than the stage hands it back.
+- **Fullscreen goes on `.video-stage`**, so the app's controls are inside the fullscreen element
+  and come with it.
+- **Delete is deliberately not among them.** The undo toast is `position: fixed` outside the
+  fullscreen element, so a delete made in fullscreen would have no visible way back - and a delete
+  you cannot undo is what §2 exists to prevent. Deleting stays on the Shuffle screen until the undo
+  lives inside the player.
+- Keys, only while the player has focus: space/`k` play-pause, `←`/`→` seek 5s, `↑`/`↓` volume,
+  `m` mute, `f` fullscreen, `n`/`b` next and back. Plain arrows and Delete are still never global
+  shortcuts (`CLAUDE.md`).
+
 ## Appearance (Recorded)
 
 Settings → Appearance offers Automatic, Light and Dark. Automatic is the default and follows the
