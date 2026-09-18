@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { videoUrl } from '../../../shared/player'
+import { PlayerControls } from './PlayerControls'
 
 /**
  * Starts playback, treating a refusal as "not now" rather than as a broken file.
@@ -13,6 +14,67 @@ function start(video: HTMLVideoElement): void {
   void video.play().catch(() => undefined)
 }
 
+/** Fullscreen goes on the stage, not the video, so the app's own controls come with it. */
+function toggleFullscreen(stage: HTMLElement | null): void {
+  if (document.fullscreenElement !== null) {
+    void document.exitFullscreen()
+    return
+  }
+  void stage?.requestFullscreen()
+}
+
+const SEEK_SECONDS = 5
+const VOLUME_STEP = 0.05
+
+/**
+ * The keys that work while the player has focus. Deliberately the ones people already expect from
+ * every other player, and deliberately not the plain arrows and Delete that `CLAUDE.md` keeps out
+ * of global shortcuts - these only apply when the video itself is focused.
+ *
+ * Returns whether the key was ours, so the caller knows what to swallow.
+ */
+function shortcut(
+  event: React.KeyboardEvent,
+  video: HTMLVideoElement,
+  stage: HTMLElement | null,
+  actions: { onNext: () => void; onBack: () => void; canMove: boolean }
+): boolean {
+  switch (event.key) {
+    case ' ':
+    case 'k':
+      if (video.paused) start(video)
+      else video.pause()
+      return true
+    case 'ArrowRight':
+      video.currentTime = Math.min(video.currentTime + SEEK_SECONDS, video.duration || 0)
+      return true
+    case 'ArrowLeft':
+      video.currentTime = Math.max(video.currentTime - SEEK_SECONDS, 0)
+      return true
+    case 'ArrowUp':
+      video.volume = Math.min(video.volume + VOLUME_STEP, 1)
+      video.muted = false
+      return true
+    case 'ArrowDown':
+      video.volume = Math.max(video.volume - VOLUME_STEP, 0)
+      return true
+    case 'm':
+      video.muted = !video.muted
+      return true
+    case 'f':
+      toggleFullscreen(stage)
+      return true
+    case 'n':
+      if (actions.canMove) actions.onNext()
+      return true
+    case 'b':
+      if (actions.canMove) actions.onBack()
+      return true
+    default:
+      return false
+  }
+}
+
 /**
  * The built-in player's video surface (PROJECT.md §4).
  *
@@ -23,8 +85,19 @@ function start(video: HTMLVideoElement): void {
  * Everything it knows about a file is a token. Main decides what that token points at, so the page
  * cannot ask for a file it was not given.
  */
-export function VideoStage({ visible }: { visible: boolean }): React.JSX.Element {
+export function VideoStage({
+  visible,
+  onNext,
+  onBack,
+  canMove
+}: {
+  visible: boolean
+  onNext: () => void
+  onBack: () => void
+  canMove: boolean
+}): React.JSX.Element {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
   // The load a report belongs to. Kept in a ref because events arrive outside React's flow, and a
   // stale token must never be reported as the current one.
   const tokenRef = useRef<number | null>(null)
@@ -32,6 +105,9 @@ export function VideoStage({ visible }: { visible: boolean }): React.JSX.Element
   // black box whenever the Shuffle tab was open, including before anything had ever played
   // (Lucas, 2026-09-17). It is never a placeholder: no video, nothing on screen.
   const [hasVideo, setHasVideo] = useState(false)
+  // Controls stay up while paused. A paused video with no visible way to start it again is the
+  // one state where hiding them is actively unhelpful.
+  const [paused, setPaused] = useState(true)
 
   useEffect(() => {
     const video = videoRef.current
@@ -87,6 +163,10 @@ export function VideoStage({ visible }: { visible: boolean }): React.JSX.Element
       if (document.visibilityState === 'visible') start(video)
     }
 
+    const onPlayState = (): void => setPaused(video.paused)
+
+    video.addEventListener('play', onPlayState)
+    video.addEventListener('pause', onPlayState)
     video.addEventListener('loadeddata', onLoadedData)
     video.addEventListener('ended', onEnded)
     video.addEventListener('error', onError)
@@ -96,6 +176,8 @@ export function VideoStage({ visible }: { visible: boolean }): React.JSX.Element
 
     return () => {
       stopCommands()
+      video.removeEventListener('play', onPlayState)
+      video.removeEventListener('pause', onPlayState)
       video.removeEventListener('loadeddata', onLoadedData)
       video.removeEventListener('ended', onEnded)
       video.removeEventListener('error', onError)
@@ -105,10 +187,47 @@ export function VideoStage({ visible }: { visible: boolean }): React.JSX.Element
   }, [])
 
   return (
-    <div className={`video-stage${visible && hasVideo ? '' : ' is-hidden'}`}>
-      {/* No `controls`: the app's own buttons drive this, and the browser's bar would be the one
-          piece of chrome that ignores every token in the design. */}
-      <video ref={videoRef} className="video-stage-el" playsInline />
+    <div
+      ref={stageRef}
+      className={`video-stage${visible && hasVideo ? '' : ' is-hidden'}${paused ? ' is-paused' : ''}`}
+      // Focusable so the keyboard shortcuts have somewhere to live that is not the whole window:
+      // space must not scroll the page, and must not fight with a text field on another screen.
+      tabIndex={-1}
+      onKeyDown={(event) => {
+        const video = videoRef.current
+        if (video === null) return
+        const handled = shortcut(event, video, stageRef.current, { onNext, onBack, canMove })
+        if (handled) {
+          event.preventDefault()
+          event.stopPropagation()
+        }
+      }}
+    >
+      {/* The frame is what the controls are positioned against, so they line up with the picture
+          rather than with the screen gutter, and both share its rounded corners. */}
+      <div className="video-frame">
+        {/* No `controls`: the browser's own bar is exactly the look this replaces. */}
+        <video
+          ref={videoRef}
+          className="video-stage-el"
+          playsInline
+          onClick={() => {
+            const video = videoRef.current
+            if (video === null) return
+            if (video.paused) start(video)
+            else video.pause()
+          }}
+          onDoubleClick={() => toggleFullscreen(stageRef.current)}
+        />
+        <PlayerControls
+          videoRef={videoRef}
+          stageRef={stageRef}
+          ready={hasVideo}
+          onNext={onNext}
+          onBack={onBack}
+          canMove={canMove}
+        />
+      </div>
     </div>
   )
 }

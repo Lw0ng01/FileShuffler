@@ -30,3 +30,17 @@ export function shortenPath(path: string): string {
   const parts = path.split(/[\\/]/).filter(Boolean)
   return parts.length <= 3 ? path : `…${separator}${parts.slice(-2).join(separator)}`
 }
+
+/**
+ * A playback position as `m:ss`, or `h:mm:ss` once there is an hour to show. Always the shortest
+ * form the length needs, so a three-minute clip does not read as `0:03:12`.
+ */
+export function formatClock(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00'
+  const whole = Math.floor(seconds)
+  const hours = Math.floor(whole / 3600)
+  const minutes = Math.floor((whole % 3600) / 60)
+  const secs = whole % 60
+  const pad = (value: number): string => String(value).padStart(2, '0')
+  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(secs)}` : `${minutes}:${pad(secs)}`
+}

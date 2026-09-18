@@ -123,3 +123,54 @@ export function StatsIcon(props: IconProps): React.JSX.Element {
     </Svg>
   )
 }
+
+export function PauseIcon(props: IconProps): React.JSX.Element {
+  return (
+    <Svg {...props}>
+      <path d="M9 4v16" />
+      <path d="M15 4v16" />
+    </Svg>
+  )
+}
+
+export function VolumeIcon(props: IconProps): React.JSX.Element {
+  return (
+    <Svg {...props}>
+      <path d="M11 5 6 9H3v6h3l5 4z" />
+      <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+      <path d="M18.5 5.5a9 9 0 0 1 0 13" />
+    </Svg>
+  )
+}
+
+export function MuteIcon(props: IconProps): React.JSX.Element {
+  return (
+    <Svg {...props}>
+      <path d="M11 5 6 9H3v6h3l5 4z" />
+      <path d="m16 9 5 6" />
+      <path d="m21 9-5 6" />
+    </Svg>
+  )
+}
+
+export function FullscreenIcon(props: IconProps): React.JSX.Element {
+  return (
+    <Svg {...props}>
+      <path d="M4 9V4h5" />
+      <path d="M20 9V4h-5" />
+      <path d="M4 15v5h5" />
+      <path d="M20 15v5h-5" />
+    </Svg>
+  )
+}
+
+export function ExitFullscreenIcon(props: IconProps): React.JSX.Element {
+  return (
+    <Svg {...props}>
+      <path d="M9 4v5H4" />
+      <path d="M15 4v5h5" />
+      <path d="M9 20v-5H4" />
+      <path d="M15 20v-5h5" />
+    </Svg>
+  )
+}

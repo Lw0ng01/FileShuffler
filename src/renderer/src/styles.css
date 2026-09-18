@@ -1159,9 +1159,186 @@ a,
   /* Tall enough to be worth watching, never so tall that the controls fall off the screen. */
   max-height: 62vh;
   aspect-ratio: 16 / 9;
-  border-radius: 12px;
   /* Black, not `--bg`: the bars beside a video should not read as a theme surface. */
   background: #000000;
   /* Fit rather than fill: never crop someone's video to tidy up the edges. */
   object-fit: contain;
+}
+
+/* Player controls
+   ----
+   The reason the player moved into the app: these are ordinary elements using the same tokens as
+   everything else, so the bar, the volume and play/pause belong to FileShuffler rather than to
+   someone else's player (Lucas, 2026-09-17).
+
+   They sit over the bottom of the picture and fade out while it plays, so a video that is being
+   watched is not a video with a bar across it. Any pointer movement, or focus landing on a control,
+   brings them back. */
+/* The picture and its controls, positioned together so the bar lines up with the video rather than
+   with the screen gutter, and both are clipped to the same corners. */
+.video-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  /* Its own line box would otherwise leave a few pixels of background under the video. */
+  line-height: 0;
+}
+
+.player-bar {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 26px 14px 12px;
+  border-radius: 0 0 12px 12px;
+  /* A wash rather than a panel: the picture stays visible behind the controls, and the text on them
+     stays readable over a bright frame. */
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0));
+  opacity: 0;
+  transition: opacity var(--dur-base) var(--ease-out);
+  pointer-events: none;
+}
+
+/* Shown while the pointer is over the picture, whenever it is paused, and whenever a control has
+   keyboard focus - so tabbing to them never leaves you pressing something invisible. */
+.video-stage:hover .player-bar,
+.video-stage:focus-within .player-bar,
+.video-stage.is-paused .player-bar {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.player-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* White rather than `--text`: these sit on the picture, not on a surface, so they have to read the
+   same in both themes and over any frame. */
+.player-btn {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.player-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.player-btn:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.player-time {
+  margin-left: 8px;
+  color: #ffffff;
+  font-size: 13px;
+  /* The width changes every second; fixed-width digits stop the row twitching. */
+  font-variant-numeric: tabular-nums;
+}
+
+.player-time .faint {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.player-volume {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  /* Pushed to the right, with fullscreen after it. */
+  margin-left: auto;
+}
+
+/* Both sliders share their look: a thin track with the played part filled from `--played`, which
+   the component sets. A native range input keeps the keyboard and screen-reader behaviour that
+   rebuilding it from divs would throw away. */
+.player-seek,
+.player-level {
+  height: 16px;
+  padding: 0;
+  border-radius: 999px;
+  background: transparent;
+  appearance: none;
+  cursor: pointer;
+}
+
+.player-seek {
+  width: 100%;
+}
+
+.player-level {
+  width: 84px;
+}
+
+.player-seek::-webkit-slider-runnable-track,
+.player-level::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--accent) 0 var(--played, 0%),
+    rgba(255, 255, 255, 0.28) var(--played, 0%) 100%
+  );
+}
+
+.player-seek::-webkit-slider-thumb,
+.player-level::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border: 0;
+  border-radius: 50%;
+  background: #ffffff;
+  appearance: none;
+}
+
+.player-seek:disabled,
+.player-level:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.player-seek:focus-visible,
+.player-level:focus-visible,
+.player-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Fullscreen: the stage is the element that goes fullscreen, so the controls come with it. The
+   video fills the screen and the rounded corners would be a seam against the edges. */
+.video-stage:fullscreen {
+  width: 100%;
+  max-width: none;
+  padding: 0;
+  margin: 0;
+  background: #000000;
+}
+
+.video-stage:fullscreen .video-frame {
+  height: 100%;
+  border-radius: 0;
+}
+
+.video-stage:fullscreen .video-stage-el {
+  max-height: none;
+  height: 100%;
+  border-radius: 0;
+}
+
+.video-stage:fullscreen .player-bar {
+  border-radius: 0;
+  padding: 40px 28px 22px;
 }
