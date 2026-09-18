@@ -22,11 +22,20 @@ export const CHANNELS = {
  * - `ready`: a folder is loaded and nothing is playing yet
  * - `starting-player`: mpv is launching
  * - `loading` / `playing`: a file was sent to the player / the player confirmed it opened
+ * - `playing-elsewhere`: the built-in player can't decode this one, so it opened in the system's
+ *   own player. The shuffle stays on it until Next, rather than playing the next file over it
  * - `finished`: nothing left that can play
  * - `player-exited`: the player window was closed; Play reopens it
  */
 export type ShufflerStatus =
-  'no-folder' | 'ready' | 'starting-player' | 'loading' | 'playing' | 'finished' | 'player-exited'
+  | 'no-folder'
+  | 'ready'
+  | 'starting-player'
+  | 'loading'
+  | 'playing'
+  | 'playing-elsewhere'
+  | 'finished'
+  | 'player-exited'
 
 export interface ShufflerView {
   folder: string | null

@@ -34,7 +34,12 @@ export type PlayerCommandMessage =
 export type PlayerEventMessage =
   | { type: 'loaded'; token: number }
   | { type: 'ended'; token: number }
-  | { type: 'failed'; token: number; reason: string }
+  /**
+   * `code` is the `MediaError` code, which is what separates "this app cannot play that format"
+   * (3 and 4) from "the file would not read" (1 and 2). Only the first kind is worth handing to
+   * the system's own player.
+   */
+  | { type: 'failed'; token: number; reason: string; code: number }
   /** The answer to `unload`, whether or not anything was playing. */
   | { type: 'unloaded'; requestId: number }
 

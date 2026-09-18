@@ -15,6 +15,12 @@ export type PlaybackEvent =
   | { type: 'ended'; token: number }
   /** The player could not open or play the file for this load. */
   | { type: 'failed'; token: number; reason: string }
+  /**
+   * The file opened, but in the system's own player rather than in this one - the fallback for
+   * formats the built-in player cannot decode (PROJECT.md §4). It counts as opened, so the shuffle
+   * stays on it: advancing would start the next file here while that one is still playing there.
+   */
+  | { type: 'external'; token: number }
   | { type: 'command'; command: PlayerCommand }
   /** The player is gone (closed by the user, crashed, or disposed). */
   | { type: 'exited'; reason: string }

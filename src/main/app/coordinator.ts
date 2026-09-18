@@ -10,7 +10,14 @@ import type { PlaybackAdapter, PlaybackEvent } from '../playback/types'
  * - `finished`: nothing left that can play (empty folder, or every file failed or was deleted)
  * - `player-exited`: the player is gone; navigation is ignored until a new coordinator is created
  */
-export type CoordinatorStatus = 'idle' | 'loading' | 'playing' | 'finished' | 'player-exited'
+export type CoordinatorStatus =
+  | 'idle'
+  | 'loading'
+  | 'playing'
+  /** Opened in the system's own player, because this one cannot decode it (PROJECT.md §4). */
+  | 'playing-elsewhere'
+  | 'finished'
+  | 'player-exited'
 
 export interface PendingDelete {
   id: string
@@ -249,10 +256,13 @@ export class ShuffleCoordinator {
 
     switch (event.type) {
       case 'loaded':
+      case 'external':
         if (event.token !== this.activeToken || this.current === null) return
         this.session.markOpened(this.current)
         this.record('opened', this.current)
-        this.status = 'playing'
+        // Counted as opened either way: it is being watched, just not in here. The shuffle stays
+        // on it rather than advancing, or the next file would start playing over the top of it.
+        this.status = event.type === 'external' ? 'playing-elsewhere' : 'playing'
         this.lastError = null
         this.emit()
         return

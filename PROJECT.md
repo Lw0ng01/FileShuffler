@@ -18,9 +18,10 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
 "Working with Lucas") are the handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #40 is on `main`. One branch is waiting
-   for review: **`worktree-player-controls`**, the player's own controls and fullscreen. If it has
-   been merged, nothing else is outstanding.
+1. `git checkout main && git pull`. Everything through PR #41 is on `main`. One branch is waiting for review:
+   **`worktree-packaged-player`**, which verified the player in a packaged build and sends the
+   formats Chromium cannot decode to the system's player. If it has been merged, nothing else is
+   outstanding.
    - `worktree-sidebar-material` is a dead duplicate of the merged `worktree-sidebar-mica`, kept
      only because rewriting a pushed branch means a force-push. Delete it.
 2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads its binary on first
@@ -96,14 +97,18 @@ machine keeps its own index.
   Measurements, §10). Lucas confirmed the merged features work (2026-09-16).
 
 **Next steps, in order**
-1. **On macOS: decide whether `vibrancy` comes out.** The translucent sidebar was tried and
+1. **Lucas, on the Windows desktop: try a delete where recycling is not possible** - a removable
+   USB stick or a network share. It must fail with an error and keep the file, never delete
+   permanently (§2). Still the one safety rule that has never been exercised against real hardware,
+   and the external drive does not count: Windows gives it a Recycle Bin.
+2. **On macOS: decide whether `vibrancy` comes out.** The translucent sidebar was tried and
    reversed (2026-09-17, twice): it borrowed the OS's tint and the OS's animation with it, so the
    sidebar trailed the page on every theme change. The sidebar is opaque now, which means
    `vibrancy: 'sidebar'` on macOS has nothing left to show, exactly as `backgroundMaterial` had
    nothing to show on Windows - and that one has been removed. Left in place only because it cannot
    be seen from a Windows machine. Check how it looks on the Mac, then either remove it or say what
    it is still earning.
-2. The front end (§7 working order). Landed on the Mac on 2026-09-17: motion on the Shuffle screen,
+3. The front end (§7 working order). Landed on the Mac on 2026-09-17: motion on the Shuffle screen,
    the visual overhaul towards Apple's language, an Appearance setting (Automatic/Light/Dark), the
    Dashboard as the opening tab, and wider list screens.
    - Still to do: starring from the dashboard's lists, and a first-run guide when mpv is missing.
@@ -112,66 +117,18 @@ machine keeps its own index.
    - **Undecided: whether the UI is good enough to stop.** Ask before another pass.
    - Ask Lucas before settling layout or look. The `fileshuffler-ui` skill marks unsettled things
      "Open" for exactly this reason.
-3. **The player's own look** (§4, §9 item 5). mpv's window is the part Lucas finds ugly, and no
-   amount of polish in the app's own screens changes it. **mpv is not stuck that way** - but the
-   question splits in two, and only the second answer also makes the app look the same on both
-   platforms, because mpv's window never will.
-
-   *Dress up mpv's own window:*
-   - tune the built-in OSC through `--script-opts=osc-*`, keeping `--no-config`. Cheap - the
-     `extraArgs` hook in `mpvArguments` already exists - but it buys layout and scale only: the
-     built-in OSC's colours are not options, so it still looks like mpv. Low reward, and it differs
-     per platform either way;
-   - ship a nicer OSC such as uosc - genuinely good-looking, but it means bundling GPL Lua and
-     reopening the script-loading path `--no-config` deliberately closes (autoload can push files
-     into mpv's own playlist, outside the shuffle session), and it is still a separate window;
-
-   *Make playback part of the app:*
-   - `--osc=no` and drive playback from our own window over the IPC channel that already exists.
-     Only half an answer on its own: the video stays in mpv's window while the controls are in
-     ours, so it needs the next item to make sense;
-   - `--wid` embeds mpv into our window, and this mpv supports it (verified 2026-09-17). The catch
-     is that the native video surface paints *above* web content, so HTML controls cannot overlay
-     the video - it needs the video confined to a rectangle with the controls outside it, or a
-     second transparent window tracked over the first. Fragile, and different on each platform;
-   - **an in-app `<video>` surface, with mpv kept as the fallback.** The measurement in §4 is what
-     makes this the recommendation rather than a compromise: Chromium here decodes HEVC, H.264,
-     AV1, VP9 and AAC, and covers 98.9% of this library by size. Controls, overlays, keyboard and
-     theming become ordinary HTML and CSS, identical on both platforms, and the separate-window
-     problem disappears. The unproven part is file release for the delete flow (§4), which is what
-     a spike has to settle first.
-
-   **✅ Decided (Lucas, 2026-09-17): mpv's look is not acceptable, and the way out is the in-app
-   player, with the system player for anything it cannot play.** He put it as a choice between the
-   system default player for everything, or a custom one. The answer is that those are not
-   competing - they do different jobs:
-
-   - **The system player already opens regular videos.** The dashboard's Open is `shell.openPath`
-     (`services.ts`), which hands the file to whatever the OS is set to use. That half is done.
-   - **The system player cannot drive a shuffle**, and this is the part worth being clear about.
-     `shell.openPath` returns as soon as the OS launches the handler: no process handle, no IPC, no
-     events. So there is no end-of-file to autoplay from, no way to send Next or Back, and no way to
-     unload a file before trashing it - which §2 requires precisely because of Windows file locks.
-     A shuffle driven by the system player degrades to "open one file, switch back, click Next", and
-     the delete safety story gets weaker, not just the convenience.
-   - **So: the in-app `<video>` player carries the shuffle**, and `shell.openPath` catches the rest.
-     Both halves are already proven or already written.
-   - **That lets mpv go entirely.** For the ~1% Chromium cannot decode (`.mkv`, `.wmv`, `.avi`, or
-     AC-3 audio) the fallback is the system player rather than a bundled dependency - so mpv stops
-     being required, which also removes the first-run problem of an app that cannot play anything
-     until you install something. The one thing lost is autoplay for those files, and they should
-     say so when opened.
-   - uosc is worth revisiting only *after* this lands, and probably not at all then: it would be
-     dressing up a fallback path the user rarely sees.
-
-   **Still Lucas's call before building**: whether the Shuffle screen becomes the player or the
-   player is its own surface, and whether mpv stays available as an option in Settings for people
-   who want it. Features are frozen for v1, so this is also a v1-scope decision.
-4. Whenever convenient, Lucas, on the Windows desktop: try a delete where recycling isn't supported,
-   on a removable USB stick or a network share. It must fail with an error and keep the file, never
-   delete permanently. His external drive doesn't count: Windows treats it as a local disk and it
-   has a Recycle Bin.
-5. Whenever convenient, Lucas, on the Windows desktop: build the installer (`npm run build:win`)
+4. **The player is done** (§4, §9 item 5), so this is history rather than a next step: playback is
+   in the app, with its own controls and fullscreen, and the formats Chromium cannot decode open
+   in the system's player. mpv is no longer required - it stays in Settings for anyone who wants
+   it. What is left is polish: the pipeline, the code and the UI, which is where Lucas wants to
+   land next (2026-09-17).
+   - **Not done, and worth deciding**: Delete is missing from the player, so it cannot be used in
+     fullscreen. It was left out because the undo toast is `position: fixed` outside the
+     fullscreen element, and a delete with no visible undo is what §2 exists to prevent. Moving
+     the undo into the player is the fix, and it touches the safety-critical path, so it wants
+     care rather than speed.
+5. Whenever convenient, Lucas, on the Windows desktop: install from the built installer
+   (`npm run build:win`)
    and install it from a separate local Windows account with no development tools, as the
    clean-machine test (§7 Phase 6). Copy it to `C:\Users\Public` first so the other account can
    reach it.
@@ -2033,3 +1990,31 @@ machines, not Lucas's.
     reports before a file is read.
   - Next: the system player as the fallback for what Chromium cannot decode, which is what lets mpv
     go entirely.
+- **2026-09-17:** Verified the player in a packaged build, and gave the last few formats somewhere
+  to go.
+  - **The packaged build works.** Everything until now had been checked with `electron-vite dev`,
+    and the built-in player leans on two things packaging is exactly where to break: a URL scheme
+    registered before app-ready, and the CSP in the bundled `index.html`. Ran
+    `dist/win-unpacked/FileShuffler.exe` against an isolated data folder: the file streamed from
+    `fsvideo://file/1`, `readyState` 4, 640x360, 20s, controls present, `failed: 0`. No
+    `%APPDATA%\FileShuffler` was created, because `FILESHUFFLER_DATA` covers the packaged app too.
+  - **The 1% estimate was too pessimistic, for the same reason as `.mov`.** A real Matroska file
+    with H.264 inside *plays*: Chromium's WebM demuxer is a Matroska demuxer, whatever
+    `canPlayType('video/x-matroska')` says. Confirmed by decoding one - `readyState` 4, 320x180, 8s,
+    no error. So of the 25 files counted as unplayable, the 17 `.mkv` are probably fine and the real
+    gap is the 5 `.wmv` and 3 `.avi`, plus any exotic soundtrack. **Twice now a capability answer
+    has been wrong and only playing the file was right.**
+  - **Files that genuinely cannot play now open in the system's player** rather than being skipped.
+    `MediaError` code 3 or 4 means "this app cannot play that format" and is handed to
+    `shell.openPath`; codes 1 and 2 mean the file itself would not read, and are still reported as
+    failures - opening those elsewhere would only fail again somewhere less visible.
+  - **The shuffle deliberately stays on such a file.** A new `external` event counts as opened and
+    sets a new `playing-elsewhere` status, because advancing would start the next video in the app
+    while that one is still playing in the other window. Next moves on when the person is ready.
+  - Verified with a real AVI: `MediaError` code 4, VLC opened it as the system default,
+    `status: playing-elsewhere`, `opened: 1`, `failed: 0`, and the Shuffle card explains what
+    happened.
+  - **Another empty black box, found the same way as the first.** The video surface stayed up after
+    a file failed, showing controls over nothing. It hides on failure now.
+  - 350 tests, up from 345: the fallback firing only on the right error codes, both ways the system
+    player can refuse, and the case where there is no fallback at all.

@@ -35,7 +35,10 @@ export function ShufflerScreen({
   // Back/Next/Delete only appear once something has played.
   const showControls =
     hasVideos &&
-    (view.status === 'loading' || view.status === 'playing' || view.status === 'player-exited')
+    (view.status === 'loading' ||
+      view.status === 'playing' ||
+      view.status === 'playing-elsewhere' ||
+      view.status === 'player-exited')
   const deletePending = view.pendingDeletes.length > 0
   // "Player exited" is expected when the user closes the mpv window; the card explains it instead.
   const error =
@@ -191,17 +194,28 @@ function StatusCard({
       )
     case 'loading':
     case 'playing':
+    case 'playing-elsewhere':
       return (
         <div className="card" aria-live="polite">
           <p className="eyebrow">
             <span className={`dot ${view.status}`} />
-            {view.status === 'loading' ? 'Opening' : 'Now playing'}
+            {view.status === 'loading'
+              ? 'Opening'
+              : view.status === 'playing-elsewhere'
+                ? 'Playing in your default player'
+                : 'Now playing'}
           </p>
           {/* Keyed by the filename: each new video remounts this, so the title springs in rather
               than the text swapping in place. Pressing Next twice quickly simply restarts it. */}
           <p className="now-title" key={view.current}>
             {view.current}
           </p>
+          {view.status === 'playing-elsewhere' && (
+            <p className="muted">
+              FileShuffler can&rsquo;t play this format, so it opened in whatever your computer
+              uses. Press Next when you&rsquo;re done with it.
+            </p>
+          )}
           <Progress view={view} onRestartCycle={actions.restartCycle} />
         </div>
       )

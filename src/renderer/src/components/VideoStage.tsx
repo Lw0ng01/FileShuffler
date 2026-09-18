@@ -150,10 +150,16 @@ export function VideoStage({
     const onError = (): void => {
       const token = tokenRef.current
       if (token === null) return
+      // Nothing to show: either this file is going to the system's player or it is being skipped.
+      // Leaving the surface up would put an empty black box under the picture's place.
+      setHasVideo(false)
       api.send({
         type: 'failed',
         token,
-        reason: video.error?.message ?? 'The file would not play.'
+        reason: video.error?.message ?? 'The file would not play.',
+        // Main needs the code to tell "this app cannot play that format" from "that file would
+        // not read", because only the first is worth handing to the system's player.
+        code: video.error?.code ?? 0
       })
     }
 
