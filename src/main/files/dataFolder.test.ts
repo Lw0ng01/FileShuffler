@@ -3,12 +3,37 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { copyLegacyData, dataFolderName } from './dataFolder'
+import { copyLegacyData, dataFolder, dataFolderName } from './dataFolder'
 
 describe('dataFolderName', () => {
   it('keeps the installed app and development runs apart', () => {
     expect(dataFolderName(true)).toBe('FileShuffler')
     expect(dataFolderName(false)).toBe('FileShuffler Dev')
+  })
+})
+
+describe('dataFolder', () => {
+  it('puts the data under the system location by default', () => {
+    expect(dataFolder(join('C:', 'AppData'), false, {})).toBe(
+      join('C:', 'AppData', 'FileShuffler Dev')
+    )
+    expect(dataFolder(join('C:', 'AppData'), true, {})).toBe(join('C:', 'AppData', 'FileShuffler'))
+  })
+
+  it('follows FILESHUFFLER_DATA, so a test can run against a copy rather than the real library', () => {
+    const env = { FILESHUFFLER_DATA: join('D:', 'copy') }
+    expect(dataFolder(join('C:', 'AppData'), false, env)).toBe(join('D:', 'copy'))
+    // The override is absolute, so it applies to the installed app too.
+    expect(dataFolder(join('C:', 'AppData'), true, env)).toBe(join('D:', 'copy'))
+  })
+
+  it('ignores an override that is empty or only spaces', () => {
+    expect(dataFolder(join('C:', 'AppData'), false, { FILESHUFFLER_DATA: '' })).toBe(
+      join('C:', 'AppData', 'FileShuffler Dev')
+    )
+    expect(dataFolder(join('C:', 'AppData'), false, { FILESHUFFLER_DATA: '   ' })).toBe(
+      join('C:', 'AppData', 'FileShuffler Dev')
+    )
   })
 })
 

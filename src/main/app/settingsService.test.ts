@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Appearance, ClearableData } from '../../shared/settings'
+import type { Appearance, ClearableData, PlayerChoice } from '../../shared/settings'
 import type { AppSettings } from '../files/settingsStore'
 import type { MpvLocation } from '../playback/mpv/findMpv'
 import type { MpvProbe } from '../playback/mpv/probeMpv'
 import { SettingsService, type SettingsServiceDeps, type SettingsSource } from './settingsService'
 
 class FakeStore implements SettingsSource {
-  settings: AppSettings = { mpvPath: null, appearance: 'system' }
+  settings: AppSettings = { mpvPath: null, appearance: 'system', player: 'builtin' }
 
   async get(): Promise<AppSettings> {
     return { ...this.settings }
@@ -19,6 +19,11 @@ class FakeStore implements SettingsSource {
 
   async setAppearance(appearance: Appearance): Promise<AppSettings> {
     this.settings = { ...this.settings, appearance }
+    return { ...this.settings }
+  }
+
+  async setPlayer(player: PlayerChoice): Promise<AppSettings> {
+    this.settings = { ...this.settings, player }
     return { ...this.settings }
   }
 }
@@ -73,7 +78,7 @@ describe('SettingsService appearance', () => {
   it('applies the saved choice at startup, so it survives a restart', async () => {
     const applied: Appearance[] = []
     const { service, store } = setup({ applyAppearance: (value) => applied.push(value) })
-    store.settings = { mpvPath: null, appearance: 'dark' }
+    store.settings = { mpvPath: null, appearance: 'dark', player: 'builtin' }
 
     await service.load()
 
@@ -83,7 +88,7 @@ describe('SettingsService appearance', () => {
 
   it('keeps the chosen mpv when the theme changes', async () => {
     const { service, store } = setup()
-    store.settings = { mpvPath: '/usr/local/bin/mpv', appearance: 'system' }
+    store.settings = { mpvPath: '/usr/local/bin/mpv', appearance: 'system', player: 'builtin' }
 
     await service.setAppearance('dark')
 
@@ -147,7 +152,7 @@ describe('SettingsService mpv', () => {
 
   it('reads a saved choice at startup', async () => {
     const { service, store } = setup()
-    store.settings = { mpvPath: 'E:\\mpv\\mpv.exe', appearance: 'system' }
+    store.settings = { mpvPath: 'E:\\mpv\\mpv.exe', appearance: 'system', player: 'builtin' }
     await service.load()
     expect(service.getView().mpv).toMatchObject({ path: 'E:\\mpv\\mpv.exe', source: 'settings' })
   })

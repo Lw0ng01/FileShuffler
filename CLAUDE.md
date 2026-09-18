@@ -67,8 +67,12 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
   - `src/main/domain/`: pure logic with tests beside it (`shuffle.ts` is the shuffle engine,
     PROJECT.md §3)
   - `src/main/app/`: the coordinator that connects the shuffle session to a player
-  - `src/main/playback/`: the player interface (`types.ts`) and the mpv adapter (`mpv/`,
-    PROJECT.md §4)
+  - `src/main/playback/`: the player interface (`types.ts`) and the adapters behind it - the mpv
+    adapter (`mpv/`) and the built-in player (`embedded/`, PROJECT.md §4). The built-in one plays
+    in a `<video>` in the renderer, so its adapter is split: `embeddedPlayer.ts` in main,
+    `VideoStage.tsx` in the renderer, joined by `playerIpc.ts`. The renderer is handed a load
+    **token**, never a path; `videoProtocol.ts` serves `fsvideo://file/<token>` and is the only
+    thing that knows which file that is
   - `src/main/files/`: read-only folder listing and file identity checks (PROJECT.md §2), saved
     cycle progress (`progressStore.ts`), and the indexer's scan rules and walker (`scanRules.ts`,
     `scanner.ts`). Only `progressStore.ts` writes, and only inside the app's data folder
@@ -134,6 +138,9 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
 - Players sit behind one playback adapter interface (mpv now, VLC in Phase 2, embedded later).
   - Don't assume pushed events: VLC is polled.
   - Unload the file and observe completion before trashing it.
+- The built-in player never receives a path. It asks for `fsvideo://file/<token>` and main decides
+  what the token means, so a compromised page cannot ask for a file it was not given. The CSP
+  allows `media-src fsvideo:` and nothing else.
 - Keep the security baseline:
   - In `src/main/mainWindow.ts`: sandbox on, context isolation on, Node integration off, navigation and
     new windows blocked. Keep the strict CSP in `src/renderer/index.html`.
@@ -162,6 +169,7 @@ npm run dev         # run app with hot reload
 npm test            # vitest (unit tests)
 MPV_PATH=/path/to/mpv npm test   # also run the real-mpv integration tests
 FILESHUFFLER_MPV=/path/to/mpv npm run dev   # force a specific mpv; beats the choice in Settings
+FILESHUFFLER_DATA=/path/to/copy npm run dev  # run against a copy of the data, not the real one
 npm run typecheck
 npm run lint
 npm run build       # typecheck + production build into out/

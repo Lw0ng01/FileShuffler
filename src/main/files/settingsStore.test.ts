@@ -22,32 +22,44 @@ describe('SettingsStore', () => {
   })
 
   it('starts with the defaults when nothing is saved', async () => {
-    expect(await new SettingsStore(file).get()).toEqual({ mpvPath: null, appearance: 'system' })
+    expect(await new SettingsStore(file).get()).toEqual({
+      mpvPath: null,
+      appearance: 'system',
+      player: 'builtin'
+    })
   })
 
   it('remembers the chosen mpv across restarts, and forgets it on request', async () => {
     await new SettingsStore(file).setMpvPath('D:\\Tools\\mpv\\mpv.exe')
     expect(await new SettingsStore(file).get()).toEqual({
       mpvPath: 'D:\\Tools\\mpv\\mpv.exe',
-      appearance: 'system'
+      appearance: 'system',
+      player: 'builtin'
     })
 
     await new SettingsStore(file).setMpvPath(null)
-    expect(await new SettingsStore(file).get()).toEqual({ mpvPath: null, appearance: 'system' })
+    expect(await new SettingsStore(file).get()).toEqual({
+      mpvPath: null,
+      appearance: 'system',
+      player: 'builtin'
+    })
   })
 
   it('reads a corrupt or unexpected file as the defaults', async () => {
     const store = new SettingsStore(file)
     await store.setMpvPath('D:\\mpv.exe')
 
-    await writeFile(file, '{ not json', 'utf8')
-    expect(await new SettingsStore(file).get()).toEqual({ mpvPath: null, appearance: 'system' })
+    const defaults = { mpvPath: null, appearance: 'system', player: 'builtin' }
 
+    await writeFile(file, '{ not json', 'utf8')
+    expect(await new SettingsStore(file).get()).toEqual(defaults)
+
+    // Readable, but with no `player`: an upgrade rather than a fresh install, so it keeps mpv.
     await writeFile(file, JSON.stringify({ version: 1, mpvPath: 42 }), 'utf8')
-    expect(await new SettingsStore(file).get()).toEqual({ mpvPath: null, appearance: 'system' })
+    expect(await new SettingsStore(file).get()).toEqual({ ...defaults, player: 'mpv' })
 
     await writeFile(file, JSON.stringify({ version: 99, mpvPath: 'D:\\mpv.exe' }), 'utf8')
-    expect(await new SettingsStore(file).get()).toEqual({ mpvPath: null, appearance: 'system' })
+    expect(await new SettingsStore(file).get()).toEqual(defaults)
   })
 
   it('remembers the chosen theme, and keeps the mpv choice alongside it', async () => {
@@ -56,7 +68,8 @@ describe('SettingsStore', () => {
 
     expect(await new SettingsStore(file).get()).toEqual({
       mpvPath: 'D:\\Tools\\mpv\\mpv.exe',
-      appearance: 'dark'
+      appearance: 'dark',
+      player: 'builtin'
     })
   })
 
@@ -67,8 +80,25 @@ describe('SettingsStore', () => {
 
     expect(await new SettingsStore(file).get()).toEqual({
       mpvPath: 'D:\\mpv.exe',
-      appearance: 'system'
+      appearance: 'system',
+      player: 'mpv'
     })
+  })
+
+  it('leaves an existing install on mpv, and starts a new one on the built-in player', async () => {
+    // Someone upgrading already has mpv working, and quietly changing what plays their videos
+    // would be a surprise. A fresh install has no mpv at all, so the built-in player is the only
+    // thing that can work out of the box.
+    await writeFile(file, JSON.stringify({ version: 1, mpvPath: null }), 'utf8')
+    expect((await new SettingsStore(file).get()).player).toBe('mpv')
+
+    await rm(file, { force: true })
+    expect((await new SettingsStore(file).get()).player).toBe('builtin')
+  })
+
+  it('reads an unrecognised player as mpv, the safe direction for an upgrade', async () => {
+    await writeFile(file, JSON.stringify({ version: 1, player: 'vlc' }), 'utf8')
+    expect((await new SettingsStore(file).get()).player).toBe('mpv')
   })
 
   it('reads an unrecognised theme as following the system', async () => {

@@ -2,17 +2,32 @@ import type { IpcMainInvokeEvent } from 'electron'
 import {
   APPEARANCES,
   CLEARABLE_DATA,
+  PLAYER_CHOICES,
   SETTINGS_CHANNELS,
   type Appearance,
-  type ClearableData
+  type ClearableData,
+  type PlayerChoice
 } from '../shared/settings'
 import type { SettingsService } from './app/settingsService'
 import type { IpcRegistry } from './ipc'
 
 export type SettingsBackend = Pick<
   SettingsService,
-  'getView' | 'chooseMpv' | 'useDefaultMpv' | 'testMpv' | 'setAppearance' | 'clearData'
+  | 'getView'
+  | 'chooseMpv'
+  | 'useDefaultMpv'
+  | 'testMpv'
+  | 'setAppearance'
+  | 'setPlayer'
+  | 'clearData'
 >
+
+function asPlayerChoice(value: unknown): PlayerChoice {
+  if (typeof value !== 'string' || !(PLAYER_CHOICES as readonly string[]).includes(value)) {
+    throw new Error('Expected builtin or mpv')
+  }
+  return value as PlayerChoice
+}
 
 function asAppearance(value: unknown): Appearance {
   if (typeof value !== 'string' || !(APPEARANCES as readonly string[]).includes(value)) {
@@ -53,6 +68,7 @@ export function registerSettingsIpc(
   handle(SETTINGS_CHANNELS.useDefaultMpv, () => backend.useDefaultMpv())
   handle(SETTINGS_CHANNELS.testMpv, () => backend.testMpv())
   handle(SETTINGS_CHANNELS.setAppearance, ([value]) => backend.setAppearance(asAppearance(value)))
+  handle(SETTINGS_CHANNELS.setPlayer, ([value]) => backend.setPlayer(asPlayerChoice(value)))
   handle(SETTINGS_CHANNELS.clearData, ([what]) => backend.clearData(asClearable(what)))
 
   return () => {

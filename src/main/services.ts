@@ -1,5 +1,6 @@
 import {
   app,
+  ipcMain,
   nativeTheme,
   shell,
   type BrowserWindow,
@@ -26,10 +27,14 @@ import { listVideoFiles } from './files/videoFolder'
 import { registerShufflerIpc } from './ipc'
 import { connectIndexWorker, type IndexWorkerClient } from './library/workerIndexStore'
 import { registerLibraryIpc } from './libraryIpc'
-import { sendToWindow } from './mainWindow'
+import { isTrustedSender, sendToWindow } from './mainWindow'
+import { EmbeddedPlayer } from './playback/embedded/embeddedPlayer'
+import { serveVideo } from './playback/embedded/videoProtocol'
+import { VideoSources } from './playback/embedded/videoSources'
 import { locateMpv, type MpvLocation } from './playback/mpv/findMpv'
 import { KEY_LABELS, launchMpv } from './playback/mpv/mpvPlayer'
 import { probeMpv } from './playback/mpv/probeMpv'
+import { createPlayerTransport } from './playerIpc'
 import { registerSettingsIpc } from './settingsIpc'
 import { registerStatsIpc } from './statsIpc'
 
@@ -45,6 +50,12 @@ export interface ServiceOptions {
 }
 
 export interface Services {
+  /**
+   * Starts serving the built-in player's video stream. Separate from building the services because
+   * a protocol handler can only be registered once the app is ready, and the services are built
+   * before that so the index can start opening.
+   */
+  startVideoStream: () => void
   index: IndexWorkerClient
   stats: StatsService
   shuffler: ShufflerService
@@ -83,12 +94,37 @@ export function createServices(options: ServiceOptions): Services {
 
   const stats = new StatsService({ db })
 
+  // The built-in player (PROJECT.md §4). The video element lives in the window, so "launching" it
+  // is just wiring, not starting a process - but it still goes behind the same `PlaybackAdapter`,
+  // which is what keeps the shuffle, the coordinator and the delete flow from knowing the
+  // difference between this and mpv.
+  const videoSources = new VideoSources()
+  // Set once the page says its video surface exists. Until then a load would go nowhere, so the
+  // adapter reports a failure rather than leaving the coordinator waiting.
+  let videoSurfaceReady = false
+  const playerTransport = createPlayerTransport({
+    ipc: ipcMain,
+    sources: videoSources,
+    sendToWindow: (channel, payload) => sendToWindow(window(), channel, payload),
+    isLive: () => videoSurfaceReady && window() !== null,
+    isTrustedSender: (event) => isTrustedSender(window(), event),
+    onReady: () => {
+      videoSurfaceReady = true
+    }
+  })
+
   const shuffler = new ShufflerService({
     pickFolder: () => pickFolder(window(), 'shuffle'),
     listVideos: listVideoFiles,
-    // Read at every launch, so a new choice in Settings applies to the next shuffle without a restart.
-    launchPlayer: async () =>
-      launchMpv({ mpvPath: mpvLocation((await settingsStore.get()).mpvPath).path }),
+    // Read at every launch, so a new choice in Settings applies to the next shuffle without a
+    // restart - which also means the way back to mpv is one click and no relaunch.
+    launchPlayer: async () => {
+      const saved = await settingsStore.get()
+      if (saved.player === 'builtin') {
+        return new EmbeddedPlayer({ transport: playerTransport.transport })
+      }
+      return launchMpv({ mpvPath: mpvLocation(saved.mpvPath).path })
+    },
     // Rejects instead of deleting permanently when the item can't be recycled (PROJECT.md §2).
     trash: (path) => shell.trashItem(path),
     identify: readFileIdentity,
@@ -165,7 +201,14 @@ export function createServices(options: ServiceOptions): Services {
   stats.onView((view) => sendToWindow(window(), STATS_CHANNELS.view, view))
   settings.onView((view) => sendToWindow(window(), SETTINGS_CHANNELS.view, view))
 
-  return { index, stats, shuffler, library, settings }
+  return {
+    startVideoStream: () => serveVideo(videoSources),
+    index,
+    stats,
+    shuffler,
+    library,
+    settings
+  }
 }
 
 /** Registers every renderer command, each checking its sender (PROJECT.md §5). */

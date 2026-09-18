@@ -2,6 +2,7 @@ import {
   BrowserWindow,
   nativeTheme,
   type BrowserWindowConstructorOptions,
+  type IpcMainEvent,
   type IpcMainInvokeEvent
 } from 'electron'
 import { join } from 'path'
@@ -155,8 +156,15 @@ export function createMainWindow(): BrowserWindow {
   return window
 }
 
-/** Only the app's own window, and only its top-level page, may send commands. */
-export function isTrustedSender(window: BrowserWindow | null, event: IpcMainInvokeEvent): boolean {
+/**
+ * Only the app's own window, and only its top-level page, may send commands. Takes both kinds of
+ * event because the built-in player reports playback one-way rather than through `invoke`, and
+ * there should be exactly one answer to "is this really our page?".
+ */
+export function isTrustedSender(
+  window: BrowserWindow | null,
+  event: IpcMainInvokeEvent | IpcMainEvent
+): boolean {
   return (
     window !== null &&
     !window.isDestroyed() &&
