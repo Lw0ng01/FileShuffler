@@ -96,10 +96,13 @@ export class SettingsStore {
         appearance: APPEARANCES.includes(appearance as Appearance)
           ? (appearance as Appearance)
           : 'system',
-        // Absent in files written before the built-in player existed. Those are upgrades rather
-        // than new installs, so they keep mpv - changing what plays their videos without asking
-        // would be a surprise, and Settings is one click away.
-        player: PLAYER_CHOICES.includes(player as PlayerChoice) ? (player as PlayerChoice) : 'mpv'
+        // Absent in files written before the built-in player existed, and that means the built-in
+        // one. Keeping upgrades on mpv was tried and was exactly wrong (Lucas, 2026-09-17): the
+        // whole point of the built-in player is not to see mpv's window, so defaulting to mpv made
+        // the feature look like it had not shipped. Anyone who wants mpv can choose it in Settings.
+        player: PLAYER_CHOICES.includes(player as PlayerChoice)
+          ? (player as PlayerChoice)
+          : 'builtin'
       }
     } catch {
       return defaults()
