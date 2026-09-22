@@ -18,9 +18,9 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
 "Working with Lucas") are the handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #42 is on `main`, including the packaged
-   player. One branch is waiting for review: **`worktree-player-security`**, the audit of the
-   player's new surface logged below.
+1. `git checkout main && git pull`. Everything through PR #43 is on `main`, including the packaged
+   player and the security audit. One branch is waiting for review:
+   **`worktree-polish-packaging`**, the first macOS build, its signing, and the MIT licence.
    - `worktree-sidebar-material` is a dead duplicate of the merged `worktree-sidebar-mica`, kept
      only because rewriting a pushed branch means a force-push. Delete it.
 2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads its binary on first
@@ -119,11 +119,12 @@ machine keeps its own index.
    in the system's player. mpv is no longer required - it stays in Settings for anyone who wants
    it. What is left is polish: the pipeline, the code and the UI, which is where Lucas wants to
    land next (2026-09-17).
-   - **Not done, and worth deciding**: Delete is missing from the player, so it cannot be used in
-     fullscreen. It was left out because the undo toast is `position: fixed` outside the
-     fullscreen element, and a delete with no visible undo is what §2 exists to prevent. Moving
-     the undo into the player is the fix, and it touches the safety-critical path, so it wants
-     care rather than speed.
+   - ~~Delete is missing from the player~~: **settled, and it stays that way** *(Lucas, 2026-09-22:
+     the player is enough; delete lives everywhere else)*. It was left out because the undo toast is
+     `position: fixed` outside the fullscreen element, so a delete made in fullscreen would have had
+     no visible way back - exactly what §2 exists to prevent. Keeping delete on the Shuffle screen,
+     where the undo already lives, means that hole is never created. Do not "fix" this later without
+     moving the undo inside the player first.
 5. Whenever convenient, Lucas, on the Windows desktop: install from the built installer
    (`npm run build:win`)
    and install it from a separate local Windows account with no development tools, as the
@@ -1092,17 +1093,38 @@ machines, not Lucas's.
   a virtual machine, or at least a fresh Windows user account (no mpv on its PATH, empty app data).
 - Found by the spike: without a pinned folder, the packaged app used the same `file-shuffler` data
   folder as development, contrary to an earlier note. Now pinned (§3 Implementation).
-- [ ] macOS build and platform-specific validation
+- [x] **macOS build** (2026-09-22): `npm run build:mac` produces `file-shuffler-1.0.0.dmg`, 122 MB,
+      arm64 only *(Lucas, 2026-09-22: Apple Silicon is all that is needed)*. Signed ad-hoc, with the
+      hardened runtime off - see §7 Phase 6 signing. Platform validation beyond "it builds and runs"
+      is still open.
 - [ ] Document supported media combinations, resource measurements, and known limitations
 - [x] **mpv's terms:** settled by not bundling it (below). mpv is GPLv2+ by default and LGPLv2.1+
       only when built with `-Dgpl=false` (its `Copyright` file); the Windows build in use states
       neither and ships no license files. Bundling would mean shipping license texts and publishing
       matching source for mpv and every library in that build, with every release.
-- [ ] **A LICENSE for FileShuffler itself:** deferred by Lucas (2026-09-16). Settle it before the
-      first public release: a public repository with no license means nobody may legally reuse it.
-- [ ] **Unsigned installer:** Windows SmartScreen warns on a download from an unknown publisher,
-      and the user has to click through "More info → Run anyway". Either say so plainly in the
-      README or buy a code-signing certificate. Never coach people to disable protections.
+- [x] **A LICENSE for FileShuffler itself: MIT** *(Lucas, 2026-09-22)*. A public repository with no
+      licence is not open source - nobody may legally use, fork or redistribute it - and that was
+      the thing actually standing between this and being downloadable from the repo. Nothing
+      conflicts: mpv is not bundled, so its GPL never reaches us, and the built-in player is
+      Chromium's. `LICENSE` at the root, and `"license": "MIT"` in `package.json`.
+- [ ] **Unsigned on both platforms, and they fail differently.** Windows SmartScreen warns and the
+      person clicks through "More info → Run anyway". macOS is stricter: nothing but a Developer ID
+      satisfies Gatekeeper, so a downloaded build gets the "unidentified developer" prompt that
+      right-click → Open clears. Say both plainly in the README rather than coaching anyone to
+      disable a protection - right-click → Open is Apple's own sanctioned path, which is not the
+      same thing as switching Gatekeeper off.
+      - **Signing as it stands** (2026-09-22): ad-hoc, `identity: '-'` in `electron-builder.yml`.
+        Without it the app keeps only the signature the linker left - identifier `Electron`, no
+        sealed resources - and macOS calls that *damaged* rather than merely unidentified, which is
+        a dead end instead of a prompt.
+      - **The hardened runtime is off**, deliberately. It exists to make notarization possible, and
+        notarization needs the Developer ID we do not have, so it earns nothing while breaking the
+        app: an ad-hoc signature has no team identity, so library validation rejects Electron's own
+        frameworks. electron-builder suggests the `disable-library-validation` entitlement instead,
+        which is a protection switched off rather than a feature left unused. **Turn it back on the
+        day a Developer ID exists**; notarization requires it.
+      - A Developer ID is $99/year and the only way a plain double-click works for someone else.
+        Homebrew Cask is the free middle ground: it handles quarantine as part of a normal install.
 - [ ] **A README for users**, not developers: what it does, install steps, the SmartScreen note,
       where saved progress lives, and how to remove it
 - [x] **Decide the app-data folder name:** `FileShuffler` installed, `FileShuffler Dev` in
@@ -1111,7 +1133,10 @@ machines, not Lucas's.
       explain what's missing rather than fail silently. Choosing mpv in Settings now covers the
       no-PATH case; a guided first run that points there is still to do.
 - [ ] GitHub Releases: attach the installer, decide how versions are numbered, and keep notes on
-      what changed
+      what changed. This is the distribution plan *(Lucas, 2026-09-22: downloadable through the
+      repo)*, and it does not conflict with §2.7 - that rule is about the app making network calls,
+      not about how it is handed out. Hosting on GitHub changes nothing about signing: a file
+      downloaded from a release carries the same quarantine flag as one from anywhere else.
 
 ## 8. Concerns / risks
 
@@ -2054,3 +2079,35 @@ machines, not Lucas's.
     *works* in a packaged build without re-taking startup and memory. Worth a fresh reading before
     any release claim.
   - 343 unit tests, 350 with the real-mpv set, verified on the Mac. No behaviour changed.
+- **2026-09-22:** The first macOS build, and the licence that makes the repo actually open source.
+  - **Two decisions closed.** Delete stays off the player *(Lucas: the player is enough, and delete
+    lives everywhere else)*, which keeps the undo where it already is rather than opening the
+    fullscreen hole §2 exists to prevent. And the macOS window was launched and looks the same as
+    Windows, confirming the removed `vibrancy` was showing nothing - the one thing the code could
+    not prove on its own.
+  - **`npm run build:mac` had never been run.** It works: `file-shuffler-1.0.0.dmg`, 122 MB, arm64
+    only, which is all that is wanted. The mac config had been written long ago and never exercised.
+  - **The first build was worse than unsigned.** With no Developer ID, electron-builder skipped
+    signing entirely, leaving the signature the linker happens to apply: identifier `Electron`,
+    `Info.plist` not bound, no sealed resources. `spctl` called that *"code has no resources but
+    signature indicates they must be present"* - macOS treats it as damaged, which is a dead end
+    rather than a prompt someone can get past.
+  - **Ad-hoc signing fixes the bundle** (`identity: '-'`): identifier `com.lucaswong.fileshuffler`,
+    11 sealed resources. Gatekeeper still refuses it, because nothing but a Developer ID satisfies
+    Gatekeeper - but it refuses it as *unidentified*, which right-click → Open clears.
+  - **The hardened runtime is off, on purpose.** Ad-hoc signing plus the hardened runtime makes
+    library validation reject Electron's own frameworks, and the app fails to launch;
+    electron-builder's own suggestion is the `disable-library-validation` entitlement. Turning a
+    protection off is worse than leaving a feature unused when that feature exists only to enable
+    notarization we cannot do. Verified: the flag went from `0x10002(adhoc,runtime)` to `0x2(adhoc)`
+    and the warning stopped. Set it back to `true` if a Developer ID is ever bought.
+  - The packaged app was launched against an isolated data folder and ran, which is what proves the
+    signing change rather than the flags alone.
+  - **MIT, at last** *(Lucas, 2026-09-22)*. The repo had no licence, so "public" did not mean open
+    source and nobody could legally reuse it - the real blocker to being downloadable from the repo,
+    not the signing. Nothing conflicts, since mpv is not bundled and the player is Chromium's.
+  - Hosting on GitHub Releases changes nothing about signing: a downloaded file carries the same
+    quarantine flag wherever it came from. Homebrew Cask is the free middle ground if the
+    right-click step grates.
+  - Still open for a download anyone else would use: the user-facing README, the clean-machine test,
+    and a packaged baseline taken with the player in.
