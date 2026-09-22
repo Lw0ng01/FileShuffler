@@ -1,7 +1,9 @@
 # CLAUDE.md
 
-Read `PROJECT.md` first. It holds the vision, safety rules (§2), shuffle design (§3), playback plan
-(§4), stack/architecture/efficiency (§5), roadmap (§7) and a dated change log.
+Read `docs/PROJECT.md` first. It holds the vision, safety rules (§2), shuffle design (§3), playback
+plan (§4), stack/architecture/efficiency (§5), roadmap (§7) and a dated change log. It moved out of
+the repository root on 2026-09-22 so the front page shows only what a visitor needs; every `PROJECT.md
+§x` citation in the source still refers to it.
 - Add a Change Log entry there for any major change or decision.
 - This file covers *how to work in the code*. Link to PROJECT.md instead of restating it here.
 

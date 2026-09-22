@@ -77,7 +77,7 @@ npm run build:win    # Windows installer
 npm run build:mac    # macOS .dmg
 ```
 
-Node 22.12 or newer. See [PROJECT.md](PROJECT.md) for the design, the safety rules and the full
+Node 22.12 or newer. See [docs/PROJECT.md](docs/PROJECT.md) for the design, the safety rules and the full
 change log, and [CLAUDE.md](CLAUDE.md) for how to work in the code.
 
 ## Licence

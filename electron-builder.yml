@@ -6,7 +6,13 @@ files:
   - '!**/.vscode/*'
   - '!src/*'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
-  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md,PROJECT.md,CLAUDE.md}'
+  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md,CLAUDE.md}'
+  # Excluded by folder, not by filename. The old list named `PROJECT.md` at the repository root, so
+  # moving it into `docs/` would have silently stopped matching and shipped it inside every build -
+  # and it records real measurements from a real machine, which is the one thing it must not do.
+  # `LICENSE` and `THIRD-PARTY-NOTICES.md` are deliberately *not* excluded: those should travel with
+  # the app.
+  - '!docs'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 asarUnpack:
