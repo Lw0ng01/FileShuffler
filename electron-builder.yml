@@ -13,6 +13,12 @@ files:
   # `LICENSE` and `THIRD-PARTY-NOTICES.md` are deliberately *not* excluded: those should travel with
   # the app.
   - '!docs'
+  # Git worktrees live in `.claude/worktrees/`, inside the project folder, each with its own
+  # checkout and its own `dist/`. Without this, a build packages them: a real one came out at 489 MB
+  # instead of 122 MB because the app contained a complete copy of a previous build of itself, that
+  # checkout's `CLAUDE.md`, and - the part that matters - its `docs/PROJECT.md`. The `!docs` rule
+  # above only ever matched at the root, so a nested copy walked straight past it.
+  - '!.claude'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 asarUnpack:
