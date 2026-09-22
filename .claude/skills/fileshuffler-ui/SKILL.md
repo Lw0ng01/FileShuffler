@@ -117,8 +117,14 @@ Three things follow, and each one silently breaks something if forgotten:
     and would pass through a stretch where it is unreadable against a half-changed background.
 - **Anything pinned over scrolling content** (`.titlebar`, `.screen-header`) must paint `--bg`
   itself, because `body` has no background to sit on.
-- macOS still asks for `vibrancy` and now has nothing to show either. Left alone only because it
-  cannot be checked from Windows - someone on the Mac should decide whether it comes out.
+- **Neither platform takes a window material any more** (macOS settled on the Mac, 2026-09-22).
+  `vibrancy: 'sidebar'` could only show through a translucent sidebar, and `--sidebar` is
+  `var(--panel)` in both palettes, so it had nothing left to show. It went, and the clear
+  `backgroundColor` it required went with it: a transparent window under an opaque page is only a
+  see-through flash waiting for the first frame.
+- `body` is still `transparent` and is now vestigial for the same reason - the sidebar and `.main`
+  between them paint everything. It is harmless, because the window's own `backgroundColor` shows
+  through it, which is the flat surface the app wants anyway. Left alone rather than chased.
 
 `mainWindow.ts` owns this, and `backgroundColor` follows `nativeTheme` - it was hard-coded dark,
 which flashed dark at every launch for a light-mode user. Its two values **are** `--bg` from
