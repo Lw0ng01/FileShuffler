@@ -18,10 +18,9 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
 "Working with Lucas") are the handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #41 is on `main`. One branch is waiting for review:
-   **`worktree-packaged-player`**, which verified the player in a packaged build and sends the
-   formats Chromium cannot decode to the system's player. If it has been merged, nothing else is
-   outstanding.
+1. `git checkout main && git pull`. Everything through PR #42 is on `main`, including the packaged
+   player. One branch is waiting for review: **`worktree-player-security`**, the audit of the
+   player's new surface logged below.
    - `worktree-sidebar-material` is a dead duplicate of the merged `worktree-sidebar-mica`, kept
      only because rewriting a pushed branch means a force-push. Delete it.
 2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads its binary on first
@@ -57,9 +56,9 @@ machine keeps its own index.
   and Delete with a 5-second undo before trashing. See §2, §3, §4 and §6 (Implementation notes).
 - The Windows desktop is set up: Node 24.21, npm 11.19, Git 2.55 and mpv 0.41 from winget
   (§5 Existing setup notes). `npm ci`, typecheck and Electron 44.3.0 work.
-- `npm test` runs 305 unit tests. Seven more run against a real mpv when `MPV_PATH` is set, 312 in
-  all. All 312 pass on both machines, Windows last re-run on 2026-09-17 after the drive-grouping
-  and window-chrome changes.
+- `npm test` runs 343 unit tests. Seven more run against a real mpv when `MPV_PATH` is set, 350 in
+  all. All 350 pass on both machines: Windows last re-run on 2026-09-17 after the drive-grouping
+  and window-chrome changes, the Mac on 2026-09-22.
 - Features are frozen for v1. The agreed order from here is packaging (done, apart from a
   clean-machine test), measure and harden (done, apart from Lucas's USB and clean-machine tests),
   a small refactor (done 2026-09-17: the index runs in a worker thread), then the front end
@@ -101,13 +100,11 @@ machine keeps its own index.
    USB stick or a network share. It must fail with an error and keep the file, never delete
    permanently (§2). Still the one safety rule that has never been exercised against real hardware,
    and the external drive does not count: Windows gives it a Recycle Bin.
-2. **On macOS: decide whether `vibrancy` comes out.** The translucent sidebar was tried and
-   reversed (2026-09-17, twice): it borrowed the OS's tint and the OS's animation with it, so the
-   sidebar trailed the page on every theme change. The sidebar is opaque now, which means
-   `vibrancy: 'sidebar'` on macOS has nothing left to show, exactly as `backgroundMaterial` had
-   nothing to show on Windows - and that one has been removed. Left in place only because it cannot
-   be seen from a Windows machine. Check how it looks on the Mac, then either remove it or say what
-   it is still earning.
+2. ~~On macOS: decide whether `vibrancy` comes out.~~ Settled on the Mac 2026-09-22: it is gone,
+   and the clear `backgroundColor` it required went with it (§10). Still unverified by eye on
+   macOS - the reasoning is that `--sidebar` is a solid colour in both palettes, so there was
+   nothing for it to show through, but a launch on the Mac would confirm the window looks the same
+   as before and does not flash.
 3. The front end (§7 working order). Landed on the Mac on 2026-09-17: motion on the Shuffle screen,
    the visual overhaul towards Apple's language, an Appearance setting (Automatic/Light/Dark), the
    Dashboard as the opening tab, and wider list screens.
@@ -2018,3 +2015,42 @@ machines, not Lucas's.
     a file failed, showing controls over nothing. It hides on failure now.
   - 350 tests, up from 345: the fallback firing only on the right error codes, both ways the system
     player can refuse, and the case where there is no fallback at all.
+- **2026-09-22:** Audited the player's new surface, and took the dead window material out.
+  *(Lucas: features are effectively done; what matters now is fast, not bloated, and above all
+  secure.)*
+  - **The audit found nothing to fix**, which is worth recording as a result rather than a silence.
+    The built-in player added the first new bridge between the renderer and the filesystem since
+    the IPC layer, and that is exactly where path traversal and arbitrary-file reads live.
+  - **Path traversal is impossible by construction, not by validation.** The renderer is handed an
+    integer token and never a path, so there is no path for it to manipulate. `VideoSources` is the
+    only token-to-path map, holds four entries, and is cleared when the session ends. A fully
+    compromised page could at most re-read the handful of files the person is already watching.
+  - Tokens are sequential and guessable, which does not matter here: the scheme sets
+    `corsEnabled: false`, navigation and new windows are refused, the CSP is `default-src 'self'`
+    with `media-src fsvideo:`, and every token maps to a file the session itself just opened.
+  - The security baseline survived two window-chrome rewrites: `sandbox`, `contextIsolation` and
+    `nodeIntegration: false` are all still right, and `isTrustedSender` was correctly widened to
+    cover the player's one-way `IpcMainEvent` as well as `invoke`. Every inbound player message is
+    checked field by field, with the failure reason truncated to 200 characters.
+  - Range handling holds up against the awkward cases - zero-length files, seeks past the end,
+    suffix and open-ended ranges, absurd offsets - all of which answer 416 rather than something
+    worse. The handler opens a read stream and nothing else.
+  - The closest thing to a finding, and not worth changing: the `MediaError` code that decides
+    whether a file goes to the system player comes from the renderer, so a compromised page could
+    make `shell.openPath` open a file the person is already playing.
+  - **`vibrancy` is gone from macOS**, the decision that was left for this machine. `--sidebar` is
+    `var(--panel)` in both palettes, so a translucent-sidebar effect had nothing to show through.
+    The clear `backgroundColor` it required went with it, and **the theme-change handler now runs
+    on every platform** - macOS had been skipped precisely because its background was clear, so
+    leaving that alone would have frozen the launch colour for the session.
+  - `body: transparent` is vestigial for the same reason and was left alone: the window's own
+    background shows through it, which is the flat surface the app wants anyway.
+  - **Not bloated, measured:** one runtime dependency (`@electron-toolkit/utils`) - React, Vite and
+    the rest are dev-only and bundled - and `npm audit` reports no vulnerabilities. The renderer is
+    a single 737 kB chunk with no code splitting, which matters far less loading from disk than it
+    would over a network.
+  - **A gap in the numbers, not a regression:** §5's packaged-app baseline was re-measured after the
+    index moved to a worker thread, but predates the built-in player. PR #42 verified the player
+    *works* in a packaged build without re-taking startup and memory. Worth a fresh reading before
+    any release claim.
+  - 343 unit tests, 350 with the real-mpv set, verified on the Mac. No behaviour changed.

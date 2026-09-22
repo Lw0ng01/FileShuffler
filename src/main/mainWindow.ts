@@ -38,8 +38,8 @@ function backgroundColor(): string {
 /**
  * Windows draws the minimise, maximise and close buttons itself, over the top-right of our page,
  * so it needs to be told what they sit on. Both colours follow the theme, and so must be reapplied
- * with `setTitleBarOverlay` when it changes - unlike `vibrancy` on macOS, nothing here adapts on
- * its own, and dark glyphs on a dark background would be invisible.
+ * with `setTitleBarOverlay` when it changes - nothing here adapts on its own, and dark glyphs on a
+ * dark background would be invisible.
  */
 function titleBarOverlay(): { color: string; symbolColor: string; height: number } {
   return {
@@ -63,9 +63,12 @@ function titleBarOverlay(): { color: string; symbolColor: string; height: number
  * theme switch are one decision, and the switch won - so the page is opaque throughout and the
  * window needs no material behind it.
  *
- * macOS still asks for `vibrancy`, and with an opaque sidebar it has nothing to show either. It is
- * left alone only because it cannot be seen from a Windows machine; someone on the Mac should
- * decide whether it comes out (PROJECT.md, Next steps).
+ * **macOS takes no material either, for the same reason** (settled on the Mac, 2026-09-22).
+ * `vibrancy: 'sidebar'` could only ever show through a translucent sidebar, and `--sidebar` is
+ * `var(--panel)` in both palettes - a solid colour - so it had nothing left to show once the
+ * translucency was reversed. It is gone, and with it the clear `backgroundColor` it required:
+ * a transparent window with an opaque page is just a see-through flash waiting for the first
+ * frame, which is exactly why Windows does not do it either.
  *
  * Windows hides its title bar too, so the sidebar reaches the top edge there as well, and
  * `titleBarOverlay` leaves the window controls native: Windows draws them itself, in the right
@@ -80,9 +83,7 @@ function windowChrome(): BrowserWindowConstructorOptions {
     return {
       titleBarStyle: 'hiddenInset',
       trafficLightPosition: { x: 18, y: 20 },
-      vibrancy: 'sidebar',
-      visualEffectState: 'followWindow',
-      backgroundColor: '#00000000'
+      backgroundColor: backgroundColor()
     }
   }
   if (process.platform === 'win32') {
@@ -125,20 +126,20 @@ export function createMainWindow(): BrowserWindow {
 
   window.on('ready-to-show', () => window.show())
 
-  // Following the system theme means following it while running, not only at launch. macOS keeps
-  // its clear background so the vibrancy stays visible, and needs nothing here.
-  if (process.platform !== 'darwin') {
-    const onThemeChange = (): void => {
-      if (window.isDestroyed()) return
-      // What shows before the first frame paints, so it has to follow the theme too.
-      window.setBackgroundColor(backgroundColor())
-      // The window controls are drawn by Windows, not by the page, so switching to Light in
-      // Settings would otherwise leave light glyphs on the new light background.
-      if (process.platform === 'win32') window.setTitleBarOverlay(titleBarOverlay())
-    }
-    nativeTheme.on('updated', onThemeChange)
-    window.on('closed', () => nativeTheme.off('updated', onThemeChange))
+  // Following the system theme means following it while running, not only at launch. Every
+  // platform needs this now: macOS was skipped while its background was clear for the vibrancy,
+  // and now that it has a real background, it would otherwise keep the launch colour for the rest
+  // of the session and flash it on the next reload.
+  const onThemeChange = (): void => {
+    if (window.isDestroyed()) return
+    // What shows before the first frame paints, so it has to follow the theme too.
+    window.setBackgroundColor(backgroundColor())
+    // The window controls are drawn by Windows, not by the page, so switching to Light in
+    // Settings would otherwise leave light glyphs on the new light background.
+    if (process.platform === 'win32') window.setTitleBarOverlay(titleBarOverlay())
   }
+  nativeTheme.on('updated', onThemeChange)
+  window.on('closed', () => nativeTheme.off('updated', onThemeChange))
 
   // The app never opens other windows or navigates away from its own UI.
   // Same-URL navigation stays allowed so dev-mode reloads keep working.
