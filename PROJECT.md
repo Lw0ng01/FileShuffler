@@ -18,9 +18,9 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
 "Working with Lucas") are the handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #43 is on `main`, including the packaged
-   player and the security audit. One branch is waiting for review:
-   **`worktree-polish-packaging`**, the first macOS build, its signing, and the MIT licence.
+1. `git checkout main && git pull`. Everything through PR #44 is on `main`, including the macOS
+   build and the MIT licence. One branch is waiting for review: **`worktree-readme-baseline`**,
+   the user README, the third-party notices and the first macOS memory reading.
    - `worktree-sidebar-material` is a dead duplicate of the merged `worktree-sidebar-mica`, kept
      only because rewriting a pushed branch means a force-push. Delete it.
 2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads its binary on first
@@ -729,6 +729,17 @@ never played), and timing the longest gap in a 5 ms timer on the calling thread:
   302–350 ms (first launch after a rebuild: 898 ms), idle private memory 210–223 MB, up from
   188 MB. The worker thread's own JavaScript engine and SQLite cache account for that; still under
   the proposed 250 MB budget. A normal close takes about 130 ms, index closed cleanly.
+- **macOS, 2026-09-22, with the built-in player in**: the packaged app idles at **317 MB resident
+  across four processes**, against an empty index.
+  - **This does not compare to the 210-223 MB above**, and should not be read as a regression. That
+    figure is Windows *private* memory; this is macOS *resident* memory, which counts shared
+    framework pages as well - one process reported a 45 MB `phys_footprint` against a far larger
+    resident size, which is the size of the difference. The index was also empty here and real
+    there.
+  - The comparable reading is a Windows one taken with the player in, which is still to do. Until
+    then the 250 MB budget has not actually been tested against the player at all.
+  - Startup was not re-timed: the earlier figure came from instrumentation inside the app, and
+    guessing it from outside would be a worse number pretending to be the same one.
 
 **Still to address:**
 - Not yet tested: a delete on a removable USB stick or network share, and a clean machine.
@@ -1125,8 +1136,10 @@ machines, not Lucas's.
         day a Developer ID exists**; notarization requires it.
       - A Developer ID is $99/year and the only way a plain double-click works for someone else.
         Homebrew Cask is the free middle ground: it handles quarantine as part of a normal install.
-- [ ] **A README for users**, not developers: what it does, install steps, the SmartScreen note,
-      where saved progress lives, and how to remove it
+- [x] **A README for users**, not developers (2026-09-22): what it does, that deletes always go to
+      the Recycle Bin or Trash and can be undone, the unsigned-download step for both platforms,
+      where saved data lives and how to remove it, and that mpv is optional. The old one still
+      described "mpv or VLC" and a dashboard that was "later".
 - [x] **Decide the app-data folder name:** `FileShuffler` installed, `FileShuffler Dev` in
       development, kept separate on purpose (§3 Implementation)
 - [ ] **First run on a clean machine:** no mpv, no PATH entry, no development tools. The app must
@@ -1137,6 +1150,14 @@ machines, not Lucas's.
       repo)*, and it does not conflict with §2.7 - that rule is about the app making network calls,
       not about how it is handed out. Hosting on GitHub changes nothing about signing: a file
       downloaded from a release carries the same quarantine flag as one from anywhere else.
+      - **Attach `LICENSES.chromium.html` to every release.** A packaged build embeds Chromium,
+        whose components are licensed by several hundred separate notices, and those licences
+        require the notices to travel with the binary. Electron ships that file at the root of
+        `electron-v<version>-<platform>-<arch>.zip`; the macOS `.app` does **not** contain it,
+        because electron-builder extracts `Electron.app` and leaves its siblings behind (checked
+        2026-09-22: zero licence files anywhere in the bundle). It is 20 MB, so it belongs on the
+        release rather than in the repository. `THIRD-PARTY-NOTICES.md` explains this and carries
+        Electron's own MIT notice in full.
 
 ## 8. Concerns / risks
 
@@ -2111,3 +2132,27 @@ machines, not Lucas's.
     right-click step grates.
   - Still open for a download anyone else would use: the user-facing README, the clean-machine test,
     and a packaged baseline taken with the player in.
+- **2026-09-22:** A README for people rather than developers, and the licences a public build owes.
+  - **The duplicates had already drifted, in three days.** `AGENTS.md` was a copy of `CLAUDE.md`
+    with the words swapped - "Codex co-author", and a path to `.Codex/skills/...` that does not
+    exist - and it predated the built-in player, so it was missing the token-security note
+    entirely. A second copy of the conventions is a second set of conventions. Both it and
+    `.agents/` are gone.
+  - **The README was rewritten for someone who has never seen the app.** The old one still promised
+    "mpv or VLC" and a dashboard that was "later". The new one leads with what it does, says plainly
+    that deletes go to the Recycle Bin or Trash and can be undone, and walks through the
+    unsigned-download step on both platforms without telling anyone to switch a protection off.
+  - **Found while checking what a public build owes: the bundle ships no licences at all.** Electron
+    is MIT and Chromium is several hundred separate notices, and both require those notices to
+    accompany a binary. The macOS `.app` contains none, because electron-builder extracts
+    `Electron.app` from the distribution zip and leaves `LICENSE` and `LICENSES.chromium.html`
+    behind. `THIRD-PARTY-NOTICES.md` now carries Electron's MIT notice in full and explains where
+    the 20 MB Chromium credits file comes from; attaching it to each release is on the Phase 6 list.
+    Paraphrasing it was rejected: it is an aggregate of hundreds of licences, so a summary would be
+    wrong rather than brief.
+  - **Publishing sweep, clean:** every commit in the whole history uses only the noreply address,
+    and the only paths in tracked files are placeholders (`/Users/someone/...`) or a genuine Windows
+    system path (`C:\Users\Public`). Nothing personal is in the repository.
+  - The first macOS memory reading is in §5 Measurements, with the reasons it is not comparable to
+    the Windows one.
+  - Docs and packaging only: 350 tests, unchanged.
