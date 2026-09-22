@@ -18,9 +18,9 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
 "Working with Lucas") are the handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #46 is on `main`, including this file's
-   move into `docs/`. One branch is waiting for review: **`worktree-chromium-licences`**, which
-   makes the build produce Chromium's licence notices for a release.
+1. `git checkout main && git pull`. Everything through PR #47 is on `main`. One branch is waiting
+   for review: **`worktree-package-exclude`**, which stops builds packaging the git worktrees.
+   **Do not cut a release from a build made before it** - see the change log for 2026-09-22.
    - **This file now lives at `docs/PROJECT.md`.** `CLAUDE.md` deliberately stayed at the root,
      because it only loads as project instructions from there.
    - `worktree-sidebar-material` is a dead duplicate of the merged `worktree-sidebar-mica`, kept
@@ -163,13 +163,27 @@ machine keeps its own index.
     to 15 s only made the failure slower (15201 ms). It is not parallel load either: 12 filtered
     runs, 15 whole-file runs and 6 full-suite runs produced one failure, and that one came from a
     whole-file run on its own.
-  - What is left is mpv itself not finishing a one-second clip inside 15 s. Filtering down to the
-    single test never reproduced it, so the preceding tests in the file matter, which points at
-    process teardown rather than anything about two back-to-back loads.
-  - **The next failure will explain itself.** The integration test now records every raw mpv message
-    with the milliseconds since the player started, and prints them on a timeout, which tells
-    "never arrived" apart from "arrived late" apart from "arrived with a reason that maps to
-    silence". Read that before theorising a fourth time.
+  - **Caught, 2026-09-22, and the answer is mpv.** The instrumentation finally printed a failing
+    run's raw messages:
+
+    ```
+    at 0 ms   start-file       playlist_entry_id 1
+    at 1 ms   end-file  stop   playlist_entry_id 1
+    at 1 ms   start-file       playlist_entry_id 2
+    at 5 ms   file-loaded
+    at 5 ms   playback-restart
+    ... nothing for the next 15 seconds
+    ```
+
+    mpv started the newer file, loaded it, restarted playback - and never sent `end-file` at all.
+    Not a reason that maps to silence, not a late arrival, not the adapter: **the one-second clip
+    simply never finishes**. All three earlier theories are dead, including both of the ones
+    recorded above.
+  - **Why it probably does not reach anyone.** The test runs mpv with `--vo=null --ao=null`, so a
+    generated `lavfi` source has neither a video nor an audio clock to advance it, and playback
+    occasionally just sits. The app starts mpv with real outputs, and mpv is optional now that the
+    built-in player is the default. If it ever needs fixing, the test wants a source that carries
+    its own timing rather than a longer deadline - the deadline was never the problem.
   - One latent hazard found and deliberately left alone: `endOutcome` turns any `end-file` reason
     other than `eof` and `error` into silence, so a reason this code has never seen would look
     exactly like this flake. That is right for `stop` and `redirect`, where the file was replaced on
@@ -1144,9 +1158,24 @@ machines, not Lucas's.
       described "mpv or VLC" and a dashboard that was "later".
 - [x] **Decide the app-data folder name:** `FileShuffler` installed, `FileShuffler Dev` in
       development, kept separate on purpose (§3 Implementation)
-- [ ] **First run on a clean machine:** no mpv, no PATH entry, no development tools. The app must
-      explain what's missing rather than fail silently. Choosing mpv in Settings now covers the
-      no-PATH case; a guided first run that points there is still to do.
+- [ ] **First run on a clean machine:** no mpv, no development tools, empty app data.
+      - **Download it from the release rather than copying it across.** Downloading is what sets the
+        quarantine flag, and the quarantine flag is what summons SmartScreen and Gatekeeper. A file
+        carried over on a USB stick or a network share may arrive without it, which skips the exact
+        behaviour the test exists to check.
+      - So the order is: merge the packaging fix, rebuild on both machines, cut a release (marking
+        it a pre-release keeps it from looking official) with the installer, the `.dmg`,
+        `LICENSES.chromium.html` and `LICENSE` attached, then download from that release on the
+        clean machine.
+      - "Clean" means no Node and no dev tools, and nothing in `%APPDATA%\FileShuffler`. Windows 11
+        Home has no Windows Sandbox, so it needs another PC, a virtual machine, or at least a fresh
+        Windows user account.
+      - What to actually check: SmartScreen appears and *More info → Run anyway* works as the README
+        describes; the app opens; **a video plays with no mpv installed**, which is the real change
+        since this item was written - the built-in player is the default now, so a clean machine
+        should need nothing extra; data lands in `%APPDATA%\FileShuffler` and not the `Dev` folder;
+        a delete reaches the Recycle Bin and Undo brings it back; and an empty Dashboard explains
+        itself rather than looking broken.
 - [ ] GitHub Releases: attach the installer, decide how versions are numbered, and keep notes on
       what changed. This is the distribution plan *(Lucas, 2026-09-22: downloadable through the
       repo)*, and it does not conflict with §2.7 - that rule is about the app making network calls,
@@ -2202,4 +2231,32 @@ machines, not Lucas's.
     annotations - the rule was inapplicable rather than being ignored.
   - `dist/` is git-ignored, so none of this reaches the repository. Checked with `git check-ignore`
     rather than assumed, because a 19 MB accidental commit is not easily undone.
+  - Packaging only: 350 tests, lint and typecheck clean.
+- **2026-09-22:** Builds were packaging the git worktrees, and shipping this file with them.
+  - A `build:mac` on the main checkout produced a **489 MB** dmg where the same build from a
+    worktree produced 122 MB. The difference was entirely `Contents/Resources`: 553 MB against
+    1.1 MB, with `app.asar` holding 750 entries instead of 28.
+  - **The app contained a complete copy of a previous build of itself.** Git worktrees live in
+    `.claude/worktrees/` *inside* the project folder, each with its own checkout and its own
+    `dist/`, and nothing excluded them - so `app.asar` held
+    `.claude/worktrees/resume-notes/dist/file-shuffler-1.0.0.dmg`, that checkout's `CLAUDE.md`, and
+    its 19 MB copy of the Chromium licences.
+  - **And `docs/PROJECT.md` went with it.** The `!docs` rule added earlier that day only ever
+    matched at the repository root, so the nested copy walked straight past it and this file - real
+    measurements from a real machine - was inside the installer. Exactly what moving it was meant to
+    prevent, arriving by a different route the same day.
+  - Fixed with `!.claude` in `electron-builder.yml`. Verified by rebuilding: zero `.claude` entries
+    in the new `app.asar`, 28 entries total, and the app back to 288 MB - of which 287 MB is
+    Electron's own frameworks.
+  - Deliberately *not* fixed with a blanket nested-`dist` exclusion: electron-vite builds the real
+    application into `out/`, so a rule broad enough to catch stray build folders would be one step
+    away from excluding the app itself.
+  - **Nothing built before this should be released.** The lesson is narrower than "check the size":
+    an exclusion written as a bare path only matches at the root, and anything that puts a second
+    checkout inside the project folder turns that into a leak.
+  - **The real-mpv flake was also caught in the act**, by the instrumentation added for exactly that
+    (known quirks above). A failing run's raw messages show mpv starting the newer file, loading it,
+    restarting playback, and then never sending `end-file` at all - so it is mpv not finishing the
+    clip, not the adapter, not a reason that maps to silence, and not a deadline that is too short.
+    Three theories dead, two of them mine, and none of them would have died without the log.
   - Packaging only: 350 tests, lint and typecheck clean.
