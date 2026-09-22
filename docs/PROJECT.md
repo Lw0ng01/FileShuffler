@@ -18,9 +18,9 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
 "Working with Lucas") are the handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #45 is on `main`, including the user
-   README and the third-party notices. One branch is waiting for review:
-   **`worktree-docs-folder`**, which moved this file to `docs/`.
+1. `git checkout main && git pull`. Everything through PR #46 is on `main`, including this file's
+   move into `docs/`. One branch is waiting for review: **`worktree-chromium-licences`**, which
+   makes the build produce Chromium's licence notices for a release.
    - **This file now lives at `docs/PROJECT.md`.** `CLAUDE.md` deliberately stayed at the root,
      because it only loads as project instructions from there.
    - `worktree-sidebar-material` is a dead duplicate of the merged `worktree-sidebar-mica`, kept
@@ -1152,14 +1152,17 @@ machines, not Lucas's.
       repo)*, and it does not conflict with §2.7 - that rule is about the app making network calls,
       not about how it is handed out. Hosting on GitHub changes nothing about signing: a file
       downloaded from a release carries the same quarantine flag as one from anywhere else.
-      - **Attach `LICENSES.chromium.html` to every release.** A packaged build embeds Chromium,
-        whose components are licensed by several hundred separate notices, and those licences
-        require the notices to travel with the binary. Electron ships that file at the root of
-        `electron-v<version>-<platform>-<arch>.zip`; the macOS `.app` does **not** contain it,
+      - **Attach `LICENSES.chromium.html` and `LICENSE` to every release.** A packaged build embeds
+        Chromium, whose components are licensed by several hundred separate notices, and those
+        licences require the notices to travel with the binary. Electron ships them at the root of
+        `electron-v<version>-<platform>-<arch>.zip`; the macOS `.app` does **not** contain them,
         because electron-builder extracts `Electron.app` and leaves its siblings behind (checked
-        2026-09-22: zero licence files anywhere in the bundle). It is 20 MB, so it belongs on the
-        release rather than in the repository. `THIRD-PARTY-NOTICES.md` explains this and carries
-        Electron's own MIT notice in full.
+        2026-09-22: zero licence files anywhere in the bundle).
+      - **The build now produces them** (2026-09-22). `npm run build:mac` and `build:win` end by
+        running `npm run licenses`, which pulls both out of the cached Electron download into
+        `dist/`, beside the installer. Nothing left but uploading them with the installer when a
+        release is actually cut - that step is manual on purpose, because publishing a release is
+        not something a build should do by itself.
 
 ## 8. Concerns / risks
 
@@ -2181,3 +2184,22 @@ machines, not Lucas's.
     the rules in `CLAUDE.md` forbid and which would break every clone. Everything from here is
     private to the repository root; everything before it is public, permanently.
   - Docs and packaging only: 350 tests, lint and typecheck clean.
+- **2026-09-22:** The build now produces Chromium's licence notices for a release.
+  - `scripts/chromium-licenses.mjs` pulls `LICENSES.chromium.html` and Electron's own `LICENSE` out
+    of the cached Electron download into `dist/`, and `build:mac` and `build:win` end by running it.
+    Verified here: 19.2 MB extracted beside the installer.
+  - **Beside the installer, not inside it.** The licences ask that the notice accompany the
+    distribution, which a file on the same release page does. Bundling 19 MB into the app would add
+    a sixth to every download for a file nobody opens twice, and "not bloated" is a stated priority.
+  - It reads the version from the installed `node_modules/electron` rather than the range in
+    `package.json`, so an Electron upgrade cannot leave last version's notices behind, and it fails
+    loudly if the cached download is missing rather than producing nothing quietly.
+  - **The Windows branch is unverified.** Windows has no `unzip`, so it goes through PowerShell's
+    zip API, which cannot be exercised from a Mac. If it ever fails, the two files can be taken out
+    of the zip by hand; the script says so.
+  - `eslint.config.mjs` now turns off `explicit-function-return-type` for `scripts/**/*.mjs`. The
+    recommended TypeScript rules apply to every file, and a plain Node script cannot carry type
+    annotations - the rule was inapplicable rather than being ignored.
+  - `dist/` is git-ignored, so none of this reaches the repository. Checked with `git check-ignore`
+    rather than assumed, because a 19 MB accidental commit is not easily undone.
+  - Packaging only: 350 tests, lint and typecheck clean.

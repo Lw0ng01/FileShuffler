@@ -16,8 +16,9 @@
     "build": "npm run typecheck && electron-vite build",
     "postinstall": "electron-builder install-app-deps",
     "build:unpack": "npm run build && electron-builder --dir",
-    "build:win": "npm run build && electron-builder --win",
-    "build:mac": "electron-vite build && electron-builder --mac",
+    "licenses": "node scripts/chromium-licenses.mjs",
+    "build:win": "npm run build && electron-builder --win && npm run licenses",
+    "build:mac": "electron-vite build && electron-builder --mac && npm run licenses",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest"
   },
