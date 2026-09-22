@@ -19,6 +19,20 @@ nsis:
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
 mac:
+  # Ad-hoc signing, because there is no Developer ID (PROJECT.md §7 Phase 6). Without this the app
+  # keeps only the signature the linker left: the signing identifier stays `Electron`, no resources
+  # are sealed, and macOS calls the result damaged rather than merely unidentified. Ad-hoc does not
+  # satisfy Gatekeeper either - nothing but a Developer ID does - but it makes the bundle valid, so
+  # a download opens with the ordinary "unidentified developer" prompt that right-click, Open clears.
+  identity: '-'
+  # Off while the signature is ad-hoc. The hardened runtime exists to make notarization possible,
+  # and notarization needs a Developer ID we do not have - so it earns nothing here, while breaking
+  # the app: an ad-hoc signature has no team identity, so library validation rejects Electron's own
+  # frameworks and the app fails to launch. The alternative electron-builder suggests is the
+  # `com.apple.security.cs.disable-library-validation` entitlement, which is a protection switched
+  # off rather than a feature left unused. **Set this back to true the day a Developer ID exists**;
+  # notarization requires it.
+  hardenedRuntime: false
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     - NSDocumentsFolderUsageDescription: FileShuffler reads your Documents folder to list files.

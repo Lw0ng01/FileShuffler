@@ -2,6 +2,7 @@
   "name": "file-shuffler",
   "version": "1.0.0",
   "description": "Personal video shuffler + file dashboard (Electron + TypeScript)",
+  "license": "MIT",
   "main": "./out/main/index.js",
   "author": "Lucas Wong",
   "scripts": {
