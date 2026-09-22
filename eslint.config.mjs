@@ -28,5 +28,12 @@ export default defineConfig(
       ...eslintPluginReactRefresh.configs.vite.rules
     }
   },
+  {
+    // Build scripts are plain Node, not TypeScript, and the recommended TypeScript rules apply to
+    // every file rather than only `.ts`. Asking JavaScript for return-type annotations is a rule
+    // that cannot be satisfied rather than one being ignored.
+    files: ['scripts/**/*.mjs'],
+    rules: { '@typescript-eslint/explicit-function-return-type': 'off' }
+  },
   eslintConfigPrettier
 )

@@ -41,10 +41,16 @@ Electron embeds Chromium, which is not under a single licence. It ships an aggre
 document listing every component it contains - several hundred of them, under BSD, MIT, Apache 2.0
 and others - each with its own copyright notice.
 
-That document is **`LICENSES.chromium.html`**, about 20 MB, and it is the notice for all of them. It
+That document is **`LICENSES.chromium.html`**, about 19 MB, and it is the notice for all of them. It
 is too large to keep in this repository, and paraphrasing it would be both incomplete and wrong, so
 it is published **alongside the installers on each
 [release](https://github.com/Lw0ng01/FileShuffler/releases)**.
+
+`npm run build:mac` and `npm run build:win` write it into `dist/` next to the installer, along with
+Electron's own `LICENSE`; `npm run licenses` produces them on their own. Both belong on the release.
+They sit beside the installer rather than inside it: the licences ask that the notice accompany the
+distribution, and bundling 19 MB into every download would add a sixth to its size for a file nobody
+opens twice.
 
 If you have a build and want the exact file for its version, it is also inside the official Electron
 distribution for that version, at the root of
