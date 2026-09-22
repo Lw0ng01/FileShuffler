@@ -18,9 +18,11 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
 "Working with Lucas") are the handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #44 is on `main`, including the macOS
-   build and the MIT licence. One branch is waiting for review: **`worktree-readme-baseline`**,
-   the user README, the third-party notices and the first macOS memory reading.
+1. `git checkout main && git pull`. Everything through PR #45 is on `main`, including the user
+   README and the third-party notices. One branch is waiting for review:
+   **`worktree-docs-folder`**, which moved this file to `docs/`.
+   - **This file now lives at `docs/PROJECT.md`.** `CLAUDE.md` deliberately stayed at the root,
+     because it only loads as project instructions from there.
    - `worktree-sidebar-material` is a dead duplicate of the merged `worktree-sidebar-mica`, kept
      only because rewriting a pushed branch means a force-push. Delete it.
 2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads its binary on first
@@ -2156,3 +2158,26 @@ machines, not Lucas's.
   - The first macOS memory reading is in §5 Measurements, with the reasons it is not comparable to
     the Windows one.
   - Docs and packaging only: 350 tests, unchanged.
+- **2026-09-22:** Moved this file to `docs/`, and caught what that would have shipped.
+  - The repository root now shows a visitor `README.md`, `LICENSE` and `THIRD-PARTY-NOTICES.md`
+    rather than the working notes *(Lucas, 2026-09-22)*.
+  - **`CLAUDE.md` stayed at the root on purpose.** It is not documentation; it is a config file that
+    only loads as project instructions from the root, so moving it would have quietly cost every
+    future session the conventions, the safety rules and the commit-voice rule. It belongs with
+    `eslint.config.mjs` and `.prettierrc.yaml`, which nobody relocates for tidiness either.
+  - **The move would have shipped this file inside every build.** `electron-builder.yml` excluded
+    `PROJECT.md` *by name at the root*, so relocating it silently stopped the pattern matching -
+    and this file records real measurements from a real machine, which is precisely what must not
+    travel in a public download. The exclusion is now `!docs`, by folder.
+  - Verified rather than assumed: the packaged `app.asar` was listed after rebuilding. It contains
+    `/LICENSE` and `/THIRD-PARTY-NOTICES.md` - so the notices now genuinely ship with the app, which
+    is part of the obligation recorded above - and no `docs/` and no `PROJECT.md`.
+  - The roughly forty `PROJECT.md §x` citations in the source were left alone. They name the
+    document, not a path, and rewriting forty files for a cosmetic move is risk and noise without
+    a reader being any better off.
+  - **Hiding it from history was never on the table**, and the reasoning is worth keeping: this file
+    appears in 55 of 101 commits, starting at the first scaffold commit. Erasing it would mean
+    rewriting more than half the repository and force-pushing over 45 merged pull requests, which
+    the rules in `CLAUDE.md` forbid and which would break every clone. Everything from here is
+    private to the repository root; everything before it is public, permanently.
+  - Docs and packaging only: 350 tests, lint and typecheck clean.
