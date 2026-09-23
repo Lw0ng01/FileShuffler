@@ -1,0 +1,41 @@
+<!--
+  FileShuffler's app icon: the master every icon file is generated from.
+  Edit this, then run `npm run icons` - never edit build/icon.png, .ico or .icns by hand.
+
+  An amber folder, the colour everyone reads as "a folder of files", on the same dark grey as the
+  app's own surfaces, with the app's shuffle glyph on its front. The glyph group keeps id="glyph"
+  and stroke-width="2.6": the generator thickens exactly that for the smallest sizes, where a 2.6
+  stroke would disappear.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="plate" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a3a3e"/>
+      <stop offset="1" stop-color="#1c1c1e"/>
+    </linearGradient>
+    <linearGradient id="folderBack" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e8940f"/>
+      <stop offset="1" stop-color="#d27d05"/>
+    </linearGradient>
+    <linearGradient id="folderFront" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffd663"/>
+      <stop offset="1" stop-color="#f8ae25"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="40" y="40" width="944" height="944" rx="210" fill="url(#plate)"/>
+
+  <path fill="url(#folderBack)"
+    d="M 190 375 Q 190 270 235 270 H 408 Q 435 270 466 330 H 789 Q 834 330 834 375 V 670 H 190 Z"/>
+  <rect x="177" y="400" width="670" height="370" rx="45" fill="url(#folderFront)"/>
+
+  <!-- The shuffle glyph from src/renderer/src/components/Icons.tsx, scaled onto the folder front. -->
+  <g id="glyph" transform="translate(338.39 431.33) scale(13.889)" fill="none" stroke="#2a2a2c"
+    stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 3h5v5"/>
+    <path d="M4 20 21 3"/>
+    <path d="M21 16v5h-5"/>
+    <path d="m15 15 6 6"/>
+    <path d="M4 4l5 5"/>
+  </g>
+</svg>

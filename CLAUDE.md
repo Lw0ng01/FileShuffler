@@ -177,4 +177,10 @@ npm run lint
 npm run build       # typecheck + production build into out/
 npm run build:win   # Windows installer
 npm run build:mac   # macOS dmg
+npm run icons       # regenerate every icon file from build/icon.svg
 ```
+
+The app icon has one source, `build/icon.svg`. `build/icon.ico`, `build/icon.icns`, `build/icon.png`
+and `resources/icon.png` are generated from it by `scripts/make-icons.mjs`: never edit them by hand,
+and commit them with the SVG so a build never needs the generator. Windows' small `.ico` sizes are
+bitmaps on purpose - PNG ones decode as noise through Windows' own icon loader.

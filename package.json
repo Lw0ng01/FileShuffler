@@ -17,6 +17,7 @@
     "postinstall": "electron-builder install-app-deps",
     "build:unpack": "npm run build && electron-builder --dir",
     "licenses": "node scripts/chromium-licenses.mjs",
+    "icons": "electron scripts/make-icons.mjs",
     "build:win": "npm run build && electron-builder --win && npm run licenses",
     "build:mac": "electron-vite build && electron-builder --mac && npm run licenses",
     "test": "vitest run --passWithNoTests",

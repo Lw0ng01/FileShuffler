@@ -18,15 +18,17 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
 "Working with Lucas") are the handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #49 is on `main`, including the fix that
+1. `git checkout main && git pull`. Everything through PR #50 is on `main`, including the fix that
    stops builds packaging the git worktrees - so **builds made from `main` now are safe to
    release; anything built before #48 is not.** One branch is waiting for review:
-   **`worktree-install-guide`**: the README's download and install guide, and the `.dmg` renamed
-   to `FileShuffler-<version>.dmg` to match the Windows installer.
+   **`worktree-app-icon`**: FileShuffler's own icon, replacing Electron's placeholder.
    - **The first release is being cut: `v1.0.0`, a full release, not a pre-release**
      *(Lucas, 2026-09-23)*, so the README can link to `/releases/latest`, which skips
-     pre-releases. The Mac `dist/` has to be cleared and the `.dmg` rebuilt after this branch
-     merges, both for the new name and to be certain it is a post-#48 build.
+     pre-releases. **It is a draft on GitHub**, and its Windows installer predates the new icon:
+     once the icon branch merges, the Windows installer is rebuilt from that merge and replaces
+     the one on the draft, and the Mac `.dmg` is built from the same merge. Both files from one
+     commit is the whole point - it is what "the same on both platforms" means.
+   - On the Mac, clear `dist/` before building: it still holds the pre-#48 builds.
    - **This file now lives at `docs/PROJECT.md`.** `CLAUDE.md` deliberately stayed at the root,
      because it only loads as project instructions from there.
    - `worktree-sidebar-material` is a dead duplicate of the merged `worktree-sidebar-mica`, kept
@@ -2306,3 +2308,35 @@ machines, not Lucas's.
   - **`/releases/latest` is why this is a full release.** GitHub's latest link skips pre-releases,
     so marking v1.0.0 as one would have left the front page's download link with nowhere to go.
   - Docs and build configuration only. 350 tests, lint and typecheck clean.
+- **2026-09-23:** FileShuffler's own icon, replacing Electron's placeholder.
+  - **The app had been shipping the Electron atom**, the template's placeholder, as its icon on
+    every platform - the installer, the exe, the Dock. *(Lucas, 2026-09-23)*: "something simple like
+    the file explorer logo with a shuffle on it". Three versions were drawn and shown at real sizes
+    on light and dark backgrounds; he chose an amber folder on a dark rounded plate, with the app's
+    own shuffle glyph on the folder's front. The amber reads as "folder of files" everywhere; the
+    plate is the app's own dark grey; the glyph is the one already in the sidebar.
+  - **One source, `build/icon.svg`, and a generator**: `npm run icons` writes the `.ico`, `.icns`
+    and both PNGs from it. It rasterises with Electron's own Chromium rather than adding an image
+    library, and writes the two container formats itself - `iconutil` exists only on macOS, so
+    otherwise a Windows machine could not rebuild the Mac icon.
+  - **Each platform gets what suits it.** The Windows icon fills its square; the Mac one sits on
+    Apple's icon grid with a soft shadow, because a full-bleed plate looks oversized in the Dock.
+    The smallest sizes get a heavier glyph, which otherwise vanishes at 16px.
+  - **Caught before it shipped: the first `.ico` was noise at small sizes.** Every size was written
+    as PNG, which Explorer handles, but read through Windows' own icon loader the 16-128px entries
+    came back as random pixels. Anything that reads icons that way - some taskbars, lists and
+    installers - would have shown garbage. The previous known-good `.ico` held classic 32-bit
+    bitmaps for those sizes and PNG only at 256, so that is what the generator writes now, and the
+    same loader reads all of them cleanly.
+  - Verified: Windows shows the new icon on both the built app and the installer, and the `.icns`
+    walks cleanly (eight PNG entries, 32-1024px, declared length matching actual).
+  - **Build scripts left the shipped app.** `!scripts` in `electron-builder.yml`; the licence
+    gatherer had been sitting in `app.asar`, and the icon generator would have joined it. Deferred
+    earlier so v1.0.0's two builds would match, but both are rebuilt from this commit now anyway.
+    `app.asar` is 26 entries, down from 28.
+  - The generator is `.mjs`, following the project's convention for scripts, which the lint config
+    already treats as plain JavaScript.
+  - **Not done, and worth knowing before a wider release:** the app's shuffle glyph matches
+    Feather's MIT-licensed icon, and nothing in `THIRD-PARTY-NOTICES.md` credits it. That predates
+    this change - the in-app icons have used it since the start - but it is now in the app icon too.
+  - 350 tests, lint and typecheck clean.
