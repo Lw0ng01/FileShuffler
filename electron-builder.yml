@@ -19,6 +19,9 @@ files:
   # checkout's `CLAUDE.md`, and - the part that matters - its `docs/PROJECT.md`. The `!docs` rule
   # above only ever matched at the root, so a nested copy walked straight past it.
   - '!.claude'
+  # Build-time tools (the icon generator, the licence gatherer) run from the project folder, never
+  # from inside the app, so they have no business in `app.asar`.
+  - '!scripts'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 asarUnpack:
