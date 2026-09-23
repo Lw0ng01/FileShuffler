@@ -65,10 +65,20 @@ To uninstall: **Settings → Apps → Installed apps → FileShuffler → Uninst
 1. Download `FileShuffler-<version>.dmg` from the
    [latest release](https://github.com/Lw0ng01/FileShuffler/releases/latest).
 2. Open it and drag **FileShuffler** into **Applications**.
-3. Open FileShuffler from Applications. macOS says it can't verify the developer and won't open it.
-   Click **Done** (not Move to Trash).
-4. Open **System Settings → Privacy & Security**, scroll down to the message about FileShuffler, and
-   click **Open Anyway**. Confirm with your password or Touch ID.
+3. Open FileShuffler from Applications. macOS says:
+
+   > Apple could not verify "FileShuffler" is free of malware that may harm your Mac or compromise
+   > your privacy.
+
+   That is the standard message for any app that isn't registered with Apple, not a sign that
+   anything is wrong with this one. Click **Done** (not Move to Trash).
+4. Open **System Settings → Privacy & Security** and scroll down to the **Security** section, which
+   now says FileShuffler was blocked. Click **Open Anyway** and confirm with your password or
+   Touch ID, then open FileShuffler again and choose **Open Anyway** once more if it asks.
+
+   The **Open Anyway** button only stays there for about an hour after a blocked attempt. If it
+   isn't there, open the app once more to see the message again, click **Done**, and go straight
+   back to Privacy & Security.
 
    On older macOS versions there's a shortcut instead: right-click the app, choose **Open**, then
    **Open** again.

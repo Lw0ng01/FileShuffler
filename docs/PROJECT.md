@@ -18,17 +18,21 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
 "Working with Lucas") are the handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #50 is on `main`, including the fix that
+1. `git checkout main && git pull`. Everything through PR #51 is on `main`, including the fix that
    stops builds packaging the git worktrees - so **builds made from `main` now are safe to
    release; anything built before #48 is not.** One branch is waiting for review:
-   **`worktree-app-icon`**: FileShuffler's own icon, replacing Electron's placeholder.
-   - **The first release is being cut: `v1.0.0`, a full release, not a pre-release**
-     *(Lucas, 2026-09-23)*, so the README can link to `/releases/latest`, which skips
-     pre-releases. **It is a draft on GitHub**, and its Windows installer predates the new icon:
-     once the icon branch merges, the Windows installer is rebuilt from that merge and replaces
-     the one on the draft, and the Mac `.dmg` is built from the same merge. Both files from one
-     commit is the whole point - it is what "the same on both platforms" means.
-   - On the Mac, clear `dist/` before building: it still holds the pre-#48 builds.
+   **`worktree-release-readme`**: the README's macOS step with the real Gatekeeper wording, and
+   the Feather notice the shuffle icon owes.
+   - **`v1.0.0` is a draft on GitHub, built and download-tested on both platforms, and publishing
+     it is the one step left** - it follows this branch merging, so the front page's instructions
+     are right on the day its download link starts working. It is a full release, not a
+     pre-release *(Lucas, 2026-09-23)*, because the README links to `/releases/latest`, which
+     skips pre-releases.
+   - Both files on it come from one commit, `0647588` (the icon merge): the Windows installer was
+     rebuilt from it here and the `.dmg` built from it on the Mac. That is what "the same on both
+     platforms" means. Attached beside them: `LICENSES.chromium.html`, `LICENSE`, and
+     `THIRD-PARTY-NOTICES.md` - the last because the builds on the release predate its Feather
+     entry, and attaching it is how that notice accompanies them without rebuilding both.
    - **This file now lives at `docs/PROJECT.md`.** `CLAUDE.md` deliberately stayed at the root,
      because it only loads as project instructions from there.
    - `worktree-sidebar-material` is a dead duplicate of the merged `worktree-sidebar-mica`, kept
@@ -1168,6 +1172,16 @@ machines, not Lucas's.
 - [x] **Decide the app-data folder name:** `FileShuffler` installed, `FileShuffler Dev` in
       development, kept separate on purpose (§3 Implementation)
 - [ ] **First run on a clean machine:** no mpv, no development tools, empty app data.
+      - **Downloaded from the release and installed on both platforms (2026-09-23)**, by Lucas, on
+        his own Windows desktop and Mac. Windows: SmartScreen appeared and *More info → Run
+        anyway* worked, it installed without an admin prompt and ran. macOS: *"Apple could not
+        verify 'FileShuffler' is free of malware"* - the expected message for an ad-hoc-signed
+        app, and crucially not *"damaged"* - then Privacy & Security → Open Anyway, and it opened
+        with the new icon, played with the built-in player, and deleted and undid.
+      - **Still not a clean machine**, which is why this box stays unticked: both have Node and
+        the dev tools, and the Windows desktop has mpv. What it did prove is the part only a real
+        download can - the quarantine flag, the warnings and the install path. A fresh user
+        account on either is still the honest test of "nothing else installed".
       - **Download it from the release rather than copying it across.** Downloading is what sets the
         quarantine flag, and the quarantine flag is what summons SmartScreen and Gatekeeper. A file
         carried over on a USB stick or a network share may arrive without it, which skips the exact
@@ -2340,3 +2354,21 @@ machines, not Lucas's.
     Feather's MIT-licensed icon, and nothing in `THIRD-PARTY-NOTICES.md` credits it. That predates
     this change - the in-app icons have used it since the start - but it is now in the app icon too.
   - 350 tests, lint and typecheck clean.
+- **2026-09-23:** Downloaded and installed on both platforms, and the two things fixed before
+  publishing.
+  - **Both download tests passed** *(Lucas, 2026-09-23)*: the installer from the draft release on
+    Windows, and the `.dmg` on the Mac, both through a real download so the quarantine flag and the
+    warnings were the ones a stranger would see (§7 Phase 6 has the detail).
+  - **The README's macOS step named the wrong message.** It said macOS "can't verify the
+    developer"; what it actually says is *"Apple could not verify 'FileShuffler' is free of malware
+    that may harm your Mac or compromise your privacy."* The guide quotes it word for word now,
+    because someone following instructions needs to recognise the exact words - and that
+    particular wording sounds far worse than the situation is, so the guide says plainly that it is
+    the standard message for any app not registered with Apple. It also says where Open Anyway
+    actually is (the Security section) and that the button only lasts about an hour.
+  - **The shuffle icon owed a notice.** It is Feather's `shuffle` icon path for path, and Feather is
+    MIT, whose one condition is that the notice travels with copies. It was in the sidebar from the
+    start and went into the app icon today, and nothing credited it. `THIRD-PARTY-NOTICES.md` has a
+    Feather section now, and since the builds already on the draft predate it, the notices file is
+    attached to the release beside the Chromium licences rather than making both platforms rebuild.
+  - Publishing follows this merging. Docs only; 350 tests, lint and typecheck clean.
