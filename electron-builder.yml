@@ -53,6 +53,8 @@ mac:
     - NSRemovableVolumesUsageDescription: FileShuffler reads external drives to list files.
   notarize: false
 dmg:
-  artifactName: ${name}-${version}.${ext}
+  # `${productName}`, not `${name}`: the package name is `file-shuffler`, which made the release
+  # offer `file-shuffler-1.0.0.dmg` beside `FileShuffler-Setup-1.0.0.exe`. One product, one spelling.
+  artifactName: ${productName}-${version}.${ext}
 npmRebuild: false
 # No `publish` block on purpose: the app makes no network calls (PROJECT.md §2.7).

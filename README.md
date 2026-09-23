@@ -8,6 +8,19 @@ watch - with a few seconds to undo.
 
 It is completely local. No accounts, no telemetry, no network requests of any kind.
 
+## Download
+
+**[Download the latest version](https://github.com/Lw0ng01/FileShuffler/releases/latest)**, then pick the
+file for your computer under **Assets**:
+
+| Your computer | File |
+| --- | --- |
+| Windows 10 or 11 (64-bit) | `FileShuffler-Setup-<version>.exe` |
+| Mac with Apple Silicon (M1 or newer) | `FileShuffler-<version>.dmg` |
+
+It's free and not code-signed, so your system will ask you to confirm the first time you open it.
+[How to install](#installing) walks through that, step by step. Nothing else needs to be installed.
+
 ## What it does
 
 - **Shuffle** - pick a folder and play through it. Every video plays once per cycle before any
@@ -31,20 +44,40 @@ cancelled if you close the app.
 
 ## Installing
 
-Downloads are on the [Releases page](https://github.com/Lw0ng01/FileShuffler/releases).
-
 **The app is not code-signed**, because a signing certificate costs money every year and this is a
-personal project given away for free. Both systems will therefore warn you the first time:
+personal project given away for free. So the first time, Windows and macOS both stop and ask whether
+you trust it. That is expected, and it only happens once. Only go ahead because you trust where you
+got the file - the source is all here if you would rather read it or build it yourself.
 
-- **macOS** - open the `.dmg`, drag FileShuffler to Applications, then **right-click the app and
-  choose Open** the first time. A plain double-click will refuse. macOS remembers after that.
-- **Windows** - run the installer. SmartScreen shows "Windows protected your PC": click
-  **More info**, then **Run anyway**.
+### Windows
 
-Only do this because you trust where you got the file. The source is all here if you would rather
-read it or build it yourself.
+1. Download `FileShuffler-Setup-<version>.exe` from the
+   [latest release](https://github.com/Lw0ng01/FileShuffler/releases/latest). If your browser says it
+   isn't commonly downloaded, choose to keep it.
+2. Open it. Windows shows **"Windows protected your PC"**: click **More info**, then **Run anyway**.
+3. That's it. It installs just for you (no administrator password), puts FileShuffler on your
+   desktop and in the Start menu, and opens when it's done.
 
-Apple Silicon Macs only for now; the Windows build is 64-bit.
+To uninstall: **Settings → Apps → Installed apps → FileShuffler → Uninstall**.
+
+### macOS (Apple Silicon)
+
+1. Download `FileShuffler-<version>.dmg` from the
+   [latest release](https://github.com/Lw0ng01/FileShuffler/releases/latest).
+2. Open it and drag **FileShuffler** into **Applications**.
+3. Open FileShuffler from Applications. macOS says it can't verify the developer and won't open it.
+   Click **Done** (not Move to Trash).
+4. Open **System Settings → Privacy & Security**, scroll down to the message about FileShuffler, and
+   click **Open Anyway**. Confirm with your password or Touch ID.
+
+   On older macOS versions there's a shortcut instead: right-click the app, choose **Open**, then
+   **Open** again.
+
+macOS remembers after that; later it opens like any other app. To uninstall, drag FileShuffler from
+Applications to the Trash.
+
+Uninstalling leaves your saved data behind (see [Where your data is kept](#where-your-data-is-kept)),
+so a reinstall picks up where you left off. Delete that folder too if you want it all gone.
 
 ## Playing videos
 
