@@ -18,25 +18,23 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
 "Working with Lucas") are the handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #51 is on `main`, including the fix that
-   stops builds packaging the git worktrees - so **builds made from `main` now are safe to
-   release; anything built before #48 is not.** One branch is waiting for review:
-   **`worktree-release-readme`**: the README's macOS step with the real Gatekeeper wording, and
-   the Feather notice the shuffle icon owes.
-   - **`v1.0.0` is a draft on GitHub, built and download-tested on both platforms, and publishing
-     it is the one step left** - it follows this branch merging, so the front page's instructions
-     are right on the day its download link starts working. It is a full release, not a
-     pre-release *(Lucas, 2026-09-23)*, because the README links to `/releases/latest`, which
-     skips pre-releases.
-   - Both files on it come from one commit, `0647588` (the icon merge): the Windows installer was
-     rebuilt from it here and the `.dmg` built from it on the Mac. That is what "the same on both
-     platforms" means. Attached beside them: `LICENSES.chromium.html`, `LICENSE`, and
-     `THIRD-PARTY-NOTICES.md` - the last because the builds on the release predate its Feather
-     entry, and attaching it is how that notice accompanies them without rebuilding both.
+1. `git checkout main && git pull`. Everything through PR #52 is on `main`. One branch is waiting
+   for review: **`worktree-release-published`**, which records the release below; if it has been
+   merged, nothing is outstanding.
+   - **`v1.0.0` is published** (2026-09-23): https://github.com/Lw0ng01/FileShuffler/releases/tag/v1.0.0
+     A full release, not a pre-release *(Lucas, 2026-09-23)*, because the README links to
+     `/releases/latest`, which skips pre-releases. Checked logged out, the way a stranger sees
+     it: that link redirects to `v1.0.0`, and both installers download.
+   - Both installers come from one commit, `0647588` (the icon merge), which is what the tag
+     points at: the Windows installer built on the desktop and the `.dmg` on the Mac. Beside
+     them: `LICENSES.chromium.html`, `LICENSE`, and `THIRD-PARTY-NOTICES.md` - the last because
+     those builds predate its Feather entry.
+   - **The next release**: bump `version` in `package.json`, build on both machines from the same
+     commit, create the release as a draft, `gh release upload` from each machine, download-test,
+     then publish. `gh` is installed and logged in on both machines. The asset names carry the
+     version, so the README's table deliberately says `<version>` rather than a number.
    - **This file now lives at `docs/PROJECT.md`.** `CLAUDE.md` deliberately stayed at the root,
      because it only loads as project instructions from there.
-   - `worktree-sidebar-material` is a dead duplicate of the merged `worktree-sidebar-mica`, kept
-     only because rewriting a pushed branch means a force-push. Delete it.
 2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads its binary on first
    run), then `npm test`. Expect 305 passing, plus 7 more with `MPV_PATH` set to mpv's path.
    - **On Windows, use Command Prompt, not PowerShell**, or `npm.cmd run dev`: Windows' default
@@ -1164,7 +1162,24 @@ machines, not Lucas's.
         which is a protection switched off rather than a feature left unused. **Turn it back on the
         day a Developer ID exists**; notarization requires it.
       - A Developer ID is $99/year and the only way a plain double-click works for someone else.
-        Homebrew Cask is the free middle ground: it handles quarantine as part of a normal install.
+      - **What removing the warnings would take** (looked at 2026-09-23, left unsigned for now
+        *(Lucas, 2026-09-23)*). Prices and programmes move, so check them before paying.
+        - **macOS: money fixes it completely.** The Apple Developer Program ($99/year) gives a
+          Developer ID certificate; sign with it, turn the hardened runtime back on, notarize, and
+          a download opens with only the ordinary "downloaded from the internet" confirmation.
+          There is no free way to that result. Homebrew Cask used to be the free middle ground,
+          but Homebrew has been phasing out casks that fail Gatekeeper, so do not plan on it.
+        - **Windows: money helps but does not fix it at once.** SmartScreen judges reputation,
+          not just signatures. A certificate - a traditional one at roughly $200-500 a year, with
+          its key on a hardware token, or Microsoft's cloud signing service at around $10 a month
+          where an individual is eligible - makes the prompt name the publisher and lets
+          reputation build up for that name, but a new publisher still sees the warning until
+          enough people have downloaded it. EV certificates no longer skip that wait. Free but
+          per-release: submitting each new installer to Microsoft for analysis can clear its
+          reputation.
+        - **If one is ever worth paying for, it is Apple's.** The Mac path is the harder of the
+          two for a stranger - it is buried in System Settings, where Windows is two clicks - and
+          $99 removes it entirely, where no Windows purchase does that on day one.
 - [x] **A README for users**, not developers (2026-09-22): what it does, that deletes always go to
       the Recycle Bin or Trash and can be undone, the unsigned-download step for both platforms,
       where saved data lives and how to remove it, and that mpv is optional. The old one still
@@ -2372,3 +2387,17 @@ machines, not Lucas's.
     Feather section now, and since the builds already on the draft predate it, the notices file is
     attached to the release beside the Chromium licences rather than making both platforms rebuild.
   - Publishing follows this merging. Docs only; 350 tests, lint and typecheck clean.
+- **2026-09-23:** v1.0.0 published.
+  - https://github.com/Lw0ng01/FileShuffler/releases/tag/v1.0.0 - a full release holding
+    `FileShuffler-Setup-1.0.0.exe`, `FileShuffler-1.0.0.dmg`, `LICENSES.chromium.html`, `LICENSE`
+    and `THIRD-PARTY-NOTICES.md`, tagged at `0647588`, the one commit both installers were built
+    from.
+  - **Checked logged out**, since a draft is visible to its owner and proves nothing about what a
+    stranger gets: the README's `/releases/latest` link redirects to `v1.0.0`, the release reports
+    as neither draft nor pre-release, and both installers download.
+  - **Left unsigned on purpose** *(Lucas, 2026-09-23)*. The warnings on both platforms are what an
+    unsigned free app costs, and the README walks through them. What removing them would take is
+    written down under §7 Phase 6's signing item: $99 a year fixes macOS completely; nothing fixes
+    Windows on day one, because SmartScreen waits for reputation even behind a certificate.
+  - The dead `worktree-sidebar-material` branch is gone from GitHub.
+  - Docs only.
