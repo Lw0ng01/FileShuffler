@@ -18,10 +18,15 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
 "Working with Lucas") are the handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #48 is on `main`, including the fix that
+1. `git checkout main && git pull`. Everything through PR #49 is on `main`, including the fix that
    stops builds packaging the git worktrees - so **builds made from `main` now are safe to
    release; anything built before #48 is not.** One branch is waiting for review:
-   **`worktree-windows-release`**, which records the Windows build checked against it.
+   **`worktree-install-guide`**: the README's download and install guide, and the `.dmg` renamed
+   to `FileShuffler-<version>.dmg` to match the Windows installer.
+   - **The first release is being cut: `v1.0.0`, a full release, not a pre-release**
+     *(Lucas, 2026-09-23)*, so the README can link to `/releases/latest`, which skips
+     pre-releases. The Mac `dist/` has to be cleared and the `.dmg` rebuilt after this branch
+     merges, both for the new name and to be certain it is a post-#48 build.
    - **This file now lives at `docs/PROJECT.md`.** `CLAUDE.md` deliberately stayed at the root,
      because it only loads as project instructions from there.
    - `worktree-sidebar-material` is a dead duplicate of the merged `worktree-sidebar-mica`, kept
@@ -1121,7 +1126,8 @@ machines, not Lucas's.
   a virtual machine, or at least a fresh Windows user account (no mpv on its PATH, empty app data).
 - Found by the spike: without a pinned folder, the packaged app used the same `file-shuffler` data
   folder as development, contrary to an earlier note. Now pinned (§3 Implementation).
-- [x] **macOS build** (2026-09-22): `npm run build:mac` produces `file-shuffler-1.0.0.dmg`, 122 MB,
+- [x] **macOS build** (2026-09-22): `npm run build:mac` produces `FileShuffler-1.0.0.dmg` (named
+      `file-shuffler-1.0.0.dmg` until 2026-09-23), 122 MB,
       arm64 only *(Lucas, 2026-09-22: Apple Silicon is all that is needed)*. Signed ad-hoc, with the
       hardened runtime off - see §7 Phase 6 signing. Platform validation beyond "it builds and runs"
       is still open.
@@ -1190,7 +1196,13 @@ machines, not Lucas's.
         shipped `app.asar` on both platforms. Nothing personal in it; `!scripts` in
         `electron-builder.yml` would drop it, left for after the first release so the Windows and
         Mac builds of that release stay identical.
-- [ ] GitHub Releases: attach the installer, decide how versions are numbered, and keep notes on
+- [ ] GitHub Releases. **Decided 2026-09-23:** one release per version holding both platforms'
+      files, each uploaded from the machine that built it. A release is a single object on GitHub,
+      so "which machine publishes" is not a real choice; what has to match is the commit both
+      builds came from. The first is `v1.0.0`, a full release *(Lucas, 2026-09-23)*, tagged at the
+      one commit both the installer and the `.dmg` are built from - `main` once the install guide
+      merged, so each machine rebuilds from it. Earlier notes on this item: attach the
+      installer, decide how versions are numbered, and keep notes on
       what changed. This is the distribution plan *(Lucas, 2026-09-22: downloadable through the
       repo)*, and it does not conflict with §2.7 - that rule is about the app making network calls,
       not about how it is handed out. Hosting on GitHub changes nothing about signing: a file
@@ -2274,3 +2286,23 @@ machines, not Lucas's.
     clip, not the adapter, not a reason that maps to silence, and not a deadline that is too short.
     Three theories dead, two of them mine, and none of them would have died without the log.
   - Packaging only: 350 tests, lint and typecheck clean.
+- **2026-09-23:** A download and install guide on the front page, and one spelling for both files.
+  - *(Lucas, 2026-09-23)*: the first release is being cut - `v1.0.0`, a full release rather than a
+    pre-release, with both platforms' files on the same release so there is no confusion about
+    which to take.
+  - **The README now leads with a Download section**, straight after what the app is: one link to
+    the latest release and a table saying which file is for which computer. The step-by-step guide
+    that follows replaces the old two-bullet summary, and adds what happens after the confirmation
+    (installs just for you, shortcut on the desktop, opens when done), how to uninstall, and that
+    uninstalling keeps the saved data.
+  - **The macOS step had gone out of date.** It said to right-click and choose Open, which stopped
+    getting past Gatekeeper in macOS 15: an unsigned app now has to be allowed once under
+    System Settings → Privacy & Security → Open Anyway. The guide gives that route, with the
+    right-click shortcut kept for older versions. Not yet checked by eye on the Mac.
+  - **The `.dmg` was named after the npm package**, so the release would have offered
+    `file-shuffler-1.0.0.dmg` beside `FileShuffler-Setup-1.0.0.exe`. It uses the product name now:
+    `FileShuffler-1.0.0.dmg`. That needs a Mac rebuild, which the release needed anyway - the Mac
+    `dist/` still has to be cleared, and the `.dmg` has to be a post-#48 build.
+  - **`/releases/latest` is why this is a full release.** GitHub's latest link skips pre-releases,
+    so marking v1.0.0 as one would have left the front page's download link with nowhere to go.
+  - Docs and build configuration only. 350 tests, lint and typecheck clean.
