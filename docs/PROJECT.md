@@ -18,9 +18,10 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
 "Working with Lucas") are the handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #47 is on `main`. One branch is waiting
-   for review: **`worktree-package-exclude`**, which stops builds packaging the git worktrees.
-   **Do not cut a release from a build made before it** - see the change log for 2026-09-22.
+1. `git checkout main && git pull`. Everything through PR #48 is on `main`, including the fix that
+   stops builds packaging the git worktrees - so **builds made from `main` now are safe to
+   release; anything built before #48 is not.** One branch is waiting for review:
+   **`worktree-windows-release`**, which records the Windows build checked against it.
    - **This file now lives at `docs/PROJECT.md`.** `CLAUDE.md` deliberately stayed at the root,
      because it only loads as project instructions from there.
    - `worktree-sidebar-material` is a dead duplicate of the merged `worktree-sidebar-mica`, kept
@@ -1176,6 +1177,19 @@ machines, not Lucas's.
         should need nothing extra; data lands in `%APPDATA%\FileShuffler` and not the `Dev` folder;
         a delete reaches the Recycle Bin and Undo brings it back; and an empty Dashboard explains
         itself rather than looking broken.
+      - **Windows build, checked on the desktop (2026-09-22), from `main` after #48:**
+        `npm run build:win` gives `FileShuffler-Setup-1.0.0.exe` (111.6 MB, NSIS one-click,
+        per-user) with `LICENSES.chromium.html` and `LICENSE` beside it in `dist/`. Its `app.asar`
+        holds **28 entries, the same as the Mac build** - no `.claude`, no `docs`, no `PROJECT.md`,
+        so #48 holds on Windows too. The unpacked build, started with no `settings.json` at all,
+        chose the built-in player by default, played a clip over `fsvideo://` with no mpv process
+        anywhere, and a delete undone inside its window came back as `restored`. This is the
+        packaged app on the dev machine, not the downloaded installer on a clean one - SmartScreen
+        and the real install path are still the clean-machine test above.
+      - Harmless but untidy: `scripts/chromium-licenses.mjs`, a build-time script, is inside the
+        shipped `app.asar` on both platforms. Nothing personal in it; `!scripts` in
+        `electron-builder.yml` would drop it, left for after the first release so the Windows and
+        Mac builds of that release stay identical.
 - [ ] GitHub Releases: attach the installer, decide how versions are numbered, and keep notes on
       what changed. This is the distribution plan *(Lucas, 2026-09-22: downloadable through the
       repo)*, and it does not conflict with §2.7 - that rule is about the app making network calls,
