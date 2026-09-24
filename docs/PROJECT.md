@@ -18,12 +18,18 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
 "Working with Lucas") are the handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #53 is on `main`. One branch is waiting
-   for review: **`worktree-learning-log`**, which starts `docs/LEARNING.md`; if it has been merged,
-   nothing is outstanding.
-   - **Next is the polish pass** - the pipeline, the code and the UI - and Lucas is using it to
-     learn (2026-09-24). Each branch adds an entry to the Log in `docs/LEARNING.md` (`CLAUDE.md`
-     says how). The first item is CI, because the project has none: nothing runs when a PR opens.
+1. `git checkout main && git pull`. Everything through PR #54 is on `main`. One branch is waiting
+   for review: **`worktree-ci`**, which adds CI; if it has been merged, nothing is outstanding.
+   - **The polish pass is under way** - the pipeline, the code and the UI - and Lucas is using it
+     to learn (2026-09-24). Each branch adds an entry to the Log in `docs/LEARNING.md` (`CLAUDE.md`
+     says how). The order *(Lucas, 2026-09-24)*: **CI** (this branch), then **UI/UX fixes** (an
+     empty Dashboard that explains itself on first run, scroll position reset on a tab switch,
+     Settings' Player section no longer leading with mpv), then a **code health pass** (the largest
+     and most tangled files, dead paths such as VLC mentions). Automated release builds were left
+     out: releases stay manual.
+   - **CI** (`.github/workflows/ci.yml`) runs lint, typecheck, the tests and a build on Windows and
+     macOS for every push. A red check on a PR means don't merge yet; the run's log says which step
+     failed. The 7 real-mpv tests skip there, since runners have no mpv.
    - **`v1.0.0` is published** (2026-09-23): https://github.com/Lw0ng01/FileShuffler/releases/tag/v1.0.0
      A full release, not a pre-release *(Lucas, 2026-09-23)*, because the README links to
      `/releases/latest`, which skips pre-releases. Checked logged out, the way a stranger sees
@@ -39,7 +45,7 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
    - **This file now lives at `docs/PROJECT.md`.** `CLAUDE.md` deliberately stayed at the root,
      because it only loads as project instructions from there.
 2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads its binary on first
-   run), then `npm test`. Expect 305 passing, plus 7 more with `MPV_PATH` set to mpv's path.
+   run), then `npm test`. Expect 343 passing, plus 7 more with `MPV_PATH` set to mpv's path.
    - **On Windows, use Command Prompt, not PowerShell**, or `npm.cmd run dev`: Windows' default
      execution policy blocks `npm.ps1` (§5). A terminal opened before Node was installed keeps the
      old PATH, so open a new one.
@@ -2421,3 +2427,23 @@ machines, not Lucas's.
     nothing runs on GitHub when a PR opens. That is the first item of the polish pass.
   - The Mac is running the published v1.0.0 as an everyday install.
   - Docs only.
+- **2026-09-24:** CI on GitHub Actions.
+  - *(Lucas, 2026-09-24)*: the polish pass is CI first, then UI/UX fixes, then a code health pass;
+    automated release builds are out of scope.
+  - `.github/workflows/ci.yml` runs `npm ci`, lint, typecheck, `npm test` and `electron-vite build`
+    on `windows-latest` and `macos-latest`, on Node 24, for every push. Until now these checks ran
+    only on whichever machine made the change, so a change made on the Mac was never checked on
+    Windows before merging, and the reverse.
+  - **Both platforms, not one**, because the bugs that got through before were platform bugs:
+    `lstat`'s `ENOENT` for a missing drive, the drive grouping, the window chrome. `fail-fast` is
+    off so one platform failing still shows whether the other passes.
+  - **Locked down, because it is code that runs with access to the repository.** Read-only
+    `contents` permission, checkout without persisted credentials, and every third-party action
+    pinned to a commit SHA rather than a tag, since a tag can later be pointed at different code.
+  - Pull requests from branches in this repository are not run twice: their push already ran. A
+    pull request from a fork runs under `pull_request`, which GitHub gives no secrets.
+  - A newer push to the same branch cancels the older run.
+  - The build step bundles the three programs but doesn't package an installer: packaging is slow,
+    and the release process builds and download-tests installers by hand anyway.
+  - The real-mpv tests skip on the runners (no mpv installed), which matches what someone who
+    downloads the app has.

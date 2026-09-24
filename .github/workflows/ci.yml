@@ -1,0 +1,43 @@
+# Runs the same checks as a local commit (CLAUDE.md "Before committing") on both platforms the app
+# ships for, so a change made on one machine is checked on the other before it is merged.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# Read the code, nothing else: CI has no reason to write to the repository or its releases.
+permissions:
+  contents: read
+
+# A newer push to the same branch makes the older run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    # A pull request from a branch in this repository has already been checked by its push.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      # Actions are pinned to a commit, not a tag: a tag can be moved to different code later.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      # The real-mpv tests skip themselves: runners have no mpv, and the app does not need it.
+      - run: npm test
+      - name: Build
+        run: npx electron-vite build

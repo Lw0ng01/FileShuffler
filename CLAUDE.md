@@ -163,6 +163,10 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
 
 ## Verification
 
+- CI (`.github/workflows/ci.yml`) runs lint, typecheck, tests and a build on Windows and macOS for
+  every push. Check it went green (`gh run list --branch <branch>`) before handing over a PR link.
+  Keep its actions pinned by commit SHA and its permissions read-only.
+
 - Shuffle: deterministic invariant tests (empty/small folders, cycle seams, coverage, Back/Forward,
   undo/delete mid-history). A statistical test doesn't prove uniformity.
 - Runtime changes: typecheck/build aren't enough; launch the app and exercise the flow. Test real
