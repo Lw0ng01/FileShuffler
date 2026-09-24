@@ -227,3 +227,31 @@ One entry per branch in the polish pass, newest last:
 - Try it: on a scratch branch, change an `expect(...)` in `src/main/domain/shuffle.test.ts` so it
   fails, push, and watch the PR turn red (`gh run watch` in a terminal, or the Actions tab). Open
   the failed step to see the same output `npm test` gives locally. Then delete the branch.
+
+### 2026-09-24 - UI/UX fixes
+
+- What changed:
+  - A first-run card on the Dashboard: it names the folders a scan will read, and has Scan, Choose
+    different folders, and a pointer to Shuffle.
+  - Switching tabs scrolls back to the top.
+  - Settings shows mpv's setup only when mpv is the chosen player.
+- Why: each one is something a stranger meets in their first minute, and that only you had stopped
+  seeing. The app already *had* a friendly empty state - it just never appeared, because startup
+  adds the standard folders, so "no folders" was never true for a real new user. The empty state
+  was designed for a state the app never reaches.
+- Alternatives, and why not:
+  - Scan automatically on first launch: fewer clicks, but reading someone's Documents and
+    Downloads before they have asked is not how this app treats their files. It says what it will
+    read and waits.
+  - Remember each tab's scroll position instead of resetting it: more code, and the screens change
+    under you anyway (a scan finishes, a list grows), so the old position often isn't meaningful.
+- Found along the way: the testing switch `FILESHUFFLER_DATA` quietly copied the real development
+  library into the "empty" test folder, because an old migration ran first. The test would have
+  "passed" on a state that wasn't a first run at all. It was caught only because the result looked
+  wrong - the card should have been there and wasn't.
+- The idea to keep: **test the state users actually start in, not the one you imagine.** Empty
+  states and first runs are the easiest screens to get wrong, because developers never see them
+  again after day one. And when a test setup is meant to be isolated, check that it is - print
+  what it actually loaded before trusting what it shows.
+- Try it: `FILESHUFFLER_DATA=<an empty folder> npm run dev` shows the app exactly as a new user
+  sees it. Delete the folder afterwards.

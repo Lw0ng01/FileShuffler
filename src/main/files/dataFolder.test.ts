@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { copyLegacyData, dataFolder, dataFolderName } from './dataFolder'
+import { bringsLegacyData, copyLegacyData, dataFolder, dataFolderName } from './dataFolder'
 
 describe('dataFolderName', () => {
   it('keeps the installed app and development runs apart', () => {
@@ -34,6 +34,18 @@ describe('dataFolder', () => {
     expect(dataFolder(join('C:', 'AppData'), false, { FILESHUFFLER_DATA: '   ' })).toBe(
       join('C:', 'AppData', 'FileShuffler Dev')
     )
+  })
+})
+
+describe('bringsLegacyData', () => {
+  it('brings the old folder across in development only', () => {
+    expect(bringsLegacyData(false, {})).toBe(true)
+    expect(bringsLegacyData(true, {})).toBe(false)
+  })
+
+  it('never fills a FILESHUFFLER_DATA folder with the real library', () => {
+    expect(bringsLegacyData(false, { FILESHUFFLER_DATA: join('D:', 'empty') })).toBe(false)
+    expect(bringsLegacyData(false, { FILESHUFFLER_DATA: ' ' })).toBe(true)
   })
 })
 

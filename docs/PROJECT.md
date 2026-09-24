@@ -18,15 +18,23 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
 "Working with Lucas") are the handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #54 is on `main`. One branch is waiting
-   for review: **`worktree-ci`**, which adds CI; if it has been merged, nothing is outstanding.
+1. `git checkout main && git pull`. Everything through PR #55 (CI) is on `main`. One branch is
+   waiting for review: **`worktree-ui-polish`**, the UI/UX fixes; if it has been merged, nothing is
+   outstanding.
    - **The polish pass is under way** - the pipeline, the code and the UI - and Lucas is using it
      to learn (2026-09-24). Each branch adds an entry to the Log in `docs/LEARNING.md` (`CLAUDE.md`
-     says how). The order *(Lucas, 2026-09-24)*: **CI** (this branch), then **UI/UX fixes** (an
-     empty Dashboard that explains itself on first run, scroll position reset on a tab switch,
-     Settings' Player section no longer leading with mpv), then a **code health pass** (the largest
-     and most tangled files, dead paths such as VLC mentions). Automated release builds were left
-     out: releases stay manual.
+     says how). The order *(Lucas, 2026-09-24)*: **CI** (done, #55), then **UI/UX fixes** (this
+     branch), then a **code health pass** (the largest and most tangled files, dead paths such as
+     VLC mentions) - that one is next. Automated release builds were left out: releases stay
+     manual.
+   - **After the polish: an update prompt** *(Lucas, 2026-09-24)*. On opening, on both platforms,
+     the app offers an optional update with "Remind me later". Not started. It is the first thing
+     that would make the app talk to the network, which §2 and the README currently rule out
+     entirely ("no network requests of any kind"), so it needs that rule rewritten first - most
+     likely one request to GitHub's releases, with a switch in Settings to turn it off. Installing
+     the update itself (rather than opening the download page) is possible on Windows unsigned,
+     but macOS only installs updates for signed apps, so on the Mac it would be "a new version is
+     out - download it" until the app is signed.
    - **CI** (`.github/workflows/ci.yml`) runs lint, typecheck, the tests and a build on Windows and
      macOS for every push. A red check on a PR means don't merge yet; the run's log says which step
      failed. The 7 real-mpv tests skip there, since runners have no mpv.
@@ -45,7 +53,7 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
    - **This file now lives at `docs/PROJECT.md`.** `CLAUDE.md` deliberately stayed at the root,
      because it only loads as project instructions from there.
 2. `npm ci`, then `node_modules/.bin/electron --version` (Electron downloads its binary on first
-   run), then `npm test`. Expect 343 passing, plus 7 more with `MPV_PATH` set to mpv's path.
+   run), then `npm test`. Expect 348 passing, plus 7 more with `MPV_PATH` set to mpv's path.
    - **On Windows, use Command Prompt, not PowerShell**, or `npm.cmd run dev`: Windows' default
      execution policy blocks `npm.ps1` (§5). A terminal opened before Node was installed keeps the
      old PATH, so open a new one.
@@ -2447,3 +2455,27 @@ machines, not Lucas's.
     and the release process builds and download-tests installers by hand anyway.
   - The real-mpv tests skip on the runners (no mpv installed), which matches what someone who
     downloads the app has.
+- **2026-09-24:** UI/UX fixes: a first run that explains itself, tabs that open at the top, and a
+  Player section that stops leading with mpv.
+  - **First run.** The Dashboard's "Nothing indexed yet" card never showed to a new user: startup
+    adds the standard folders (Videos, Pictures, Music, Documents, Downloads) but scans nothing, so
+    `hasRoots` was already true and the first screen was "0 B · 0 files", empty lists reading
+    "Nothing here yet", and a small Scan now in the corner. Now, until the first scan, it shows a
+    "Ready when you are" card naming those folders, with Scan these folders, Choose different
+    folders, and a line pointing at Shuffle for anyone who only came to play videos. Scanning
+    stays something the person starts, rather than reading their folders at first launch unasked.
+  - **Scroll on tab switch.** Every screen shares one scrolling area, so a new tab opened at the
+    depth the previous one was left at. `App.tsx` now has one `navigate` that switches and scrolls
+    to the top, used by the sidebar and the Dashboard's links.
+  - **Settings → Player.** The mpv card (path, source, Choose/Test) now appears only when mpv is
+    the chosen player. The built-in player is the default, so everyone was first shown the path to
+    a program most people have never installed. The two descriptions say plainly which is the
+    normal choice.
+  - **Found checking it: `FILESHUFFLER_DATA` wasn't isolated in development.** The one-time
+    migration from the old `file-shuffler` folder copied the development index into whatever
+    folder the override named, so an "empty" test folder opened as the full library. The migration
+    now skips under the override (`bringsLegacyData`). Development only; the installed app never
+    ran it. The copied test folder was deleted.
+  - Checked in the running app against an empty data folder, in both themes: the card, the links,
+    the mpv card appearing and going with the choice, and the scroll going from 583 to 0.
+  - 348 tests (5 new), lint and typecheck clean.

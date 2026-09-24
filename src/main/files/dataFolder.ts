@@ -38,9 +38,21 @@ export function dataFolder(
   packaged: boolean,
   env: NodeJS.ProcessEnv = process.env
 ): string {
+  return dataOverride(env) ?? join(appDataPath, dataFolderName(packaged))
+}
+
+function dataOverride(env: NodeJS.ProcessEnv): string | null {
   const override = env['FILESHUFFLER_DATA']
-  if (typeof override === 'string' && override.trim() !== '') return override
-  return join(appDataPath, dataFolderName(packaged))
+  return typeof override === 'string' && override.trim() !== '' ? override : null
+}
+
+/**
+ * Whether startup should bring development's old data folder across (`copyLegacyData`). Never for
+ * the installed app, and never under `FILESHUFFLER_DATA`: an override is a folder chosen to keep
+ * the real library out of a test, and copying the old index into it quietly put the library back.
+ */
+export function bringsLegacyData(packaged: boolean, env: NodeJS.ProcessEnv = process.env): boolean {
+  return !packaged && dataOverride(env) === null
 }
 
 /**
