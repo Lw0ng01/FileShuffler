@@ -41,8 +41,6 @@ import { registerStatsIpc } from './statsIpc'
 export interface ServiceOptions {
   /** The app's own data folder (PROJECT.md §2.8). */
   dataFolder: string
-  /** Where a bundled mpv would be, or null in development. */
-  resourcesPath: string | null
   /** The built index worker (`library/indexWorker.ts`). */
   indexWorkerPath: string
   /** The window, when one is open: dialogs attach to it and updates go to it. */
@@ -88,7 +86,6 @@ export function createServices(options: ServiceOptions): Services {
     locateMpv({
       env: process.env,
       platform: process.platform,
-      resourcesPath: options.resourcesPath,
       chosen
     })
 

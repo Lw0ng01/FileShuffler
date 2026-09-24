@@ -22,7 +22,7 @@ export interface SearchFilters {
   direction: 'asc' | 'desc'
 }
 
-export const EMPTY_FILTERS: SearchFilters = {
+const EMPTY_FILTERS: SearchFilters = {
   term: '',
   categories: [],
   drive: null,

@@ -5,7 +5,7 @@ import { join } from 'node:path'
  * The files FileShuffler writes itself. Electron keeps its own caches in the same folder; those
  * are left behind, because they rebuild themselves.
  */
-export const APP_DATA_FILES = [
+const APP_DATA_FILES = [
   'index.db',
   'index.db-wal',
   'index.db-shm',

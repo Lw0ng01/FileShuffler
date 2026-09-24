@@ -16,7 +16,7 @@ export const SETTINGS_CHANNELS = {
 } as const
 
 /** Where the mpv the app will use came from (PROJECT.md §4). */
-export type MpvSource = 'environment' | 'settings' | 'bundled' | 'installed' | 'path'
+export type MpvSource = 'environment' | 'settings' | 'installed' | 'path'
 
 /**
  * Which theme the app uses. `system` follows the desktop, which is the default and what the app did

@@ -55,7 +55,7 @@ export type IndexStore = { [K in IndexMethod]: Async<IndexDb[K]> }
 
 const METHOD_NAMES: ReadonlySet<string> = new Set(INDEX_METHODS)
 
-export function isIndexMethod(name: unknown): name is IndexMethod {
+function isIndexMethod(name: unknown): name is IndexMethod {
   return typeof name === 'string' && METHOD_NAMES.has(name)
 }
 

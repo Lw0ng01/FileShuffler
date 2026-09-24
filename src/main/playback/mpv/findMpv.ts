@@ -1,12 +1,9 @@
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
 import type { MpvSource } from '../../../shared/settings'
 
 export interface FindMpvOptions {
   env: Record<string, string | undefined>
   platform: NodeJS.Platform
-  /** Electron's `process.resourcesPath` in a packaged app; null during development. */
-  resourcesPath: string | null
   /** The program chosen in Settings, or null to find mpv automatically. */
   chosen?: string | null
   exists?: (path: string) => boolean
@@ -28,9 +25,12 @@ const MAC_CANDIDATES = [
  * The mpv program to start, and where it came from, in order of preference:
  * 1. `FILESHUFFLER_MPV`, for development and testing
  * 2. the program chosen in Settings, which beats anything the app finds by itself
- * 3. a copy bundled with the packaged app, in `resources/mpv/` (Phase 1 packaging)
- * 4. common macOS install locations
- * 5. `mpv` on the PATH
+ * 3. common macOS install locations
+ * 4. `mpv` on the PATH
+ *
+ * Never a copy inside the app's own folder. mpv is not shipped with FileShuffler (PROJECT.md §7
+ * Phase 6), and the Windows install folder is writable by the user, so looking there would only
+ * run whatever `mpv.exe` something else had put in it.
  */
 export function locateMpv(options: FindMpvOptions): MpvLocation {
   const exists = options.exists ?? existsSync
@@ -39,10 +39,6 @@ export function locateMpv(options: FindMpvOptions): MpvLocation {
   if (options.chosen) return { path: options.chosen, source: 'settings' }
 
   const executable = options.platform === 'win32' ? 'mpv.exe' : 'mpv'
-  if (options.resourcesPath !== null) {
-    const bundled = join(options.resourcesPath, 'mpv', executable)
-    if (exists(bundled)) return { path: bundled, source: 'bundled' }
-  }
   if (options.platform === 'darwin') {
     const installed = MAC_CANDIDATES.find((candidate) => exists(candidate))
     if (installed !== undefined) return { path: installed, source: 'installed' }

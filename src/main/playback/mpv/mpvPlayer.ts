@@ -8,7 +8,7 @@ import type { PlaybackAdapter, PlaybackEvent, PlayerCommand } from '../types'
 import { MpvIpcClient, type MpvEvent } from './ipcClient'
 
 /** First argument of every `script-message` sent by our key bindings. */
-export const MESSAGE_TARGET = 'fileshuffler'
+const MESSAGE_TARGET = 'fileshuffler'
 
 /**
  * Written to the input.conf passed to mpv. `>` and `<` are mpv's own playlist next/previous keys,
