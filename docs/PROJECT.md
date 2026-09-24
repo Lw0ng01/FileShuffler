@@ -18,9 +18,12 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
 "Working with Lucas") are the handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #52 is on `main`. One branch is waiting
-   for review: **`worktree-release-published`**, which records the release below; if it has been
-   merged, nothing is outstanding.
+1. `git checkout main && git pull`. Everything through PR #53 is on `main`. One branch is waiting
+   for review: **`worktree-learning-log`**, which starts `docs/LEARNING.md`; if it has been merged,
+   nothing is outstanding.
+   - **Next is the polish pass** - the pipeline, the code and the UI - and Lucas is using it to
+     learn (2026-09-24). Each branch adds an entry to the Log in `docs/LEARNING.md` (`CLAUDE.md`
+     says how). The first item is CI, because the project has none: nothing runs when a PR opens.
    - **`v1.0.0` is published** (2026-09-23): https://github.com/Lw0ng01/FileShuffler/releases/tag/v1.0.0
      A full release, not a pre-release *(Lucas, 2026-09-23)*, because the README links to
      `/releases/latest`, which skips pre-releases. Checked logged out, the way a stranger sees
@@ -1187,6 +1190,8 @@ machines, not Lucas's.
 - [x] **Decide the app-data folder name:** `FileShuffler` installed, `FileShuffler Dev` in
       development, kept separate on purpose (§3 Implementation)
 - [ ] **First run on a clean machine:** no mpv, no development tools, empty app data.
+      - **Installed from the published release on the Mac (2026-09-24)** by Lucas, for everyday
+        use rather than as a test, and it works.
       - **Downloaded from the release and installed on both platforms (2026-09-23)**, by Lucas, on
         his own Windows desktop and Mac. Windows: SmartScreen appeared and *More info → Run
         anyway* worked, it installed without an admin prompt and ran. macOS: *"Apple could not
@@ -2400,4 +2405,19 @@ machines, not Lucas's.
     written down under §7 Phase 6's signing item: $99 a year fixes macOS completely; nothing fixes
     Windows on day one, because SmartScreen waits for reputation even behind a certificate.
   - The dead `worktree-sidebar-material` branch is gone from GitHub.
+  - Docs only.
+- **2026-09-24:** Started `docs/LEARNING.md`, a record of *why* for learning from.
+  - *(Lucas, 2026-09-24)*: with v1 shipped, the polish pass - the pipeline, the code and the UI -
+    doubles as a way to learn how the project works, and he wanted somewhere to keep track.
+  - **This file stays the record of what was decided and when; `LEARNING.md` is the why.** It opens
+    with the big picture - Electron's processes and where the line of trust sits, the architecture
+    and the four decisions that carry it, the pipelines (build, icons, release, verification), the
+    lessons from v1 and a short glossary - and ends in a Log that every polish branch adds to, in a
+    fixed format: what changed, why, the alternatives, the idea to keep, and a small "try it".
+  - **In the repository, not a separate document,** so it travels between the Windows PC and the
+    Mac with the code and every session reads it. It is public like the rest of the repo; it holds
+    general engineering notes and nothing personal. `docs/` is already excluded from builds.
+  - **Found writing it: the project has no CI.** The "pipelines" are scripted steps run by hand;
+    nothing runs on GitHub when a PR opens. That is the first item of the polish pass.
+  - The Mac is running the published v1.0.0 as an everyday install.
   - Docs only.

@@ -3,7 +3,8 @@
 Read `docs/PROJECT.md` first. It holds the vision, safety rules (§2), shuffle design (§3), playback
 plan (§4), stack/architecture/efficiency (§5), roadmap (§7) and a dated change log. It moved out of
 the repository root on 2026-09-22 so the front page shows only what a visitor needs; every `PROJECT.md
-§x` citation in the source still refers to it.
+§x` citation in the source still refers to it. `docs/LEARNING.md` is its companion: the *why* behind
+the architecture and pipelines, written for learning from.
 - Add a Change Log entry there for any major change or decision.
 - This file covers *how to work in the code*. Link to PROJECT.md instead of restating it here.
 
@@ -41,6 +42,11 @@ the same way:
   paths, and real file or folder names from his library.
 - **Every branch updates `PROJECT.md`** (Resume here and the Change Log) and this file when the
   layout or a convention changes.
+- **Lucas is using the polish pass to learn** (2026-09-24). Every branch also adds an entry to the
+  Log in `docs/LEARNING.md`, in the format given there: what changed, why, the alternatives and why
+  not, the idea to keep, and a small "try it". Write it for someone learning, not reviewing - the
+  concept underneath matters more than the diff. Correct the big-picture sections above the Log
+  when a change proves them wrong.
 - **Check behavior in the running app**, not just the tests. A packaged build writes to the
   installed app's data folder: use a copy of the data, and remove it afterwards. To check the UI
   without screenshots, launch with `--remote-debugging-port` and read the page text. **Never
