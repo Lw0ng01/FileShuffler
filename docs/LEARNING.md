@@ -74,8 +74,14 @@ Four decisions carry most of the weight:
 
 ## 3. The pipelines
 
-"Pipeline" here means a repeatable sequence of steps. None of these run automatically yet - there is
-no CI (nothing runs on GitHub when a PR opens). That gap is the first item for the polish pass.
+"Pipeline" here means a repeatable sequence of steps. Only one runs by itself: **CI**, which runs on
+GitHub for every push. The rest are run by hand.
+
+**CI** - `.github/workflows/ci.yml`, on every push
+1. Two fresh machines start on GitHub, one Windows and one macOS.
+2. Each one runs `npm ci`, `lint`, `typecheck`, `test` and a build - the same checks as before a
+   local commit.
+3. The result shows as a green tick or a red cross next to the commit and on the PR.
 
 **Build** - `npm run build:win` / `npm run build:mac`
 1. `typecheck` - TypeScript checks the whole program before anything is built.
@@ -188,3 +194,36 @@ One entry per branch in the polish pass, newest last:
 - Alternatives, and why not: a separate document outside the repo would not travel between the two
   machines with the code, and future sessions would not read it.
 - The idea to keep: write down *why*, not just *what* - the *what* is already in git.
+
+### 2026-09-24 - CI on GitHub Actions
+
+- What changed: `.github/workflows/ci.yml`. On every push, GitHub starts one Windows and one macOS
+  machine, and each runs `npm ci`, lint, typecheck, the tests and a build. The result is a tick or
+  a cross on the PR.
+- Why: the checks already existed, but they ran only on the machine that made the change, and only
+  when remembered. A change made on the Mac was never tested on Windows before merging. Several v1
+  bugs were exactly that: code that was fine on one OS and wrong on the other.
+- How to read it:
+  - **Workflow**: the whole file. **Trigger** (`on:`): when it runs. **Job**: one machine's work;
+    the **matrix** runs the same job once per OS. **Step**: one command.
+  - `npm ci`, not `npm install`: it installs exactly what `package-lock.json` says and fails if the
+    lockfile is out of date, so CI tests what is committed rather than whatever is newest today.
+  - `fail-fast: false`: if Windows fails, macOS keeps going, so you learn whether the failure is
+    Windows-only.
+- Alternatives, and why not:
+  - Only one OS: cheaper, but the bugs it would miss are the kind this project actually had.
+  - Also building the installers in CI: slow, and a release is built and download-tested by hand
+    anyway. Left for later, if it is ever wanted.
+- Security, because a workflow is code that runs with access to the repository:
+  - `permissions: contents: read`: the job can read the code and nothing else - it cannot push,
+    tag, or edit releases.
+  - Actions pinned by commit SHA (`actions/checkout@3d3c42e…`), not by tag (`@v7`): a tag can be
+    moved to different code later, and a SHA can't. This is how several real supply-chain attacks
+    worked - someone re-pointed a popular action's tags at malicious code.
+  - `persist-credentials: false`: the checkout doesn't leave the access token lying around for
+    later steps.
+- The idea to keep: automate the check you already do by hand, and run it where your users are -
+  here, both operating systems. A check that depends on remembering will be skipped one day.
+- Try it: on a scratch branch, change an `expect(...)` in `src/main/domain/shuffle.test.ts` so it
+  fails, push, and watch the PR turn red (`gh run watch` in a terminal, or the Actions tab). Open
+  the failed step to see the same output `npm test` gives locally. Then delete the branch.
