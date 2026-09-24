@@ -40,7 +40,6 @@ let mainWindow: BrowserWindow | null = null
 
 const services = createServices({
   dataFolder: app.getPath('userData'),
-  resourcesPath: app.isPackaged ? process.resourcesPath : null,
   indexWorkerPath,
   window: () => mainWindow
 })

@@ -18,15 +18,16 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
 "Working with Lucas") are the handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #55 (CI) is on `main`. One branch is
-   waiting for review: **`worktree-ui-polish`**, the UI/UX fixes; if it has been merged, nothing is
-   outstanding.
-   - **The polish pass is under way** - the pipeline, the code and the UI - and Lucas is using it
-     to learn (2026-09-24). Each branch adds an entry to the Log in `docs/LEARNING.md` (`CLAUDE.md`
-     says how). The order *(Lucas, 2026-09-24)*: **CI** (done, #55), then **UI/UX fixes** (this
-     branch), then a **code health pass** (the largest and most tangled files, dead paths such as
-     VLC mentions) - that one is next. Automated release builds were left out: releases stay
-     manual.
+1. `git checkout main && git pull`. Everything through PR #56 (UI/UX fixes) is on `main`. One
+   branch is waiting for review: **`worktree-code-health`**, the last of the polish pass; if it has
+   been merged, nothing is outstanding.
+   - **The polish pass** - the pipeline, the code and the UI - doubled as Lucas learning how the
+     project works (2026-09-24). Each branch adds an entry to the Log in `docs/LEARNING.md`
+     (`CLAUDE.md` says how), and section 6 there is the working loop itself. The order *(Lucas,
+     2026-09-24)*: **CI** (#55), **UI/UX fixes** (#56), **code health** (this branch). Automated
+     release builds were left out: releases stay manual.
+   - **Next** *(Lucas, 2026-09-24)*: put the current build on the Windows PC and try it, then the
+     update prompt below.
    - **After the polish: an update prompt** *(Lucas, 2026-09-24)*. On opening, on both platforms,
      the app offers an optional update with "Remind me later". Not started. It is the first thing
      that would make the app talk to the network, which §2 and the README currently rule out
@@ -849,9 +850,10 @@ Build the shuffler first, inside an app shell with a sidebar, so the dashboard s
   - It checks arguments at runtime. The renderer never sends paths; Undo accepts only a name string.
   - `undoDelete` answers `restored`, `trashing` or `unknown`, so the screen can confirm what
     happened instead of the toast just vanishing.
-- **Finding mpv** (`findMpv.ts`), in order: `FILESHUFFLER_MPV`, `resources/mpv/` in a packaged app,
+- **Finding mpv** (`findMpv.ts`), in order: `FILESHUFFLER_MPV`, the program chosen in Settings,
   common macOS install paths (apps opened from Finder don't get the shell PATH), then `mpv` on the
-  PATH.
+  PATH. *(2026-09-24: a `resources/mpv/` lookup inside the packaged app was removed; mpv is not
+  bundled, see the Change Log.)*
 - **Verified on macOS** with a throwaway launch script: the built app, a stand-in for the native
   folder picker, 30-second generated clips, and real mpv 0.41.0. 21 of 21 checks passed:
   - Choosing a folder counted only the 5 top-level videos.
@@ -2479,3 +2481,24 @@ machines, not Lucas's.
   - Checked in the running app against an empty data folder, in both themes: the card, the links,
     the mpv card appearing and going with the choice, and the scroll going from 583 to 0.
   - 348 tests (5 new), lint and typecheck clean.
+- **2026-09-24:** Code health pass, the last item of the polish pass.
+  - **Measured first.** Size: the largest file is 737 lines (`indexDb.ts`, mostly SQL) in about
+    10,000, so nothing was split for length alone. Unused code: `knip`, once told Electron's four
+    entry points, found 4 exports nothing imported and no unused files or dependencies. Tangle:
+    ESLint's `complexity` rule, run once rather than switched on - it flags `?? default` lists as
+    complex, which would teach everyone to ignore it.
+  - **The bundled-mpv lookup is gone.** `locateMpv` still looked for `resources/mpv/mpv` inside a
+    packaged app, with a "Bundled with FileShuffler" label in Settings, though mpv has not been
+    bundled since Phase 6 decided against it. On Windows the per-user install folder is writable by
+    the user, so the lookup would have run any `mpv.exe` placed there. The `resourcesPath` option
+    that fed it went too, and the test now checks that nothing inside the app folder is consulted.
+  - **Settings split into sections** (`components/settings/`): folders, player (with the mpv card),
+    privacy, and one `Segmented` picker shared by Appearance and Player, which had the same markup
+    twice. `SettingsScreen.tsx` went from 364 lines to layout only. Proven unchanged by saving the
+    rendered Settings HTML before and after in three states (Built-in, mpv, a Clear… confirmation
+    open): identical.
+  - Four file-private values stopped being exported. The player interface's comment and
+    `CLAUDE.md` no longer promise a VLC adapter; they describe the two players that exist.
+  - `docs/LEARNING.md` gained section 6, "How work gets done": the loop every branch follows, and
+    why each step is there.
+  - 348 tests (the bundled-mpv tests were replaced, not dropped), lint and typecheck clean.

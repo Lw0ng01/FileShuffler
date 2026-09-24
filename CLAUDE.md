@@ -107,7 +107,8 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
 - `src/renderer/`: React UI, presentation only (`components/`, one hook per area in `hooks/`, and
   shared display formatting in `format.ts`). The sidebar switches between Dashboard, Shuffle,
   Cleanup, Stats and Settings, and Dashboard is the tab the app opens on. The dashboard's sections
-  live in `components/dashboard/`
+  live in `components/dashboard/` and Settings' in `components/settings/`; the screen file itself
+  is layout only
   - `.screen` is the 760px reading width; add `wide` to it (Dashboard, Cleanup, Stats) for screens
     built from lists and grids
   - Front-end conventions (tokens, the shape scale, motion, focus, adding a screen) live in the
@@ -143,9 +144,12 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
   imports. Inject randomness.
 - One application coordinator owns navigation, end-of-file, playback requests and pending trash.
   Use explicit states and request IDs so late events can't double-advance or overwrite newer state.
-- Players sit behind one playback adapter interface (mpv now, VLC in Phase 2, embedded later).
-  - Don't assume pushed events: VLC is polled.
+- Players sit behind one playback adapter interface (`playback/types.ts`): the built-in player
+  (the default) and mpv. A new player is another adapter; the coordinator never learns which one
+  it has.
   - Unload the file and observe completion before trashing it.
+  - mpv is never looked for inside the app's own folder: it isn't shipped, and that folder is
+    user-writable on Windows.
 - The built-in player never receives a path. It asks for `fsvideo://file/<token>` and main decides
   what the token means, so a compromised page cannot ask for a file it was not given. The CSP
   allows `media-src fsvideo:` and nothing else.
@@ -159,7 +163,8 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
   arrows/Delete as global shortcuts.
 - Use async I/O, bounded concurrency and bounded history/caches. Clean up processes, listeners and
   timers.
-- No speculative plugin/service frameworks. SQLite arrives with the indexer.
+- No speculative plugin/service frameworks: add an abstraction when a second real use needs it, as
+  the second player did.
 
 ## Verification
 

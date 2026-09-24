@@ -1,8 +1,9 @@
 /**
  * The boundary between the application and a media player (PROJECT.md §4).
  *
- * mpv implements it first. VLC (Phase 2) reports state by polling and an embedded player may come
- * later, so nothing here assumes pushed events or a particular process model.
+ * Two players implement it: mpv, a separate process driven over a local pipe (`mpv/`), and the
+ * built-in one, a `<video>` in the app's own window (`embedded/`). The coordinator cannot tell which
+ * it has, which is why adding the second changed nothing above this line.
  */
 
 /** Commands a player sends back, for example from key bindings inside its window. */

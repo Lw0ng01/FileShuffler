@@ -15,7 +15,8 @@ shows they were wrong.
 3. [The pipelines](#3-the-pipelines)
 4. [Lessons from building v1](#4-lessons-from-building-v1)
 5. [Concepts to know](#5-concepts-to-know)
-6. [Log](#log)
+6. [How work gets done](#6-how-work-gets-done)
+7. [Log](#log)
 
 ---
 
@@ -170,6 +171,45 @@ built-in player passed all the tests (section 4).
   it too. **SmartScreen** (Windows) and **Gatekeeper** (macOS) warn about programs without them.
 - **Mark of the Web / quarantine flag** - the tag an OS puts on downloaded files; it is what makes
   those warnings appear.
+- **CI (continuous integration)** - running the checks automatically on every push, on clean
+  machines, so "it passed" does not depend on anyone remembering.
+- **Refactor** - changing how code is arranged without changing what it does. The proof is that
+  the output is identical before and after.
+- **Dead code** - code nothing can reach. It still costs: it gets read, maintained, and sometimes
+  (like the bundled-mpv lookup) quietly does something nobody meant.
+- **Cyclomatic complexity** - a count of the paths through a function; a hint where code may be
+  hard to follow, not a verdict.
+
+## 6. How work gets done
+
+The same loop runs for every change, whichever machine it's on. Each step exists because skipping
+it once caused a problem.
+
+1. **Start from the latest `main`.** `git fetch`, check the previous branch was merged, then a new
+   branch named `worktree-<topic>`. One topic per branch, so each PR can be reviewed, merged or
+   reverted on its own.
+2. **Look before changing.** Read the code and the relevant docs first (the UI skill before any
+   screen change). For a clean-up, measure first - `knip` for unused code, ESLint's `complexity`
+   rule for tangled functions - rather than going on a feeling.
+3. **Make the change, with tests for the logic.** Anything pure (the shuffle, formatting, parsing)
+   gets a test beside it. Screens have no tests, so they are checked by running them (step 5).
+4. **Run the local checks:** `npm run lint`, `npm run typecheck`, `npm test`. Prettier on the files
+   touched - and only those, so the diff shows the change and nothing else.
+5. **Run the real app** against a throwaway data folder (`FILESHUFFLER_DATA`), and read the page
+   through `--remote-debugging-port`: click through the change, read the text back, take a
+   screenshot of the app's own page (never the whole screen). Both themes for anything visual.
+   Delete the throwaway folder afterwards.
+6. **Write it down.** `PROJECT.md` gets the decision and its date (Resume here + Change Log), this
+   file gets the why (a Log entry), and `CLAUDE.md` or the UI skill get any new convention.
+7. **Commit and push** as the author, with a message that says what changed and why - after
+   scanning the diff for anything personal (emails, local paths, real file names).
+8. **Wait for CI to go green** on both Windows and macOS, then hand over the PR link.
+9. **Review, merge, try it.** The merge is a person's decision, and so is "does it actually feel
+   right" - which is why the loop ends with you using it, not with the tests passing.
+
+**For a refactor, add a before-and-after.** Capture what the user sees before changing anything,
+change the code, capture again, and compare. If they are identical, the refactor changed nothing it
+shouldn't have; if not, the difference is exactly what to look at.
 
 ---
 
@@ -255,3 +295,38 @@ One entry per branch in the polish pass, newest last:
   what it actually loaded before trusting what it shows.
 - Try it: `FILESHUFFLER_DATA=<an empty folder> npm run dev` shows the app exactly as a new user
   sees it. Delete the folder afterwards.
+
+### 2026-09-24 - Code health pass
+
+- What changed:
+  - Removed the lookup for an mpv "bundled with the app" - mpv was never bundled - along with its
+    Settings label and the option that fed it.
+  - Settings split from one 364-line component into a layout plus one file per section in
+    `components/settings/`, with the two identical pickers made one `Segmented` component.
+  - Four exports nothing imported became file-private, and comments that still promised a VLC
+    player were rewritten to describe the two players that exist.
+- How it was measured, not guessed:
+  - **Size**: no file is alarming. The largest is 737 lines, most of it SQL, in a 10,000-line app.
+  - **Unused code**: `knip`. Run naively it said half the app was unused, because it didn't know
+    Electron has four entry points (main, preload, renderer, the database worker). Told about
+    them, it found 4 unused exports and no unused files or dependencies.
+  - **Tangle**: ESLint's `complexity` rule. It flagged `getView` at 22 - but that function is a
+    list of `?? default` fallbacks, each of which counts as a branch, and it reads straight down.
+    It also flagged `SettingsScreen` - which really was five screens' worth of markup in one
+    function. Same number, different verdicts.
+- Why the dead code mattered more than it looked: the Windows install folder is writable by the
+  user, so "look for `resources/mpv/mpv.exe`" meant anything that dropped a file there would be run
+  as the video player. Code that "does nothing" was a small hole. The test now checks the opposite
+  of what it used to: that nothing inside the app's folder is ever looked at.
+- How the refactor was proven safe: the Settings page's HTML was saved before the split in three
+  states (Built-in, mpv, a Clear… confirmation open), then saved again after. Byte-for-byte
+  identical. There are no screen tests, so this was the test.
+- Alternatives, and why not:
+  - Split the other big files too (`indexDb.ts`, `indexerService.ts`): they are long, but each is
+    one idea in one place. Splitting them would scatter it without making anything clearer.
+  - Turn the complexity rule on permanently: it would flag the fallback lists forever and teach
+    everyone to ignore it. A tool you run when you want an answer beats a warning nobody reads.
+- The idea to keep: **measure, then judge.** Tools find candidates quickly; deciding which are real
+  problems takes reading the code. And a refactor is only safe if you can show nothing changed.
+- Try it: `npx knip` in the project, and see how much it wrongly calls unused without being told
+  the entry points - then compare with the list above.
