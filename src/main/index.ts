@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { reportIndexFailure, warnUnreadableIndex } from './dialogs'
-import { copyLegacyData, dataFolder } from './files/dataFolder'
+import { bringsLegacyData, copyLegacyData, dataFolder } from './files/dataFolder'
 import indexWorkerPath from './library/indexWorker?modulePath'
 import { createMainWindow, isTrustedSender } from './mainWindow'
 import { registerVideoScheme } from './playback/embedded/videoProtocol'
@@ -31,7 +31,7 @@ if (!app.requestSingleInstanceLock()) {
   process.exit(0)
 }
 
-if (!app.isPackaged) {
+if (bringsLegacyData(app.isPackaged)) {
   // Development used that unpinned "file-shuffler" folder until now: bring its data across once.
   copyLegacyData(join(app.getPath('appData'), 'file-shuffler'), app.getPath('userData'))
 }

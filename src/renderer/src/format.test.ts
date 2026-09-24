@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatClock } from './format'
+import { folderName, formatClock, joinNames } from './format'
 
 describe('formatClock', () => {
   it('shows minutes and seconds for anything under an hour', () => {
@@ -26,5 +26,26 @@ describe('formatClock', () => {
     expect(formatClock(Number.NaN)).toBe('0:00')
     expect(formatClock(Number.POSITIVE_INFINITY)).toBe('0:00')
     expect(formatClock(-5)).toBe('0:00')
+  })
+})
+
+describe('folderName', () => {
+  it("gives a folder's own name on either platform", () => {
+    expect(folderName('C:\\Users\\someone\\Videos')).toBe('Videos')
+    expect(folderName('/Users/someone/Movies/')).toBe('Movies')
+  })
+
+  it('keeps a drive or the root as it is', () => {
+    expect(folderName('D:\\')).toBe('D:')
+    expect(folderName('/')).toBe('/')
+  })
+})
+
+describe('joinNames', () => {
+  it('reads as a sentence at any length', () => {
+    expect(joinNames([])).toBe('')
+    expect(joinNames(['Videos'])).toBe('Videos')
+    expect(joinNames(['Videos', 'Music'])).toBe('Videos and Music')
+    expect(joinNames(['Videos', 'Music', 'Downloads'])).toBe('Videos, Music and Downloads')
   })
 })

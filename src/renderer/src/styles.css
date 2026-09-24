@@ -407,6 +407,37 @@ h1 {
   color: var(--muted);
 }
 
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.empty .empty-hint {
+  margin: 14px 0 0;
+  font-size: 13px;
+}
+
+/* A button that reads as a link inside a sentence. Grey and underlined rather than accent: the
+   accent belongs to the one primary action on the card. */
+.link-button {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.link-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 5px;
+}
+
 /* Sentence case, normal tracking. Uppercase letter-spaced labels are an enterprise-dashboard
    habit; this language puts the weight in the type scale instead. */
 .eyebrow {

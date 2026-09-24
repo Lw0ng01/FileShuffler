@@ -22,7 +22,8 @@ negotiable without changing `PROJECT.md` §2 and §5.
 
 - **No network calls, ever.** So no Google Fonts, no CDN scripts, no remote images. The CSP in
   `src/renderer/index.html` is `default-src 'self'; script-src 'self'; style-src 'self'
-  'unsafe-inline'; img-src 'self' data:`. Anything fetched from outside is blocked, silently.
+  'unsafe-inline'; img-src 'self' data:; media-src fsvideo:`. Anything fetched from outside is
+  blocked, silently.
 - **System fonts only**, already set on `:root`: `system-ui, -apple-system, 'Segoe UI', Roboto,
   sans-serif`. The app must look right on both macOS and Windows.
 - **The renderer is presentation only.** No filesystem, Electron or player imports; everything goes
@@ -308,11 +309,23 @@ Hooks stay subscribed for the whole session on purpose (see the comment in `App.
 tabs shows current state instead of reloading - a shuffle keeps running while another tab is open.
 Don't move a hook inside a screen component.
 
+## First run and empty states (Recorded)
+
+- **Design empty states for the state a new user is really in.** Startup adds the standard folders,
+  so "no folders at all" is rare; the common first screen is "folders, never scanned". The
+  Dashboard's `neverScanned` card covers that one, and the "Nothing indexed yet" card covers the
+  rare one. Check a first run with `FILESHUFFLER_DATA` pointed at an empty folder.
+- **The app never scans without being asked.** A first-run card says what a scan will read and
+  offers the button; it does not start one.
+- `.link-button` is a button inside a sentence: grey, underlined, never accent. `.empty-actions`
+  lays out a card's buttons side by side.
+
+## Switching tabs (Recorded)
+
+Every screen scrolls in the one `.main`, so `App.tsx` switches tabs only through `navigate`, which
+also scrolls to the top. Anything new that changes the tab calls `navigate`, not `setPage`.
+
 ## Open questions that shape the front end
 
-- **The player.** `PROJECT.md` §9 item 5: mpv's own window is what Lucas finds ugly, and no amount
-  of polish in these screens changes that video opens in a separate, unstyled window. Chromium
-  `<video>` versus embedded libmpv is unresolved, and the answer decides whether there is ever a
-  playback surface to design here.
 - **Density and layout.** Nothing is settled about spacing scale, list density, or whether the
   dashboard should stay one long scroll. Ask before committing to one.

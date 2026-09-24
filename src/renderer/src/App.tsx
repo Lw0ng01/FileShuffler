@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { CleanupScreen } from './components/CleanupScreen'
 import { DashboardScreen } from './components/DashboardScreen'
 import { SettingsScreen } from './components/SettingsScreen'
@@ -26,11 +26,21 @@ function App(): React.JSX.Element {
   const library = useLibrary()
   const stats = useStats()
   const settings = useSettings()
+  // Every screen shares this one scrolling area, so without a reset a new tab opened at whatever
+  // depth the last one was scrolled to - often past its own header content, or into empty space
+  // below a short screen.
+  const mainRef = useRef<HTMLElement>(null)
+  const navigate = (next: Page): void => {
+    setPage(next)
+    mainRef.current?.scrollTo({ top: 0 })
+    setScrolled(false)
+  }
 
   return (
     <div className="app">
-      <Sidebar page={page} onNavigate={setPage} />
+      <Sidebar page={page} onNavigate={navigate} />
       <main
+        ref={mainRef}
         className="main"
         data-scrolled={scrolled}
         onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 0)}
@@ -82,7 +92,8 @@ function App(): React.JSX.Element {
             filters={library.filters}
             error={library.error}
             actions={library.actions}
-            onManageFolders={() => setPage('settings')}
+            onManageFolders={() => navigate('settings')}
+            onShuffle={() => navigate('shuffle')}
           />
         ) : view === null ? (
           <p className="loading">Loading…</p>

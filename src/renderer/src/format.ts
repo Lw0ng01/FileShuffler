@@ -31,6 +31,17 @@ export function shortenPath(path: string): string {
   return parts.length <= 3 ? path : `…${separator}${parts.slice(-2).join(separator)}`
 }
 
+/** A folder's own name - `Videos` for `C:\Users\someone\Videos` - or the path itself for a root. */
+export function folderName(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).at(-1) ?? path
+}
+
+/** Names as a sentence: "Videos", "Videos and Music", "Videos, Music and Downloads". */
+export function joinNames(names: string[]): string {
+  if (names.length <= 1) return names.join('')
+  return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
+}
+
 /**
  * A playback position as `m:ss`, or `h:mm:ss` once there is an hour to show. Always the shortest
  * form the length needs, so a three-minute clip does not read as `0:03:12`.

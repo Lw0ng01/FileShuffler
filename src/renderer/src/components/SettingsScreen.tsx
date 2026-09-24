@@ -47,13 +47,14 @@ const PLAYERS: { value: PlayerChoice; label: string; detail: string }[] = [
   {
     value: 'builtin',
     label: 'Built-in',
-    detail: 'Plays inside the app, with the same look on every screen.'
+    detail:
+      "Plays inside the app, with its own controls and fullscreen. The few formats it can't decode open in your computer's default video player."
   },
   {
     value: 'mpv',
     label: 'mpv',
     detail:
-      'Opens mpv in its own window. Needs mpv installed, and plays formats the built-in one cannot.'
+      "Opens videos in mpv's own window instead. For people who already use mpv: it is installed separately, and plays nearly every format."
   }
 ]
 
@@ -257,34 +258,41 @@ export function SettingsScreen({
             </button>
           ))}
         </div>
-        <div className="card settings-card">
-          <p className="eyebrow">mpv</p>
-          <p className="setting-path" title={mpv.path}>
-            {mpv.path}
-          </p>
-          <p className="muted">{SOURCE_LABELS[mpv.source]}</p>
-          {mpv.test !== null && (
-            <p className={mpv.test.ok ? 'ok-text' : 'warning-text'}>
-              {mpv.test.ok ? `Works: ${mpv.test.message}` : `Doesn't work: ${mpv.test.message}`}
+        {/* Only once mpv is chosen. The built-in player is the default and needs nothing set up,
+            so an mpv path, a Test button and "Looked up on the system PATH" were the first thing
+            everyone saw here - about a program most people have never installed. */}
+        {view.player === 'mpv' && (
+          <div className="card settings-card">
+            <p className="eyebrow">mpv</p>
+            <p className="setting-path" title={mpv.path}>
+              {mpv.path}
             </p>
-          )}
-          <div className="settings-actions">
-            <button className="btn btn-small" onClick={actions.chooseMpv}>
-              Choose mpv…
-            </button>
-            <button className="btn btn-small" onClick={actions.testMpv} disabled={mpv.testing}>
-              {mpv.testing ? 'Testing…' : 'Test'}
-            </button>
-            {mpv.chosen !== null && (
-              <button className="btn btn-small" onClick={actions.useDefaultMpv}>
-                Find automatically
+            <p className="muted">{SOURCE_LABELS[mpv.source]}</p>
+            {mpv.test !== null && (
+              <p className={mpv.test.ok ? 'ok-text' : 'warning-text'}>
+                {mpv.test.ok ? `Works: ${mpv.test.message}` : `Doesn't work: ${mpv.test.message}`}
+              </p>
+            )}
+            <div className="settings-actions">
+              <button className="btn btn-small" onClick={actions.chooseMpv}>
+                Choose mpv…
               </button>
+              <button className="btn btn-small" onClick={actions.testMpv} disabled={mpv.testing}>
+                {mpv.testing ? 'Testing…' : 'Test'}
+              </button>
+              {mpv.chosen !== null && (
+                <button className="btn btn-small" onClick={actions.useDefaultMpv}>
+                  Find automatically
+                </button>
+              )}
+            </div>
+            {mpv.source === 'environment' && (
+              <p className="muted">
+                FILESHUFFLER_MPV is set, so it overrides any choice made here.
+              </p>
             )}
           </div>
-          {mpv.source === 'environment' && (
-            <p className="muted">FILESHUFFLER_MPV is set, so it overrides any choice made here.</p>
-          )}
-        </div>
+        )}
       </section>
 
       <section className="dash-section" aria-label="Privacy">
