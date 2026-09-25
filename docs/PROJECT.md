@@ -18,16 +18,20 @@ earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md
 "Working with Lucas") are the handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #56 (UI/UX fixes) is on `main`. One
-   branch is waiting for review: **`worktree-code-health`**, the last of the polish pass; if it has
-   been merged, nothing is outstanding.
+1. `git checkout main && git pull`. Everything through PR #57 (code health) is on `main`. One
+   branch is waiting for review: **`worktree-release-1.0.1`**, which sets the version to 1.0.1.
+   - **v1.0.1 is in progress** (2026-09-24). The polish pass was merged and tested on both
+     machines, but a fresh download from GitHub was still v1.0.0: merging changes the code, not
+     the published installers. Once the version branch is merged: build on both machines from
+     that merge commit, draft release `v1.0.1`, upload each installer from the machine that built
+     it, download-test, publish, and check logged out. If this says "in progress" and
+     https://github.com/Lw0ng01/FileShuffler/releases/latest already shows v1.0.1, it's done.
    - **The polish pass** - the pipeline, the code and the UI - doubled as Lucas learning how the
      project works (2026-09-24). Each branch adds an entry to the Log in `docs/LEARNING.md`
      (`CLAUDE.md` says how), and section 6 there is the working loop itself. The order *(Lucas,
-     2026-09-24)*: **CI** (#55), **UI/UX fixes** (#56), **code health** (this branch). Automated
-     release builds were left out: releases stay manual.
-   - **Next** *(Lucas, 2026-09-24)*: put the current build on the Windows PC and try it, then the
-     update prompt below.
+     2026-09-24)*: **CI** (#55), **UI/UX fixes** (#56), **code health** (#57). Automated release
+     builds were left out: releases stay manual.
+   - **Next** *(Lucas, 2026-09-24)*: the update prompt below, after v1.0.1 is out.
    - **After the polish: an update prompt** *(Lucas, 2026-09-24)*. On opening, on both platforms,
      the app offers an optional update with "Remind me later". Not started. It is the first thing
      that would make the app talk to the network, which §2 and the README currently rule out
@@ -2502,3 +2506,12 @@ machines, not Lucas's.
   - `docs/LEARNING.md` gained section 6, "How work gets done": the loop every branch follows, and
     why each step is there.
   - 348 tests (the bundled-mpv tests were replaced, not dropped), lint and typecheck clean.
+- **2026-09-24:** Version 1.0.1, to ship the polish pass.
+  - A fresh machine downloading from GitHub got v1.0.0 unchanged, and that was correct: the
+    release holds installers built on 2026-09-23, and merging to `main` changes the code, not the
+    files on a release. Shipping is its own step.
+  - **1.0.1 rather than 1.1.0**: the changes are fixes and polish (a first-run card for a state the
+    app already had, scroll reset, the Settings player section, dead-code removal), with no new
+    feature.
+  - `npm version 1.0.1 --no-git-tag-version`, so `package.json` and the lockfile agree and the tag
+    is made by the release itself, on the merge commit both installers are built from.
