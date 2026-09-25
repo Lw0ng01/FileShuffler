@@ -330,3 +330,25 @@ One entry per branch in the polish pass, newest last:
   problems takes reading the code. And a refactor is only safe if you can show nothing changed.
 - Try it: `npx knip` in the project, and see how much it wrongly calls unused without being told
   the entry points - then compare with the list above.
+
+### 2026-09-24 - Merged is not shipped (v1.0.1)
+
+- What happened: after the polish pass was merged and tested on both machines, a download on a
+  fresh computer was still the old app. Nothing was broken. The GitHub release holds the
+  installer *files* built for v1.0.0, and nothing rebuilds them when code is merged.
+- Three different things, easy to blur:
+  - **The code** on `main` - what the next build *will* be.
+  - **A build** - installers made from one commit, on one machine. Your PC and Mac had these.
+  - **A release** - builds published at a version number, which is what strangers download.
+- Why the version number matters: it is the only thing that tells a person, or an update check,
+  that two downloads are different. Rebuilding and re-uploading as "1.0.0" would have made two
+  different apps with the same name. **Semantic versioning** (`major.minor.patch`): patch for
+  fixes (1.0.1), minor for new features (1.1.0), major for changes that break something (2.0.0).
+- Alternatives, and why not: automating releases in CI would have closed this gap, but it was
+  left out on purpose - the manual release includes a real download-and-install test on each OS,
+  which a robot can't judge.
+- The idea to keep: **the job is done when users have it**, not when the code is merged. Test from
+  where users start - a fresh download - not from your own machine, which always has the newest
+  build.
+- Try it: open https://github.com/Lw0ng01/FileShuffler/releases and compare each release's
+  assets and dates with `git log` - a release is a snapshot, frozen at its tag.
