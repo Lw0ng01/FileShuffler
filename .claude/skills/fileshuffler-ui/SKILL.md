@@ -98,6 +98,16 @@ Three things follow, and each one silently breaks something if forgotten:
   - **A drag region has to be opaque wherever content can pass under it**, or the content shows
     through while being unclickable - which is why the strip and the header both paint `--bg`, and
     why a bare fixed strip over a scrolling list was rejected before this.
+  - **The drag areas are resent to the OS every time the window comes back** (2026-09-29,
+    `DragRegionRefresh.tsx`). The OS only knows where they are from a list Chromium sends, and a
+    drag area that moves while the window is covered can leave the OS with its old position. On
+    Windows, after closing the system player a file was handed to, the window still dragged but its
+    buttons took no clicks: the video stage collapsed as that player opened, and the pinned header
+    jumped up onto the buttons. Keep `<DragRegionRefresh />` inside `.titlebar`. It is a
+    small drag area switched in and out on each return: that forces a fresh list while never
+    changing what actually drags.
+  - "The window came back" (focus, or visible again) is `hooks/useWindowReturn.ts`. Use it rather
+    than adding another `focus`/`visibilitychange` listener, so there stays one definition of it.
 - **The window controls are on opposite sides**, so each platform needs its own clearance: macOS
   floats the traffic lights over the top-left of the sidebar, Windows draws its buttons over the
   top-right of `.main`. `.is-mac` and `.is-windows` both add 46px of top padding to the sidebar and

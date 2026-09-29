@@ -13,19 +13,23 @@ care about the name; keep it unless they say otherwise.
 
 ## Resume here
 
-Last updated 2026-09-17, at the end of a Windows desktop session. A new session starts without
+Last updated 2026-09-29, on the Mac. A new session starts without
 earlier chats or local memory. This section, the rest of this doc and `CLAUDE.md` (including
 "Working with Lucas") are the handoff; keep this section current at the end of each session.
 
 **Start of the next session**
-1. `git checkout main && git pull`. Everything through PR #57 (code health) is on `main`. One
-   branch is waiting for review: **`worktree-release-1.0.1`**, which sets the version to 1.0.1.
-   - **v1.0.1 is in progress** (2026-09-24). The polish pass was merged and tested on both
-     machines, but a fresh download from GitHub was still v1.0.0: merging changes the code, not
-     the published installers. Once the version branch is merged: build on both machines from
-     that merge commit, draft release `v1.0.1`, upload each installer from the machine that built
-     it, download-test, publish, and check logged out. If this says "in progress" and
-     https://github.com/Lw0ng01/FileShuffler/releases/latest already shows v1.0.1, it's done.
+1. `git checkout main && git pull`. Everything through PR #58 (version 1.0.1) is on `main`. One
+   branch is waiting for review: **`worktree-external-player-clicks`** (2026-09-29).
+   - **It fixes a Windows bug Lucas reported against 1.0.1**: when a file the built-in player
+     can't decode went to the system player (VLC) and VLC was closed straight away, the window
+     still dragged but took no clicks until a key moved the shuffle on. The fix resends the drag
+     areas whenever the window comes back (Change Log, 2026-09-29). **Not yet seen fixed on
+     Windows**: the cause couldn't be reproduced on the Mac, so the test is on the desktop - an
+     `.avi` in a shuffle folder, VLC as its default app, close VLC at once, click Next. If it
+     still happens, note whether dragging *on* the Next button moves the window: that says
+     whether it is the drag areas at all.
+   - If it's confirmed, it's worth a 1.0.2 the same way 1.0.1 went out (the next release, below).
+   - **v1.0.1 is published** (2026-09-25), both installers from the PR #58 merge commit.
    - **The polish pass** - the pipeline, the code and the UI - doubled as Lucas learning how the
      project works (2026-09-24). Each branch adds an entry to the Log in `docs/LEARNING.md`
      (`CLAUDE.md` says how), and section 6 there is the working loop itself. The order *(Lucas,
@@ -2515,3 +2519,33 @@ machines, not Lucas's.
     feature.
   - `npm version 1.0.1 --no-git-tag-version`, so `package.json` and the lockfile agree and the tag
     is made by the release itself, on the merge commit both installers are built from.
+- **2026-09-29:** Clicks lost after the system player closed, on Windows (Lucas's report against
+  1.0.1).
+  - **The report:** a file the built-in player can't decode goes to the system player (VLC there).
+    Closing VLC at once left FileShuffler looking frozen: the window still dragged, but no button
+    took a click. Keyboard shortcuts sometimes still worked and could clear it.
+  - **Diagnosis.** Keys working means the page was alive; "drags but won't click" is what the OS
+    does when it believes the pointer is over a drag area. With no title bar, Windows learns where
+    those are from a list of rectangles Chromium sends when they move. The handoff moves one: the
+    video stage collapses at the moment VLC opens over the window, and the pinned Shuffle header -
+    a drag area - jumps up by the video's height onto the card and Back/Next/Delete. If that update
+    is lost while the window is covered, Windows keeps the header's old position over the buttons.
+    An arrow key loads the next video and moves the layout again, which fits "sometimes clears it".
+  - **Not reproduced.** On the Mac (IINA as the system player) the handoff, quitting the player at
+    once and returning all worked, with the page responsive and Next moving on. So the diagnosis
+    fits every symptom but is unconfirmed until the Windows test in Resume here.
+  - **Fix:** `DragRegionRefresh.tsx`, an 8px drag area inside `.titlebar` that is switched in or
+    out each time the window gets focus or becomes visible. The list of rectangles changes, so
+    Chromium rebuilds it from the page as it is now and resends it, while what drags the window is
+    identical either way (it lies inside an area that already drags). It covers any drag area that
+    moved while the window was away, not only this one.
+  - **Kept:** the pinned header stays a drag area (a recorded decision, 2026-09-17). Taking the drag
+    off it would also have removed the moving rectangle, but at the cost of the wide place to grab
+    the window that the header was pinned for, on a diagnosis not yet confirmed.
+  - **Refactor:** "the window came back" is now one hook, `useWindowReturn`, shared by this and the
+    video stage's retry of a start refused in the background, which had its own listeners.
+  - **Checked:** the rendered Dashboard and Shuffle HTML before and after are identical apart from
+    the new element. In the running app each return toggles it and still retries playback once, and
+    a shuffle through an `.avi`, an MPEG-2 `.mkv`, an H.264/AC-3 `.mkv` and an `.mp4` handed off and
+    played as before, with Back and Next working across the handoffs. 355 tests with `MPV_PATH`,
+    lint and typecheck clean.

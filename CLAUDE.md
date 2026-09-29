@@ -104,8 +104,8 @@ Electron + React + TypeScript via electron-vite. Tests use vitest.
   - `src/main/ipc.ts`: renderer commands, with sender and argument checks. The IPC tests share
     `testing/fakeIpc.ts`
 - `src/preload/`: the only bridge to the UI. Expose narrow, typed functions; keep `index.d.ts` in sync
-- `src/renderer/`: React UI, presentation only (`components/`, one hook per area in `hooks/`, and
-  shared display formatting in `format.ts`). The sidebar switches between Dashboard, Shuffle,
+- `src/renderer/`: React UI, presentation only (`components/`, one hook per area in `hooks/` plus
+  a few shared ones such as `useWindowReturn`, and shared display formatting in `format.ts`). The sidebar switches between Dashboard, Shuffle,
   Cleanup, Stats and Settings, and Dashboard is the tab the app opens on. The dashboard's sections
   live in `components/dashboard/` and Settings' in `components/settings/`; the screen file itself
   is layout only

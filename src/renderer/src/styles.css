@@ -270,6 +270,23 @@ button {
   -webkit-app-region: drag;
 }
 
+/* Switched on and off each time the window comes back, so Chromium resends the drag areas to the
+   OS (`DragRegionRefresh.tsx`). It lies wholly inside `.titlebar`, which already drags, so what
+   drags the window is the same either way. Invisible, and takes no space. */
+.drag-refresh {
+  display: none;
+}
+
+.drag-refresh[data-on] {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  -webkit-app-region: drag;
+}
+
 .loading {
   /* Not a `.screen`, so it needs the gutter that `.screen` carries for everything else. */
   padding: 0 36px;
