@@ -352,3 +352,41 @@ One entry per branch in the polish pass, newest last:
   build.
 - Try it: open https://github.com/Lw0ng01/FileShuffler/releases and compare each release's
   assets and dates with `git log` - a release is a snapshot, frozen at its tag.
+
+### 2026-09-29 - A window that drags but won't click
+
+- What happened: on Windows, a file the built-in player can't decode went to VLC, and closing VLC
+  straight away left FileShuffler unclickable. The window still dragged, and keyboard shortcuts
+  sometimes worked.
+- Reading the symptoms before the code:
+  - **Keys work**, so the page isn't frozen: its JavaScript is running. Only the mouse is lost.
+  - **It drags**, so the OS is still answering the window. And when a click *moves* the window
+    instead of pressing a button, the OS thinks the pointer is on a drag area.
+  - **A key sometimes clears it.** The arrow keys load the next video, which changes the layout.
+    So whatever is wrong is refreshed by a layout change.
+- The mechanism: with no title bar, every mouse press on the window starts with Windows asking
+  "caption or content?" (a *hit test*). Chromium answers from a list of drag rectangles it sends
+  whenever the page's `-webkit-app-region: drag` elements move. When a file goes to VLC, the video
+  stage collapses and the pinned header - a drag area - jumps up onto the buttons, at the exact
+  moment VLC covers the window. If that one update goes missing, Windows keeps a drag rectangle
+  where the buttons now are.
+- What changed: each time the window comes back (focus, or visible again), a tiny drag area inside
+  the top strip is switched in or out. The list is different, so Chromium rebuilds it from the page
+  as it is now and sends it again. The element sits inside an area that already drags, so nothing
+  the user can feel changes. "The window came back" also became one hook, `useWindowReturn`,
+  shared with the video player, which already listened for the same moment.
+- Alternatives, and why not:
+  - Take the drag off the header, so no drag area can ever move: simpler in principle, but it
+    gives up the header's grab area, a decision made on purpose, for a cause not yet confirmed.
+  - Keep the video area on screen during the handoff so nothing jumps: an empty black box was
+    already rejected, and it would only fix this one trigger.
+  - Timers or animation frames to "wait for things to settle": timing guesses fail on a slow
+    machine. Toggling on the event itself needs none.
+- Honest status: this couldn't be reproduced on the Mac, which handles drag areas its own way,
+  so it is a diagnosis that fits every symptom until it is seen fixed on Windows. That's why the
+  fix works whichever drag area moved, rather than patching only the header.
+- The idea to keep: **"frozen" is a symptom, not a diagnosis.** Ask which parts still work - keys,
+  dragging, a timer ticking - and each answer rules out a layer. Here it pointed away from the
+  JavaScript and at the one thing the OS and the page share: where the drag areas are.
+- Try it: in `styles.css`, give `.screen-header` a `background: red` and open Shuffle with a video
+  playing, then hand off an `.avi`: watch how far the header jumps when the video area collapses.

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { videoUrl } from '../../../shared/player'
+import { useWindowReturn } from '../hooks/useWindowReturn'
 import { PlayerControls } from './PlayerControls'
 
 /**
@@ -163,12 +164,6 @@ export function VideoStage({
       })
     }
 
-    // Coming back to the window is the moment a refused start can be retried, and the only way a
-    // file paused in the background ever gets going again without the user pressing anything.
-    const onVisible = (): void => {
-      if (document.visibilityState === 'visible') start(video)
-    }
-
     const onPlayState = (): void => setPaused(video.paused)
 
     video.addEventListener('play', onPlayState)
@@ -176,8 +171,6 @@ export function VideoStage({
     video.addEventListener('loadeddata', onLoadedData)
     video.addEventListener('ended', onEnded)
     video.addEventListener('error', onError)
-    document.addEventListener('visibilitychange', onVisible)
-    window.addEventListener('focus', onVisible)
     api.ready()
 
     return () => {
@@ -187,10 +180,14 @@ export function VideoStage({
       video.removeEventListener('loadeddata', onLoadedData)
       video.removeEventListener('ended', onEnded)
       video.removeEventListener('error', onError)
-      document.removeEventListener('visibilitychange', onVisible)
-      window.removeEventListener('focus', onVisible)
     }
   }, [])
+
+  // Coming back to the window is the moment a refused start can be retried, and the only way a
+  // file paused in the background ever gets going again without the user pressing anything.
+  useWindowReturn(() => {
+    if (videoRef.current !== null) start(videoRef.current)
+  })
 
   return (
     <div

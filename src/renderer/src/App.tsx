@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { CleanupScreen } from './components/CleanupScreen'
 import { DashboardScreen } from './components/DashboardScreen'
+import { DragRegionRefresh } from './components/DragRegionRefresh'
 import { SettingsScreen } from './components/SettingsScreen'
 import { ShufflerScreen } from './components/ShufflerScreen'
 import { Sidebar, type Page } from './components/Sidebar'
@@ -50,7 +51,9 @@ function App(): React.JSX.Element {
             width of the screen area, stays put while the content scrolls under it, and doubles as
             the clearance the window controls need. Presentation only, so it is hidden from
             assistive technology. */}
-        <div className="titlebar" aria-hidden="true" />
+        <div className="titlebar" aria-hidden="true">
+          <DragRegionRefresh />
+        </div>
         {/* Mounted for the whole life of the app, not only while Shuffle is open: unmounting it
             would stop playback the moment another tab was looked at. Hidden elsewhere, still
             playing - which is what the separate player window used to do. It sits above the
